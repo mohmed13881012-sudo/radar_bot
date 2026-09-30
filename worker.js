@@ -1,7 +1,7 @@
 const BOT_TOKEN = "8579994081:AAFPiuiMPgANy7ARI9QiE7dWWwlnFrwY8gs";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
-const RADAR_TOKEN = "cfat_NBfqhl13ZTbTlMnA2c7wc32GwKCL3UmWb3qaPEhv1a3e1133";
+const RADAR_TOKEN = "cfat_hbyshtiPpLx0a2goEzglGHpHDIfgojgWYkukkCXjd313b981";
 const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 const RADAR = "https://api.cloudflare.com/client/v4/radar";
 
@@ -37,7 +37,6 @@ export default {
   }
 };
 
-// ==================== زمان تهران ====================
 function getIranTime() {
   return new Intl.DateTimeFormat('fa-IR', {
     timeZone: 'Asia/Tehran',
@@ -51,7 +50,6 @@ function getIranDate() {
   }).format(new Date());
 }
 
-// ==================== Debug ====================
 async function debugRadar() {
   const urls = [
     RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth",
@@ -72,7 +70,6 @@ async function debugRadar() {
   return out;
 }
 
-// ==================== Channel Report ====================
 async function sendChannelReport() {
   const report = await makeReport();
   try {
@@ -84,7 +81,6 @@ async function sendChannelReport() {
   } catch(e) { console.log("Channel error: " + e.message); }
 }
 
-// ==================== Update Handler ====================
 async function handleUpdate(update) {
   if (!update.message) return;
   const msg = update.message;
@@ -161,7 +157,6 @@ async function sendMessage(chatId, text, extra) {
   } catch(e) {}
 }
 
-// ==================== Radar Helper ====================
 async function radarFetch(path) {
   try {
     const r = await fetch(RADAR + path, {
@@ -192,7 +187,6 @@ function extractValue(obj, ...paths) {
   return null;
 }
 
-// ==================== Bar ====================
 function makeBar(v) {
   const filled = Math.round(v / 10);
   let color = "🔴";
@@ -204,7 +198,6 @@ function makeBar(v) {
   return bar;
 }
 
-// ==================== Main Report ====================
 async function makeReport() {
   const bwData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth");
   const latData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=latency");
@@ -263,7 +256,6 @@ async function makeReport() {
     "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
 }
 
-// ==================== Speed Report ====================
 async function makeSpeedReport() {
   const speed = await radarFetch("/quality/speed/summary?location=IR&dateRange=1d");
   let dl = extractValue(speed, "summary_0.bandwidthDownload", "summary.0.download", "bandwidth.download");
@@ -280,7 +272,6 @@ async function makeSpeedReport() {
     "🤖 رادار اینترنت";
 }
 
-// ==================== Traffic Report ====================
 async function makeTrafficReport() {
   const traffic = await radarFetch("/http/summary/traffic?location=IR&dateRange=1d");
   let http = 0, https = 0, other = 0;
@@ -297,7 +288,6 @@ async function makeTrafficReport() {
     "🤖 رادار اینترنت";
 }
 
-// ==================== Outages Report ====================
 async function makeOutagesReport() {
   const ann = await radarFetch("/annotations/outages?dateRange=7d&limit=10");
   let out = "🚨 <b>قطعی‌ها و اختلالات (۷ روز اخیر)</b>\n\n";
@@ -311,4 +301,4 @@ async function makeOutagesReport() {
   }
   out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
   return out;
-    }
+  }
