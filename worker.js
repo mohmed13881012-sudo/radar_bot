@@ -20,6 +20,12 @@ export default {
       return new Response(await r.text());
     }
     
+    // مسیر دستی برای فرستادن گزارش به کانال (برای تست)
+    if (url.pathname === "/sendreport") {
+      await sendChannelReport();
+      return new Response("Report sent!");
+    }
+    
     if (request.method !== "POST") return new Response("Radar Bot is running!");
     
     try {
@@ -30,8 +36,31 @@ export default {
     }
     
     return new Response("OK");
+  },
+  
+  // این بخش هر ۱ ساعت خودکار اجرا می‌شه
+  async scheduled(event, env, ctx) {
+    await sendChannelReport();
   }
 };
+
+// فرستادن گزارش به کانال رادار اینترنت
+async function sendChannelReport() {
+  const report = await makeReport();
+  try {
+    await fetch(TG + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: CH1,
+        text: report,
+        parse_mode: "HTML"
+      })
+    });
+  } catch(e) {
+    console.log("Channel send error: " + e.message);
+  }
+}
 
 async function handleUpdate(update) {
   if (!update.message) return;
@@ -93,36 +122,53 @@ async function sendMessage(chatId, text, extra) {
 }
 
 async function makeReport() {
-  let iqi = 50;
-  let latency = 15;
   try {
-    const r = await fetch(
-      "https://api.cloudflare.com/client/v4/radar/quality/iqi/summary?location=IR&dateRange=1d",
+    const iqiResponse = await fetch(
+      "https://api.cloudflare.com/client/v4/radar/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth",
       { headers: { "Authorization": "Bearer " + RADAR_TOKEN } }
     );
-    const d = await r.json();
-    if (d.success && d.result) {
-      if (d.result.iqi && d.result.iqi.score) iqi = Math.round(d.result.iqi.score);
-      if (d.result.latency && d.result.latency.value) latency = Math.round(d.result.latency.value);
+    const iqiData = await iqiResponse.json();
+
+    const latencyResponse = await fetch(
+      "https://api.cloudflare.com/client/v4/radar/quality/iqi/summary?location=IR&dateRange=1d&metric=latency",
+      { headers: { "Authorization": "Bearer " + RADAR_TOKEN } }
+    );
+    const latencyData = await latencyResponse.json();
+
+    let bandwidth = 0;
+    let latency = 0;
+
+    if (iqiData.success && iqiData.result && iqiData.result.summary_0) {
+      bandwidth = Math.round(parseFloat(iqiData.result.summary_0.p50));
     }
-  } catch(e) {}
-  
-  let emoji = "🔴";
-  let status = "بحرانی";
-  if (iqi >= 80) { emoji = "🟢"; status = "پایدار"; }
-  else if (iqi >= 60) { emoji = "🟡"; status = "نسبتا پایدار"; }
-  else if (iqi >= 40) { emoji = "🟠"; status = "ناپایدار"; }
-  
-  const drop = 100 - iqi;
-  const time = new Date().toLocaleTimeString("fa-IR");
-  
-  return "📊 <b>گزارش وضعیت شبکه</b>\n\n" +
-    "وضعیت: " + emoji + " <b>" + status + "</b>\n" +
-    "🛡️ سلامت شبکه: %" + iqi + "\n" +
-    "📉 افت: %" + drop + "\n\n" +
-    "🌐 <b>کیفیت اتصال</b>\n" +
-    "⭐ QoE: %" + iqi + "\n" +
-    "⏱️ تاخیر: " + latency + " ms\n\n" +
-    "🕒 " + time + "\n" +
-    "🤖 رادار اینترنت";
-}
+    if (latencyData.success && latencyData.result && latencyData.result.summary_0) {
+      latency = Math.round(parseFloat(latencyData.result.summary_0.p50));
+    }
+
+    let iqi = Math.min(100, Math.round(bandwidth / 5));
+    if (iqi > 100) iqi = 100;
+    if (iqi < 10) iqi = 10;
+
+    let emoji = "🔴";
+    let status = "بحرانی";
+    if (iqi >= 80) { emoji = "🟢"; status = "پایدار"; }
+    else if (iqi >= 60) { emoji = "🟡"; status = "نسبتا پایدار"; }
+    else if (iqi >= 40) { emoji = "🟠"; status = "ناپایدار"; }
+
+    const drop = 100 - iqi;
+    const time = new Date().toLocaleTimeString("fa-IR");
+
+    return "📊 <b>گزارش وضعیت شبکه</b>\n\n" +
+      "وضعیت: " + emoji + " <b>" + status + "</b>\n" +
+      "🛡️ سلامت شبکه: %" + iqi + "\n" +
+      "📉 افت: %" + drop + "\n\n" +
+      "🌐 <b>کیفیت اتصال</b>\n" +
+      "⭐ QoE: %" + iqi + "\n" +
+      "⏱️ تاخیر: " + latency + " ms\n" +
+      "📶 پهنای باند: " + bandwidth + " Mbps\n\n" +
+      "🕒 " + time + "\n" +
+      "🤖 رادار اینترنت";
+  } catch(e) {
+    return "❌ <b>خطا در دریافت اطلاعات</b>\n\nمتاسفانه در حال حاضر امکان دریافت گزارش وجود ندارد.\n\n🕒 " + new Date().toLocaleTimeString("fa-IR");
+  }
+      }
