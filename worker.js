@@ -35,44 +35,56 @@ const FILTER_CHECK = [
   { name: "ویکی‌پدیا", url: "https://www.wikipedia.org" }
 ];
 
-let TG = ""; // این متغیر داخل fetch مقدار می‌گیره
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const BOT_TOKEN = env.BOT_TOKEN;
-    
-    if (!BOT_TOKEN) {
-      return new Response("ERROR: BOT_TOKEN not set in environment variables!", { status: 500 });
+
+    // مسیر تست توکن
+    if (url.pathname === "/check") {
+      return new Response("TOKEN: " + BOT_TOKEN, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
     }
-    
-    TG = "https://api.telegram.org/bot" + BOT_TOKEN;
+
+    // اگه توکن نباشه
+    if (!BOT_TOKEN) {
+      return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
+    }
+
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 
     if (url.pathname === "/test") return new Response("Test OK");
+
     if (url.pathname === "/setwebhook") {
       const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
       return new Response("Result: " + await r.text());
     }
+
     if (url.pathname === "/webhookinfo") {
       const r = await fetch(TG + "/getWebhookInfo");
       return new Response(await r.text());
     }
+
     if (url.pathname === "/sendreport") {
-      await sendChannelReport();
+      await sendChannelReport(TG);
       return new Response("Report sent!");
     }
+
     if (request.method !== "POST") return new Response("Radar Bot is running!");
+
     try {
       const update = await request.json();
-      await handleUpdate(update);
+      await handleUpdate(update, TG);
     } catch(e) { console.log("Error: " + e.message); }
     return new Response("OK");
   },
+
   async scheduled(event, env, ctx) {
     const BOT_TOKEN = env.BOT_TOKEN;
     if (!BOT_TOKEN) return;
-    TG = "https://api.telegram.org/bot" + BOT_TOKEN;
-    await sendChannelReport();
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
+    await sendChannelReport(TG);
   }
 };
 
@@ -186,7 +198,7 @@ function parseOONI(ooni) {
 }
 
 // ==================== Send ====================
-async function sendPhoto(chatId, url, caption) {
+async function sendPhoto(TG, chatId, url, caption) {
   try {
     await fetch(TG + "/sendPhoto", {
       method: "POST",
@@ -195,7 +207,7 @@ async function sendPhoto(chatId, url, caption) {
     });
   } catch(e) { console.log("sendPhoto error: " + e.message); }
 }
-async function sendMessage(chatId, text, extra) {
+async function sendMessage(TG, chatId, text, extra) {
   const body = { chat_id: chatId, text: text };
   if (extra) {
     Object.keys(extra).forEach(k => {
@@ -214,7 +226,7 @@ async function sendMessage(chatId, text, extra) {
     });
   } catch(e) { console.log("sendMessage error: " + e.message); }
 }
-async function sendChannelReport() {
+async function sendChannelReport(TG) {
   const report = await makeReport();
   try {
     await fetch(TG + "/sendMessage", {
@@ -226,18 +238,18 @@ async function sendChannelReport() {
 }
 
 // ==================== Handle Update ====================
-async function handleUpdate(update) {
+async function handleUpdate(update, TG) {
   if (!update.message) return;
   const msg = update.message;
   const chatId = msg.chat.id;
   const text = msg.text || "";
   const userId = msg.from.id;
 
-  const inCh1 = await checkMember(userId, CH1);
-  const inCh2 = await checkMember(userId, CH2);
+  const inCh1 = await checkMember(TG, userId, CH1);
+  const inCh2 = await checkMember(TG, userId, CH2);
 
   if (!inCh1 || !inCh2) {
-    await sendMessage(chatId,
+    await sendMessage(TG, chatId,
       "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.",
       {
         parse_mode: "HTML",
@@ -251,47 +263,47 @@ async function handleUpdate(update) {
   }
 
   if (text === "/start") {
-    await sendMessage(chatId,
+    await sendMessage(TG, chatId,
       "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   } else if (text === "/status") {
-    await sendMessage(chatId, "🔍 در حال دریافت...");
+    await sendMessage(TG, chatId, "🔍 در حال دریافت...");
     const report = await makeReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/ping") {
-    await sendMessage(chatId, "🔍 در حال پینگ...");
+    await sendMessage(TG, chatId, "🔍 در حال پینگ...");
     const report = await makePingReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/filtering") {
-    await sendMessage(chatId, "🔍 در حال بررسی...");
+    await sendMessage(TG, chatId, "🔍 در حال بررسی...");
     const report = await makeFilteringReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/sites") {
-    await sendMessage(chatId, "🔍 در حال بررسی سرویس‌ها...");
+    await sendMessage(TG, chatId, "🔍 در حال بررسی سرویس‌ها...");
     const report = await makeSitesReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/chart") {
-    await sendMessage(chatId, "📊 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "📊 در حال ساخت نمودار...");
     const c = await makeBarChart();
-    await sendPhoto(chatId, c.url, c.caption);
+    await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/pie") {
-    await sendMessage(chatId, "🥧 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار...");
     const c = await makePieChart();
-    await sendPhoto(chatId, c.url, c.caption);
+    await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/trend") {
-    await sendMessage(chatId, "📈 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "📈 در حال ساخت نمودار...");
     const c = await makeTrendChart();
-    await sendPhoto(chatId, c.url, c.caption);
+    await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/help") {
-    await sendMessage(chatId,
+    await sendMessage(TG, chatId,
       "📚 <b>راهنمای ربات</b>\n\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   }
 }
 
-async function checkMember(userId, channel) {
+async function checkMember(TG, userId, channel) {
   try {
     const r = await fetch(TG + "/getChatMember?chat_id=" + channel + "&user_id=" + userId);
     const d = await r.json();
@@ -513,4 +525,4 @@ async function makeReport() {
   out += "\n━━━━━━━━━━━━━━━\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n\n";
   out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
   return out;
-}
+        }
