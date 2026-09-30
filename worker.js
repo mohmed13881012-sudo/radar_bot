@@ -1,7 +1,7 @@
 const BOT_TOKEN = "8579994081:AAFPiuiMPgANy7ARI9QiE7dWWwlnFrwY8gs";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
-const RADAR_TOKEN = "cfat_hbyshtiPpLx0a2goEzglGHpHDIfgojgWYkukkCXjd313b981";
+const RADAR_TOKEN = "cfut_B6RHwtGv5kXvPTXOCtqmwnZfpZPgDa9yMSUSFmGk8d34c9b4";
 const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 const RADAR = "https://api.cloudflare.com/client/v4/radar";
 
@@ -301,4 +301,4 @@ async function makeOutagesReport() {
   }
   out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
   return out;
-  }
+        }
