@@ -156,7 +156,7 @@ function parseOONI(ooni) {
       const ok = mc - ac - cc - fc;
       totalMs += mc;
       blockedMs += (ac + cc);
-      
+
       if (row.probe_asn && mc >= 30) {
         const asn = String(row.probe_asn).replace(/^AS/i, "");
         if (!asnData[asn]) asnData[asn] = { total: 0, ok: 0, count: 0 };
@@ -164,7 +164,7 @@ function parseOONI(ooni) {
         asnData[asn].ok += ok;
         asnData[asn].count += mc;
       }
-      
+
       if (row.measurement_start_day) {
         const day = row.measurement_start_day;
         if (!dayData[day]) dayData[day] = { total: 0, blocked: 0 };
@@ -201,7 +201,7 @@ async function makeBarChart() {
         }]
       },
       options: {
-        title: { display: true, text: "دسترسی آزاد به تفکیک اپراتور (24h)", fontSize: 18 },
+        title: { display: true, text: "دسترسی آزاد اپراتورها (24h)", fontSize: 18 },
         legend: { display: false },
         scales: { xAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
@@ -273,7 +273,7 @@ async function makeTrendChart() {
   };
 }
 
-// ==================== Send ====================
+// ==================== Send Photo ====================
 async function sendPhoto(chatId, url, caption) {
   try {
     await fetch(TG + "/sendPhoto", {
@@ -284,15 +284,25 @@ async function sendPhoto(chatId, url, caption) {
   } catch(e) { console.log("sendPhoto error: " + e.message); }
 }
 
+// ==================== Send Message (اصلاح‌شده) ====================
 async function sendMessage(chatId, text, extra) {
-  const body = Object.assign({ chat_id: chatId, text: text }, extra || {});
+  const body = { chat_id: chatId, text: text };
+  if (extra) {
+    Object.keys(extra).forEach(k => {
+      if (k === "inline_keyboard") {
+        body.reply_markup = { inline_keyboard: extra[k] };
+      } else {
+        body[k] = extra[k];
+      }
+    });
+  }
   try {
     await fetch(TG + "/sendMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-  } catch(e) {}
+  } catch(e) { console.log("sendMessage error: " + e.message); }
 }
 
 async function sendChannelReport() {
@@ -306,7 +316,7 @@ async function sendChannelReport() {
   } catch(e) {}
 }
 
-// ==================== Update ====================
+// ==================== Update Handler ====================
 async function handleUpdate(update) {
   if (!update.message) return;
   const msg = update.message;
@@ -505,4 +515,4 @@ async function makeReport() {
   out += "\n━━━━━━━━━━━━━━━\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n\n";
   out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
   return out;
-      }
+}
