@@ -1,9 +1,20 @@
 const BOT_TOKEN = "8579994081:AAFPiuiMPgANy7ARI9QiE7dWWwlnFrwY8gs";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
-const RADAR_TOKEN = "cfut_B6RHwtGv5kXvPTXOCtqmwnZfpZPgDa9yMSUSFmGk8d34c9b4";
 const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
-const RADAR = "https://api.cloudflare.com/client/v4/radar";
+
+// سایت‌های تست
+const IR_SITES = [
+  { name: "ایرانسل", url: "https://irancell.ir" },
+  { name: "همراه اول", url: "https://mci.ir" },
+  { name: "شاپرک", url: "https://shaparak.ir" },
+  { name: "دیجی‌کالا", url: "https://digikala.com" }
+];
+const GLOBAL_SITES = [
+  { name: "گوگل", url: "https://www.google.com" },
+  { name: "کلادفلر", url: "https://www.cloudflare.com" },
+  { name: "مایکروسافت", url: "https://www.microsoft.com" }
+];
 
 export default {
   async fetch(request) {
@@ -18,7 +29,7 @@ export default {
       return new Response(await r.text());
     }
     if (url.pathname === "/debug") {
-      const out = await debugRadar();
+      const out = await debugPing();
       return new Response(out, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     if (url.pathname === "/sendreport") {
@@ -50,22 +61,30 @@ function getIranDate() {
   }).format(new Date());
 }
 
-async function debugRadar() {
-  const urls = [
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth",
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=latency",
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=dns",
-    RADAR + "/quality/speed/summary?location=IR&dateRange=1d"
-  ];
+// پینگ یه سایت و برگرداندن زمان پاسخ (ms)
+async function pingSite(url) {
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    await fetch(url, { method: "HEAD", signal: controller.signal, redirect: "follow" });
+    clearTimeout(timeout);
+    return Date.now() - start;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function debugPing() {
   let out = "";
-  for (const u of urls) {
-    try {
-      const r = await fetch(u, { headers: { "Authorization": "Bearer " + RADAR_TOKEN } });
-      const t = await r.text();
-      out += "=== " + u + "\n" + t.substring(0, 1500) + "\n\n";
-    } catch(e) {
-      out += "=== " + u + "\nERR: " + e.message + "\n\n";
-    }
+  for (const site of IR_SITES) {
+    const t = await pingSite(site.url);
+    out += site.name + " (" + site.url + "): " + (t ? t + " ms" : "FAIL") + "\n";
+  }
+  out += "---\n";
+  for (const site of GLOBAL_SITES) {
+    const t = await pingSite(site.url);
+    out += site.name + " (" + site.url + "): " + (t ? t + " ms" : "FAIL") + "\n";
   }
   return out;
 }
@@ -107,7 +126,7 @@ async function handleUpdate(update) {
 
   if (text === "/start") {
     await sendMessage(chatId,
-      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 برای دریافت گزارش لحظه‌ای اینترنت ایران، دستور /status را بزنید.\n\n📌 دستورات:\n/start - شروع\n/status - گزارش لحظه‌ای\n/speed - سرعت اینترنت\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها\n/help - راهنما",
+      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 برای دریافت گزارش لحظه‌ای اینترنت ایران، دستور /status را بزنید.\n\n📌 دستورات:\n/start - شروع\n/status - گزارش لحظه‌ای\n/speed - سرعت و پینگ سایت‌ها\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   } else if (text === "/status") {
@@ -115,20 +134,12 @@ async function handleUpdate(update) {
     const report = await makeReport();
     await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/speed") {
-    await sendMessage(chatId, "🔍 در حال دریافت اطلاعات سرعت...");
+    await sendMessage(chatId, "🔍 در حال دریافت پینگ...");
     const report = await makeSpeedReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/traffic") {
-    await sendMessage(chatId, "🔍 در حال دریافت اطلاعات ترافیک...");
-    const report = await makeTrafficReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/outages") {
-    await sendMessage(chatId, "🔍 در حال بررسی قطعی‌ها...");
-    const report = await makeOutagesReport();
     await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/help") {
     await sendMessage(chatId,
-      "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/start - شروع\n/status - گزارش لحظه‌ای اینترنت ایران\n/speed - سرعت و کیفیت اتصال\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها و اختلالات\n/help - راهنما\n\n📡 کانال‌ها:\n@radarinternetiran\n@royal_trust_ir_official",
+      "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/start - شروع\n/status - گزارش لحظه‌ای\n/speed - پینگ سایت‌ها\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   }
@@ -157,148 +168,121 @@ async function sendMessage(chatId, text, extra) {
   } catch(e) {}
 }
 
-async function radarFetch(path) {
-  try {
-    const r = await fetch(RADAR + path, {
-      headers: { "Authorization": "Bearer " + RADAR_TOKEN }
-    });
-    const d = await r.json();
-    if (d.success && d.result) return d.result;
-  } catch(e) { console.log("Radar error: " + e.message); }
-  return null;
-}
-
-function extractValue(obj, ...paths) {
-  if (!obj) return null;
-  for (const p of paths) {
-    if (!p) continue;
-    const parts = p.split(".");
-    let v = obj;
-    let ok = true;
-    for (const part of parts) {
-      if (v && v[part] !== undefined) v = v[part];
-      else { ok = false; break; }
-    }
-    if (ok && v !== null && v !== undefined) {
-      const num = parseFloat(v);
-      if (!isNaN(num)) return num;
-    }
-  }
-  return null;
-}
-
 function makeBar(v) {
-  const filled = Math.round(v / 10);
+  const filled = Math.max(0, Math.min(10, Math.round(v)));
   let color = "🔴";
-  if (v >= 80) color = "🟢";
-  else if (v >= 60) color = "🟡";
-  else if (v >= 40) color = "🟠";
+  if (v >= 8) color = "🟢";
+  else if (v >= 6) color = "🟡";
+  else if (v >= 4) color = "🟠";
   let bar = "";
   for (let i = 0; i < 10; i++) bar += (i < filled ? color : "▫️");
   return bar;
 }
 
-async function makeReport() {
-  const bwData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth");
-  const latData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=latency");
-  const dnsData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=dns");
+// تحلیل وضعیت کلی بر اساس پینگ‌ها
+async function analyzeNetwork() {
+  const irResults = [];
+  const globalResults = [];
 
-  const getP50 = (data) => {
-    if (!data || !data.summary_0 || !data.summary_0.p50) return null;
-    const v = parseFloat(data.summary_0.p50);
-    return isNaN(v) ? null : v;
-  };
-
-  let bandwidth = getP50(bwData);
-  let latency = getP50(latData);
-  let dns = getP50(dnsData);
-
-  bandwidth = bandwidth ? Math.round(bandwidth * 10) / 10 : 0;
-  latency = latency ? Math.round(latency) : 0;
-  dns = dns ? Math.round(dns) : 0;
-
-  let iqiScore = 50;
-  if (bandwidth > 0) {
-    iqiScore = Math.min(100, Math.round(bandwidth * 2.5));
-  } else if (latency > 0) {
-    iqiScore = Math.max(10, Math.min(100, Math.round(100 - latency)));
+  for (const site of IR_SITES) {
+    const t = await pingSite(site.url);
+    irResults.push({ name: site.name, time: t });
   }
-  if (iqiScore < 10) iqiScore = 10;
+  for (const site of GLOBAL_SITES) {
+    const t = await pingSite(site.url);
+    globalResults.push({ name: site.name, time: t });
+  }
+
+  const irTimes = irResults.filter(r => r.time).map(r => r.time);
+  const globalTimes = globalResults.filter(r => r.time).map(r => r.time);
+
+  const irAvg = irTimes.length ? Math.round(irTimes.reduce((a,b) => a+b, 0) / irTimes.length) : null;
+  const globalAvg = globalTimes.length ? Math.round(globalTimes.reduce((a,b) => a+b, 0) / globalTimes.length) : null;
+
+  // محاسبه امتیاز کلی
+  let score = 0;
+  let count = 0;
+  if (irAvg !== null) {
+    // پینگ زیر ۱۰۰ = عالی، بالای ۵۰۰ = بد
+    const irScore = Math.max(0, Math.min(100, 100 - (irAvg / 5)));
+    score += irScore;
+    count++;
+  }
+  if (globalAvg !== null) {
+    const globalScore = Math.max(0, Math.min(100, 100 - (globalAvg / 5)));
+    score += globalScore;
+    count++;
+  }
+  const finalScore = count > 0 ? Math.round(score / count) : 0;
+
+  return {
+    irResults,
+    globalResults,
+    irAvg,
+    globalAvg,
+    score: finalScore,
+    irAccessible: irTimes.length,
+    globalAccessible: globalTimes.length,
+    irTotal: IR_SITES.length,
+    globalTotal: GLOBAL_SITES.length
+  };
+}
+
+async function makeReport() {
+  const data = await analyzeNetwork();
 
   let emoji = "🔴", status = "بحرانی";
-  if (iqiScore >= 80) { emoji = "🟢"; status = "پایدار"; }
-  else if (iqiScore >= 60) { emoji = "🟡"; status = "نسبتا پایدار"; }
-  else if (iqiScore >= 40) { emoji = "🟠"; status = "ناپایدار"; }
+  if (data.score >= 80) { emoji = "🟢"; status = "پایدار"; }
+  else if (data.score >= 60) { emoji = "🟡"; status = "نسبتا پایدار"; }
+  else if (data.score >= 40) { emoji = "🟠"; status = "ناپایدار"; }
 
-  const drop = 100 - iqiScore;
   const time = getIranTime();
   const date = getIranDate();
-  const bar = makeBar(iqiScore);
+  const bar = makeBar(data.score / 10);
+
+  // ساخت لیست سایت‌ها
+  let irList = "";
+  for (const r of data.irResults) {
+    irList += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
+  }
+  let globalList = "";
+  for (const r of data.globalResults) {
+    globalList += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
+  }
 
   return "📊 <b>گزارش وضعیت شبکه</b>\n" +
     "📅 " + date + " | 🕒 " + time + "\n\n" +
     "━━━━━━━━━━━━━━━\n" +
     "🎯 <b>وضعیت کلی</b>\n" +
     emoji + " " + status + "\n" +
-    bar + " <b>%" + iqiScore + "</b>\n\n" +
-    "🛡️ سلامت شبکه: %" + iqiScore + "\n" +
-    "📉 افت: %" + drop + "\n\n" +
+    bar + " <b>%" + data.score + "</b>\n\n" +
+    "📡 دسترسی ایران: " + data.irAccessible + "/" + data.irTotal + "\n" +
+    "🌍 دسترسی جهانی: " + data.globalAccessible + "/" + data.globalTotal + "\n\n" +
     "━━━━━━━━━━━━━━━\n" +
-    "🌐 <b>کیفیت اتصال</b>\n" +
-    "⭐ QoE: %" + iqiScore + "\n" +
-    "⏱️ تاخیر: " + latency + " ms\n" +
-    "📶 پهنای باند: " + bandwidth + " Mbps\n" +
-    "🔍 DNS: " + dns + " ms\n\n" +
+    "🇮🇷 <b>سایت‌های ایرانی</b>\n" +
+    irList + "\n" +
+    "🌍 <b>سایت‌های جهانی</b>\n" +
+    globalList + "\n" +
     "━━━━━━━━━━━━━━━\n" +
-    "🔗 <b>لینک‌های مفید</b>\n" +
-    "📡 @radarinternetiran\n" +
+    "🔗 @radarinternetiran\n" +
     "👑 @royal_trust_ir_official\n\n" +
     "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
 }
 
 async function makeSpeedReport() {
-  const speed = await radarFetch("/quality/speed/summary?location=IR&dateRange=1d");
-  let dl = extractValue(speed, "summary_0.bandwidthDownload", "summary.0.download", "bandwidth.download");
-  let ul = extractValue(speed, "summary_0.bandwidthUpload", "summary.0.upload", "bandwidth.upload");
-  let lat = extractValue(speed, "summary_0.latency", "summary.0.latency", "latency");
-  dl = dl ? Math.round(dl * 10) / 10 : 0;
-  ul = ul ? Math.round(ul * 10) / 10 : 0;
-  lat = lat ? Math.round(lat) : 0;
-  return "📶 <b>سرعت اینترنت ایران</b>\n\n" +
-    "⬇️ دانلود: " + dl + " Mbps\n" +
-    "⬆️ آپلود: " + ul + " Mbps\n" +
-    "⏱️ تاخیر: " + lat + " ms\n\n" +
-    "🕒 " + getIranTime() + "\n" +
-    "🤖 رادار اینترنت";
-}
-
-async function makeTrafficReport() {
-  const traffic = await radarFetch("/http/summary/traffic?location=IR&dateRange=1d");
-  let http = 0, https = 0, other = 0;
-  if (traffic && traffic.summary_0) {
-    http = Math.round(parseFloat(traffic.summary_0.http || 0));
-    https = Math.round(parseFloat(traffic.summary_0.https || 0));
-    other = Math.round(parseFloat(traffic.summary_0.other || 0));
+  const data = await analyzeNetwork();
+  let out = "📶 <b>پینگ سرورها</b>\n\n";
+  out += "🇮🇷 <b>ایرانی</b>\n";
+  for (const r of data.irResults) {
+    out += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
   }
-  return "🌐 <b>ترافیک شبکه ایران</b>\n\n" +
-    "🔒 HTTPS: %" + https + "\n" +
-    "🌍 HTTP: %" + http + "\n" +
-    "📦 سایر: %" + other + "\n\n" +
-    "🕒 " + getIranTime() + "\n" +
-    "🤖 رادار اینترنت";
-}
-
-async function makeOutagesReport() {
-  const ann = await radarFetch("/annotations/outages?dateRange=7d&limit=10");
-  let out = "🚨 <b>قطعی‌ها و اختلالات (۷ روز اخیر)</b>\n\n";
-  if (ann && ann.annotations && ann.annotations.length > 0) {
-    for (const a of ann.annotations.slice(0, 5)) {
-      out += "• " + (a.description || "قطعی") + "\n";
-      if (a.startDate) out += "  🕒 " + a.startDate + "\n";
-    }
-  } else {
-    out += "✅ هیچ قطعی ثبت نشده.\n";
+  out += "\n🌍 <b>جهانی</b>\n";
+  for (const r of data.globalResults) {
+    out += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
   }
-  out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  out += "\n📊 میانگین ایران: " + (data.irAvg || "-") + " ms\n";
+  out += "📊 میانگین جهانی: " + (data.globalAvg || "-") + " ms\n\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "🤖 رادار اینترنت";
   return out;
-        }
+}
