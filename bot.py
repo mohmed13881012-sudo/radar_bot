@@ -3,7 +3,8 @@ import os
 import requests
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-CHANNEL = "radar_internet_ir"
+CHANNEL_1 = "radar_internet_ir"
+CHANNEL_2 = "royal_trust_ir_official"
 RADAR_TOKEN = os.environ.get("RADAR_TOKEN", "")
 API = f"https://botapi.rubika.ir/v3/{BOT_TOKEN}"
 
@@ -30,18 +31,27 @@ def send_message(chat_id, text, inline=None):
     except Exception as e:
         print(f"خطا در ارسال: {e}")
 
-def check_member(user_id):
+def check_single_channel(user_id, channel):
+    """چک کردن عضویت در یک کانال"""
     try:
         r = requests.post(f"{API}/getChatMember", 
-            json={"chat_id": "@" + CHANNEL, "user_id": user_id}, timeout=10)
+            json={"chat_id": "@" + channel, "user_id": user_id}, timeout=10)
         d = r.json()
-        print(f"Check member: {d}")
         if d.get("status") == "OK":
             st = d.get("data", {}).get("member", {}).get("status")
             return st in ["Member", "Admin", "Creator"]
     except Exception as e:
-        print(f"خطا: {e}")
+        print(f"خطا در چک {channel}: {e}")
     return False
+
+def check_member(user_id):
+    """چک کردن عضویت در هر دو کانال"""
+    in_channel_1 = check_single_channel(user_id, CHANNEL_1)
+    in_channel_2 = check_single_channel(user_id, CHANNEL_2)
+    
+    print(f"عضویت: کانال ۱ = {in_channel_1}, کانال ۲ = {in_channel_2}")
+    
+    return in_channel_1 and in_channel_2
 
 def get_radar_data():
     try:
@@ -87,8 +97,14 @@ def handle_update(update):
     print(f"پیام: {text} از {user_id}")
     
     if not check_member(user_id):
-        send_message(chat_id, "🔒 برای استفاده، ابتدا در کانال @radar_internet_ir عضو شوید.",
-            [[{"text": "📡 عضویت", "type": "join_channel", "username": CHANNEL}]])
+        send_message(chat_id, 
+            "🔒 برای استفاده از ربات، ابتدا در کانال‌های زیر عضو شوید:\n\n"
+            "1️⃣ رادار اینترنت\n"
+            "2️⃣ رویال تراست",
+            [
+                [{"text": "📡 عضویت در رادار اینترنت", "type": "join_channel", "username": CHANNEL_1}],
+                [{"text": "👑 عضویت در رویال تراست", "type": "join_channel", "username": CHANNEL_2}]
+            ])
         return
     
     if text == "/start":
