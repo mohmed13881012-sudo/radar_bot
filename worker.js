@@ -3,26 +3,6 @@ const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
 const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 
-const IR_SITES = [
-  { name: "ایرانسل", url: "https://irancell.ir" },
-  { name: "همراه اول", url: "https://mci.ir" },
-  { name: "شاپرک", url: "https://shaparak.ir" },
-  { name: "دیجی‌کالا", url: "https://digikala.com" }
-];
-const GLOBAL_SITES = [
-  { name: "گوگل", url: "https://www.google.com" },
-  { name: "کلادفلر", url: "https://www.cloudflare.com" },
-  { name: "مایکروسافت", url: "https://www.microsoft.com" }
-];
-// سایت‌هایی که معمولاً در ایران فیلتر هستن
-const FILTERED_SITES = [
-  { name: "توییتر / X", url: "https://x.com" },
-  { name: "یوتیوب", url: "https://www.youtube.com" },
-  { name: "فیسبوک", url: "https://www.facebook.com" },
-  { name: "تلگرام", url: "https://telegram.org" },
-  { name: "اینستاگرام", url: "https://www.instagram.com" }
-];
-
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -30,10 +10,6 @@ export default {
     if (url.pathname === "/setwebhook") {
       const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
       return new Response("Result: " + await r.text());
-    }
-    if (url.pathname === "/webhookinfo") {
-      const r = await fetch(TG + "/getWebhookInfo");
-      return new Response(await r.text());
     }
     if (url.pathname === "/debug") {
       const out = await debugAll();
@@ -68,75 +44,53 @@ function getIranDate() {
   }).format(new Date());
 }
 
-// ==================== Debug همه چیز ====================
+// ==================== Debug ====================
 async function debugAll() {
-  let out = "=== PING TEST ===\n";
-  for (const s of [...IR_SITES, ...GLOBAL_SITES]) {
-    const t = await pingSite(s.url);
-    out += s.name + ": " + (t ? t + " ms" : "FAIL") + "\n";
-  }
-  out += "\n=== BANDWIDTH ===\n";
-  const bw = await measureBandwidth();
-  out += "Estimated: " + bw + " Mbps\n";
-  out += "\n=== OONI FILTERING ===\n";
+  let out = "=== OONI (24h) ===\n";
   const ooni = await fetchOONI();
-  out += JSON.stringify(ooni).substring(0, 1000) + "\n";
-  out += "\n=== BGP DATA (RIPE) ===\n";
+  out += JSON.stringify(ooni).substring(0, 2000) + "\n\n";
+  out += "=== OONI (7d) ===\n";
+  const ooni7 = await fetchOONI7d();
+  out += JSON.stringify(ooni7).substring(0, 2000) + "\n\n";
+  out += "=== RIPE BGP (1h) ===\n";
   const bgp = await fetchBGP();
-  out += JSON.stringify(bgp).substring(0, 1000) + "\n";
+  out += JSON.stringify(bgp).substring(0, 2000) + "\n\n";
   return out;
 }
 
-// ==================== Ping ====================
-async function pingSite(url) {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    await fetch(url, { method: "HEAD", signal: controller.signal, redirect: "follow" });
-    clearTimeout(timeout);
-    return Date.now() - start;
-  } catch(e) { return null; }
-}
-
-// ==================== Bandwidth Test ====================
-async function measureBandwidth() {
-  // دانلود فایل 100KB از Cloudflare برای تست سرعت
-  try {
-    const start = Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const r = await fetch("https://speed.cloudflare.com/__down?bytes=1000000", { signal: controller.signal });
-    const data = await r.arrayBuffer();
-    clearTimeout(timeout);
-    const elapsed = (Date.now() - start) / 1000;
-    const bits = data.byteLength * 8;
-    const mbps = (bits / elapsed / 1000000).toFixed(1);
-    return parseFloat(mbps);
-  } catch(e) { return 0; }
-}
-
-// ==================== OONI Filtering Data ====================
+// ==================== OONI (24 ساعت اخیر) ====================
 async function fetchOONI() {
   try {
-    const since = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     const until = new Date().toISOString().split("T")[0];
+    const since = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    // گرفتن داده‌های aggregate برای ایران
     const url = "https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day";
     const r = await fetch(url, { headers: { "Accept": "application/json" } });
-    const d = await r.json();
-    return d;
-  } catch(e) { return null; }
+    if (r.ok) return await r.json();
+  } catch(e) { console.log("OONI error: " + e.message); }
+  return null;
 }
 
-// ==================== BGP Data from RIPE ====================
+async function fetchOONI7d() {
+  try {
+    const until = new Date().toISOString().split("T")[0];
+    const since = new Date(Date.now() - 604800000).toISOString().split("T")[0];
+    const url = "https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day";
+    const r = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (r.ok) return await r.json();
+  } catch(e) { console.log("OONI 7d error: " + e.message); }
+  return null;
+}
+
+// ==================== RIPE BGP ====================
 async function fetchBGP() {
   try {
     const start = new Date(Date.now() - 3600000).toISOString();
     const url = "https://stat.ripe.net/data/bgp-updates/data.json?resource=IR&starttime=" + start;
     const r = await fetch(url);
-    const d = await r.json();
-    return d;
-  } catch(e) { return null; }
+    if (r.ok) return await r.json();
+  } catch(e) { console.log("BGP error: " + e.message); }
+  return null;
 }
 
 // ==================== Channel Report ====================
@@ -151,7 +105,7 @@ async function sendChannelReport() {
   } catch(e) { console.log("Channel error: " + e.message); }
 }
 
-// ==================== Update Handler ====================
+// ==================== Handle Update ====================
 async function handleUpdate(update) {
   if (!update.message) return;
   const msg = update.message;
@@ -178,19 +132,15 @@ async function handleUpdate(update) {
 
   if (text === "/start") {
     await sendMessage(chatId,
-      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 دستورات:\n/start - شروع\n/status - گزارش کامل\n/bandwidth - سرعت پهنای باند\n/filtering - سطح فیلترینگ\n/outages - اختلالات\n/help - راهنما",
+      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 برای دریافت گزارش لحظه‌ای اینترنت ایران، دستور /status را بزنید.\n\n📌 دستورات:\n/start - شروع\n/status - گزارش کامل\n/filtering - سطح فیلترینگ\n/outages - اختلالات\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   } else if (text === "/status") {
     await sendMessage(chatId, "🔍 در حال دریافت اطلاعات...");
     const report = await makeReport();
     await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/bandwidth") {
-    await sendMessage(chatId, "🔍 در حال اندازه‌گیری پهنای باند...");
-    const report = await makeBandwidthReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/filtering") {
-    await sendMessage(chatId, "🔍 در حال بررسی سطح فیلترینگ...");
+    await sendMessage(chatId, "🔍 در حال بررسی فیلترینگ...");
     const report = await makeFilteringReport();
     await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/outages") {
@@ -199,7 +149,7 @@ async function handleUpdate(update) {
     await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/help") {
     await sendMessage(chatId,
-      "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/status - گزارش کامل\n/bandwidth - پهنای باند\n/filtering - سطح فیلترینگ\n/outages - اختلالات شبکه\n/help - راهنما",
+      "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/status - گزارش کامل\n/filtering - سطح فیلترینگ\n/outages - اختلالات\n/help - راهنما",
       { parse_mode: "HTML" }
     );
   }
@@ -239,137 +189,109 @@ function makeBar(v) {
   return bar;
 }
 
-// ==================== Analyze Network ====================
-async function analyzeNetwork() {
-  const irResults = [];
-  const globalResults = [];
-
-  for (const site of IR_SITES) {
-    const t = await pingSite(site.url);
-    irResults.push({ name: site.name, time: t });
-  }
-  for (const site of GLOBAL_SITES) {
-    const t = await pingSite(site.url);
-    globalResults.push({ name: site.name, time: t });
-  }
-
-  const irTimes = irResults.filter(r => r.time).map(r => r.time);
-  const globalTimes = globalResults.filter(r => r.time).map(r => r.time);
-
-  const irAvg = irTimes.length ? Math.round(irTimes.reduce((a,b) => a+b, 0) / irTimes.length) : null;
-  const globalAvg = globalTimes.length ? Math.round(globalTimes.reduce((a,b) => a+b, 0) / globalTimes.length) : null;
-
-  let score = 0;
-  let count = 0;
-  if (irAvg !== null) {
-    const irScore = Math.max(0, Math.min(100, 100 - (irAvg / 5)));
-    score += irScore;
-    count++;
-  }
-  if (globalAvg !== null) {
-    const globalScore = Math.max(0, Math.min(100, 100 - (globalAvg / 5)));
-    score += globalScore;
-    count++;
-  }
-  const finalScore = count > 0 ? Math.round(score / count) : 0;
-
-  return {
-    irResults, globalResults, irAvg, globalAvg,
-    score: finalScore,
-    irAccessible: irTimes.length,
-    globalAccessible: globalTimes.length,
-    irTotal: IR_SITES.length,
-    globalTotal: GLOBAL_SITES.length
-  };
-}
-
 // ==================== Main Report ====================
 async function makeReport() {
-  const data = await analyzeNetwork();
-
-  let emoji = "🔴", status = "بحرانی";
-  if (data.score >= 80) { emoji = "🟢"; status = "پایدار"; }
-  else if (data.score >= 60) { emoji = "🟡"; status = "نسبتا پایدار"; }
-  else if (data.score >= 40) { emoji = "🟠"; status = "ناپایدار"; }
+  const ooni = await fetchOONI();
+  const bgp = await fetchBGP();
 
   const time = getIranTime();
   const date = getIranDate();
-  const bar = makeBar(data.score / 10);
 
-  let irList = "";
-  for (const r of data.irResults) {
-    irList += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
-  }
-  let globalList = "";
-  for (const r of data.globalResults) {
-    globalList += "  • " + r.name + ": " + (r.time ? r.time + " ms" : "❌") + "\n";
+  // محاسبه سطح فیلترینگ از OONI
+  let filterPercent = 0;
+  let totalMs = 0;
+  let okMs = 0;
+  let asnCount = 0;
+
+  if (ooni && ooni.result && Array.isArray(ooni.result)) {
+    for (const row of ooni.result) {
+      if (row.measurement_count) {
+        totalMs += row.measurement_count;
+        if (row.ok_count) okMs += row.ok_count;
+        asnCount++;
+      }
+    }
+    if (totalMs > 0) {
+      filterPercent = Math.round(((totalMs - okMs) / totalMs) * 100);
+    }
   }
 
-  return "📊 <b>گزارش وضعیت شبکه</b>\n" +
+  let filterLevel = "🟢 پایین";
+  if (filterPercent >= 60) filterLevel = "🔴 بالا";
+  else if (filterPercent >= 30) filterLevel = "🟠 نسبتاً بالا";
+  else if (filterPercent >= 15) filterLevel = "🟡 متوسط";
+
+  // محاسبه اختلال از BGP
+  let bgpUpdates = 0;
+  let bgpStatus = "🟢 پایدار";
+  if (bgp && bgp.data && bgp.data.updates) {
+    bgpUpdates = bgp.data.updates.length;
+    if (bgpUpdates > 100) bgpStatus = "🔴 اختلال جدی";
+    else if (bgpUpdates > 30) bgpStatus = "🟡 فعالیت غیرعادی";
+  }
+
+  return "📊 <b>گزارش وضعیت اینترنت ایران</b>\n" +
     "📅 " + date + " | 🕒 " + time + "\n\n" +
     "━━━━━━━━━━━━━━━\n" +
-    "🎯 <b>وضعیت کلی</b>\n" +
-    emoji + " " + status + "\n" +
-    bar + " <b>%" + data.score + "</b>\n\n" +
-    "📡 دسترسی ایران: " + data.irAccessible + "/" + data.irTotal + "\n" +
-    "🌍 دسترسی جهانی: " + data.globalAccessible + "/" + data.globalTotal + "\n\n" +
+    "🚫 <b>سطح فیلترینگ</b>\n" +
+    "وضعیت: " + filterLevel + "\n" +
+    "درصد مسدودسازی: <b>%" + filterPercent + "</b>\n" +
+    makeBar(filterPercent / 10) + "\n" +
+    "تعداد ASNهای بررسی‌شده: " + asnCount + "\n" +
+    "تعداد اندازه‌گیری‌ها: " + totalMs + "\n\n" +
     "━━━━━━━━━━━━━━━\n" +
-    "🇮🇷 <b>سایت‌های ایرانی</b>\n" + irList + "\n" +
-    "🌍 <b>سایت‌های جهانی</b>\n" + globalList + "\n" +
+    "🚨 <b>اختلالات مسیریابی (BGP)</b>\n" +
+    "وضعیت: " + bgpStatus + "\n" +
+    "تعداد به‌روزرسانی ۱ ساعت اخیر: <b>" + bgpUpdates + "</b>\n\n" +
     "━━━━━━━━━━━━━━━\n" +
+    "📌 <b>منابع داده:</b>\n" +
+    "• OONI (اندازه‌گیری از داخل ایران)\n" +
+    "• RIPE Stat (داده‌های BGP)\n\n" +
     "🔗 @radarinternetiran\n" +
     "👑 @royal_trust_ir_official\n\n" +
     "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
 }
 
-// ==================== Bandwidth Report ====================
-async function makeBandwidthReport() {
-  const bw = await measureBandwidth();
-  let quality = "🔴 ضعیف";
-  if (bw >= 20) quality = "🟢 عالی";
-  else if (bw >= 10) quality = "🟡 خوب";
-  else if (bw >= 5) quality = "🟠 متوسط";
-
-  return "📶 <b>پهنای باند اینترنت</b>\n\n" +
-    "سرعت تخمینی: <b>" + bw + " Mbps</b>\n" +
-    "کیفیت: " + quality + "\n\n" +
-    "📌 این عدد تخمینی است و بر اساس دانلود از سرورهای Cloudflare محاسبه شده.\n\n" +
-    "🕒 " + getIranTime() + "\n" +
-    "🤖 رادار اینترنت";
-}
-
 // ==================== Filtering Report ====================
 async function makeFilteringReport() {
-  const results = [];
-  for (const site of FILTERED_SITES) {
-    const t = await pingSite(site.url);
-    results.push({ name: site.name, accessible: t !== null, time: t });
+  const ooni = await fetchOONI();
+  let totalMs = 0, okMs = 0, asnCount = 0;
+  let asnList = [];
+
+  if (ooni && ooni.result && Array.isArray(ooni.result)) {
+    for (const row of ooni.result) {
+      if (row.measurement_count) {
+        totalMs += row.measurement_count;
+        if (row.ok_count) okMs += row.ok_count;
+        asnCount++;
+        if (row.probe_asn) {
+          const rate = row.measurement_count > 0 ? Math.round((row.ok_count / row.measurement_count) * 100) : 0;
+          asnList.push({ asn: row.probe_asn, rate: rate, count: row.measurement_count });
+        }
+      }
+    }
   }
 
-  const accessible = results.filter(r => r.accessible).length;
-  const total = results.length;
-  const percent = Math.round((accessible / total) * 100);
+  const filterPercent = totalMs > 0 ? Math.round(((totalMs - okMs) / totalMs) * 100) : 0;
 
-  let level = "🔴 بالا";
-  if (percent >= 80) level = "🟢 پایین";
-  else if (percent >= 60) level = "🟡 متوسط";
-  else if (percent >= 40) level = "🟠 نسبتاً بالا";
+  let out = "🚫 <b>سطح فیلترینگ ایران</b>\n\n";
+  out += "درصد مسدودسازی کل: <b>%" + filterPercent + "</b>\n";
+  out += "تعداد کل اندازه‌گیری‌ها: " + totalMs + "\n";
+  out += "تعداد ASNها: " + asnCount + "\n\n";
 
-  let list = "";
-  for (const r of results) {
-    list += "  " + (r.accessible ? "✅" : "🚫") + " " + r.name;
-    if (r.time) list += " (" + r.time + " ms)";
-    list += "\n";
+  if (asnList.length > 0) {
+    out += "━━━━━━━━━━━━━━━\n";
+    out += "<b>به تفکیک اپراتور:</b>\n";
+    asnList.sort((a,b) => a.rate - b.rate).slice(0, 10).forEach(item => {
+      const emoji = item.rate >= 80 ? "🟢" : item.rate >= 60 ? "🟡" : item.rate >= 40 ? "🟠" : "🔴";
+      out += emoji + " AS" + item.asn + ": %" + item.rate + " دسترسی آزاد\n";
+    });
   }
 
-  return "🚫 <b>سطح فیلترینگ</b>\n\n" +
-    "سطح: " + level + "\n" +
-    "دسترسی آزاد: %" + percent + "\n\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "<b>وضعیت سایت‌ها:</b>\n" + list + "\n" +
-    "⚠️ توجه: این تست از سرور خارج از ایران انجام شده و ممکنه نتایج دقیق نباشه.\n\n" +
-    "🕒 " + getIranTime() + "\n" +
-    "🤖 رادار اینترنت";
+  out += "\n🕒 " + getIranTime() + "\n";
+  out += "📌 منبع: OONI\n";
+  out += "🤖 رادار اینترنت";
+  return out;
 }
 
 // ==================== Outages Report ====================
@@ -379,14 +301,22 @@ async function makeOutagesReport() {
 
   if (bgp && bgp.data && bgp.data.updates) {
     const updates = bgp.data.updates;
-    out += "📊 تعداد به‌روزرسانی‌های BGP: <b>" + updates.length + "</b>\n";
+    out += "📊 به‌روزرسانی‌های BGP (۱ ساعت اخیر): <b>" + updates.length + "</b>\n\n";
 
     if (updates.length > 100) {
-      out += "⚠️ تعداد بالا → نشانه اختلال\n";
+      out += "🔴 اختلال جدی در مسیریابی\n";
     } else if (updates.length > 30) {
-      out += "🟡 فعالیت متوسط\n";
+      out += "🟡 فعالیت غیرعادی\n";
     } else {
-      out += "🟢 شبکه پایدار\n";
+      out += "🟢 مسیریابی پایدار است\n";
+    }
+
+    // نمایش چند نمونه از آخرین به‌روزرسانی‌ها
+    if (updates.length > 0) {
+      out += "\n<b>آخرین رویدادها:</b>\n";
+      updates.slice(0, 5).forEach(u => {
+        if (u.type) out += "• " + u.type + "\n";
+      });
     }
 
     out += "\n🔗 منبع: RIPE Stat\n";
@@ -397,4 +327,4 @@ async function makeOutagesReport() {
   out += "\n🕒 " + getIranTime() + "\n";
   out += "🤖 رادار اینترنت";
   return out;
-  }
+        }
