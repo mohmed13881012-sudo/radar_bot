@@ -4,25 +4,46 @@ const CH2 = "@royal_trust_ir_official";
 const ASN_NAMES = {
   "12880": "زیرساخت (DCI)", "58224": "مخابرات ایران (TCI)", "6736": "شاتل قدیمی",
   "44244": "ایرانسل", "197207": "همراه اول (MCI)", "57218": "رایتل",
-  "57497": "شاتل موبایل", "50810": "آسیاتک", "31549": "شاتل",
-  "42337": "پارس‌آنلاین", "16322": "پارس‌پک", "43754": "آسیاتک",
-  "48159": "پیشگامان", "25184": "افرانت", "56402": "صبانت",
-  "205648": "رسپینا", "21478": "مبین‌نت", "206065": "پیشگامان",
-  "48434": "پارس‌آنلاین", "51685": "پارس‌پک", "51074": "شاتل",
+  "57497": "شاتل موبایل", "50810": "آسیاتک",
+  "31549": "شاتل", "42337": "پارس‌آنلاین", "16322": "پارس‌پک",
+  "43754": "آسیاتک", "48159": "پیشگامان", "25184": "افرانت",
+  "56402": "صبانت", "205648": "رسپینا", "21478": "مبین‌نت",
+  "206065": "پیشگامان", "48434": "پارس‌آنلاین", "51685": "پارس‌پک",
+  "51074": "شاتل", "52140": "ایران‌سرور", "201150": "کیان‌نت",
+  "61173": "میزبان", "201540": "خلیج فارس", "56703": "ندای رایانه",
+  "205647": "ایران‌سرور", "48431": "ماهان", "203087": "سیستم‌های نوین",
   "39501": "ابر آروان", "202468": "ایران‌سرور", "204213": "همراه نت",
   "44208": "شبکه گستر", "49100": "ارتباطات زیرساخت", "208161": "ایرانسل جدید",
   "48320": "شبکه نقره‌ای", "61167": "فناوران", "49666": "مهرگان",
-  "203087": "سیستم‌های نوین", "210644": "داده گستر", "211260": "ماهان",
-  "212097": "آسیاتک نوین", "213210": "زیتون", "51433": "های‌وب",
-  "62442": "مهر", "197749": "بهسازان", "201610": "پاسارگاد",
-  "202520": "ماد", "205172": "کنیا", "206779": "کامکار",
-  "207796": "شبکه سازان", "208296": "پژواک", "209103": "افق",
-  "209408": "سبز", "210787": "دیبا", "211120": "راهبر",
-  "213891": "ایده آل", "25124": "فناوری اطلاعات", "29049": "داده پرداز",
-  "43396": "نوین", "47257": "نسیم", "48431": "ماهان",
-  "48827": "همراه", "49189": "پارس", "51430": "آرمان",
-  "56688": "شبکه پرداز", "58090": "گسترش", "59397": "توسعه",
-  "61197": "ایده", "62229": "فرهنگ", "197967": "پیشرو"
+  "210644": "داده گستر", "211260": "ماهان", "212097": "آسیاتک نوین",
+  "213210": "زیتون", "51433": "های‌وب", "62442": "مهر",
+  "197749": "بهسازان", "201610": "پاسارگاد", "202520": "ماد",
+  "205172": "کنیا", "206779": "کامکار", "207796": "شبکه سازان",
+  "208296": "پژواک", "209103": "افق", "209408": "سبز",
+  "210787": "دیبا", "211120": "راهبر", "213891": "ایده آل",
+  "25124": "فناوری اطلاعات", "29049": "داده پرداز", "43396": "نوین",
+  "47257": "نسیم", "48827": "همراه", "49189": "پارس",
+  "51430": "آرمان", "56688": "شبکه پرداز", "58090": "گسترش",
+  "59397": "توسعه", "61197": "ایده", "62229": "فرهنگ",
+  "197967": "پیشرو"
+};
+
+// نقشه کشورها برای مقایسه
+const COUNTRIES = [
+  { code: "IR", name: "🇮🇷 ایران" },
+  { code: "TR", name: "🇹🇷 ترکیه" },
+  { code: "IQ", name: "🇮🇶 عراق" },
+  { code: "AE", name: "🇦🇪 امارات" },
+  { code: "SA", name: "🇸🇦 عربستان" }
+];
+
+// ISPهای معروف برای جستجو
+const ISP_MAP = {
+  "ایرانسل": "44244", "همراه اول": "197207", "mci": "197207", "irancell": "44244",
+  "مخابرات": "58224", "tci": "58224", "شاتل": "31549", "shuttle": "31549",
+  "پارس آنلاین": "42337", "parsonline": "42337", "آسیاتک": "43754", "asiatech": "43754",
+  "رایتل": "57218", "rightel": "57218", "پارس پک": "16322", "parspack": "16322",
+  "پیشگامان": "48159", "صبانت": "56402", "sabanet": "56402"
 };
 
 const IR_SITES = [
@@ -90,6 +111,9 @@ function getIranTime() {
 function getIranDate() {
   return new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+function getIranHour() {
+  return parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tehran', hour: '2-digit', hour12: false }).format(new Date()));
+}
 function asnName(asn) {
   const c = String(asn).replace(/^AS/i, "");
   return ASN_NAMES[c] || ("AS" + c);
@@ -141,6 +165,25 @@ async function fetchOONI7d() {
     const until = new Date().toISOString().split("T")[0];
     const since = new Date(Date.now() - 604800000).toISOString().split("T")[0];
     const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
+    if (r.ok) return await r.json();
+  } catch(e) {}
+  return null;
+}
+async function fetchOONI30d() {
+  try {
+    const until = new Date().toISOString().split("T")[0];
+    const since = new Date(Date.now() - 2592000000).toISOString().split("T")[0];
+    const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
+    if (r.ok) return await r.json();
+  } catch(e) {}
+  return null;
+}
+async function fetchOONICountry(cc, days) {
+  try {
+    if (!days) days = 1;
+    const until = new Date().toISOString().split("T")[0];
+    const since = new Date(Date.now() - (days * 86400000)).toISOString().split("T")[0];
+    const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=" + cc + "&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
     if (r.ok) return await r.json();
   } catch(e) {}
   return null;
@@ -265,23 +308,28 @@ async function handleUpdate(update, TG) {
     await sendMessage(TG, chatId,
       "╭━━━ 👋 خوش آمدید ━━━╮\n\n" +
       "  به <b>رادار اینترنت</b> خوش آمدی\n\n" +
-      "┣━━━ 📊 گزارش‌ها\n\n" +
-      "  /status  →  گزارش کامل\n" +
-      "  /status simple  →  خلاصه\n" +
-      "  /status chart  →  با نمودار\n" +
-      "  /ping  →  پینگ سایت‌ها\n" +
-      "  /filtering  →  فیلترینگ\n" +
-      "  /sites  →  وضعیت سرویس‌ها\n\n" +
-      "┣━━━ 🆚 مقایسه\n\n" +
-      "  /compare  →  مقایسه اپراتورها\n" +
-      "  /top  →  رتبه‌بندی هفتگی\n\n" +
-      "┣━━━ ⚡ تست سرعت\n\n" +
-      "  /speed  →  راهنما + لینک\n" +
-      "  /myspeed  →  کارت وایرال\n\n" +
-      "┣━━━ 📈 نمودارها\n\n" +
-      "  /chart  →  میله‌ای\n" +
-      "  /pie  →  دایره‌ای\n" +
-      "  /trend  →  روند ۷ روز\n\n" +
+      "┣━━━ 📊 گزارش‌ها\n" +
+      "  /status → کامل\n" +
+      "  /status simple → خلاصه\n" +
+      "  /work → یک‌خطی\n" +
+      "  /score → امتیاز کیفیت\n" +
+      "  /ping → پینگ سایت‌ها\n" +
+      "  /filtering → فیلترینگ\n" +
+      "  /sites → سرویس‌ها\n\n" +
+      "┣━━━ 🆚 مقایسه\n" +
+      "  /compare → مقایسه اپراتورها\n" +
+      "  /top → رتبه‌بندی هفتگی\n" +
+      "  /isp → چک ISP خاص\n" +
+      "  /world → مقایسه جهانی\n\n" +
+      "┣━━━ 📈 نمودار\n" +
+      "  /today → امروز\n" +
+      "  /history → ۳۰ روز\n" +
+      "  /trend → ۷ روز\n" +
+      "  /chart → میله‌ای\n" +
+      "  /pie → دایره‌ای\n\n" +
+      "┣━━━ ⚡ تست سرعت\n" +
+      "  /speed → راهنما + لینک\n" +
+      "  /best → بهترین زمان\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" }
     );
@@ -293,12 +341,12 @@ async function handleUpdate(update, TG) {
     await sendMessage(TG, chatId, "⏳ در حال دریافت...");
     const report = await makeReport("simple");
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/status chart") {
-    await sendMessage(TG, chatId, "📊 در حال ساخت...");
-    const summary = await makeReport("chart");
-    await sendMessage(TG, chatId, summary, { parse_mode: "HTML" });
-    const c = await makeBarChart();
-    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/work") {
+    const report = await makeWorkReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/score") {
+    const report = await makeScoreReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/compare") {
     await sendMessage(TG, chatId, "🆚 در حال مقایسه...");
     const report = await makeCompareReport();
@@ -307,17 +355,40 @@ async function handleUpdate(update, TG) {
     await sendMessage(TG, chatId, "🏆 در حال رتبه‌بندی...");
     const report = await makeTopReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/isp") {
+    await sendMessage(TG, chatId,
+      "🔍 <b>چک ISP خاص</b>\n\n" +
+      "مثال:\n" +
+      "<code>/isp ایرانسل</code>\n" +
+      "<code>/isp مخابرات</code>\n" +
+      "<code>/isp شاتل</code>\n" +
+      "<code>/isp پارس آنلاین</code>\n\n" +
+      "ISPهای موجود:\nایرانسل، همراه اول، مخابرات، شاتل، پارس آنلاین، آسیاتک، رایتل، پارس پک، پیشگامان، صبانت",
+      { parse_mode: "HTML" });
+  } else if (text.startsWith("/isp ")) {
+    const query = text.replace("/isp ", "").trim();
+    await sendMessage(TG, chatId, "🔍 در حال جستجو...");
+    const report = await makeISPReport(query);
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/world") {
+    await sendMessage(TG, chatId, "🌍 در حال دریافت...");
+    const report = await makeWorldReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/today") {
+    await sendMessage(TG, chatId, "📅 در حال ساخت...");
+    const c = await makeTodayChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/history") {
+    await sendMessage(TG, chatId, "📅 در حال ساخت...");
+    const c = await makeHistoryChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/best") {
+    await sendMessage(TG, chatId, "⏰ در حال تحلیل...");
+    const report = await makeBestTimeReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/speed") {
     const report = await makeSpeedReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
-  } else if (text.startsWith("/myspeed ")) {
-    const parts = text.replace("/myspeed ", "").trim().split(/\s+/);
-    if (parts.length !== 3) {
-      await sendMessage(TG, chatId, "❌ فرمت اشتباه. مثال:\n<code>/myspeed 25 8 20</code>", { parse_mode: "HTML" });
-    } else {
-      const card = await makeSpeedCard(parts[0], parts[1], parts[2]);
-      await sendMessage(TG, chatId, card, { parse_mode: "HTML" });
-    }
   } else if (text === "/ping") {
     await sendMessage(TG, chatId, "⏳ در حال پینگ...");
     const report = await makePingReport();
@@ -345,23 +416,28 @@ async function handleUpdate(update, TG) {
   } else if (text === "/help") {
     await sendMessage(TG, chatId,
       "╭━━━ 📚 راهنمای ربات ━━━╮\n\n" +
-      "┣━━━ 📊 گزارش‌ها\n\n" +
-      "  /status  →  کامل\n" +
-      "  /status simple  →  خلاصه\n" +
-      "  /status chart  →  با نمودار\n" +
-      "  /ping  →  پینگ سایت‌ها\n" +
-      "  /filtering  →  فیلترینگ\n" +
-      "  /sites  →  سرویس‌ها\n\n" +
-      "┣━━━ 🆚 مقایسه\n\n" +
-      "  /compare  →  مقایسه اپراتورها\n" +
-      "  /top  →  رتبه‌بندی هفتگی\n\n" +
-      "┣━━━ ⚡ تست سرعت\n\n" +
-      "  /speed  →  راهنما\n" +
-      "  /myspeed 25 8 20  →  کارت\n\n" +
-      "┣━━━ 📈 نمودارها\n\n" +
-      "  /chart  →  میله‌ای\n" +
-      "  /pie  →  دایره‌ای\n" +
-      "  /trend  →  روند ۷ روز\n\n" +
+      "┣━━━ 📊 گزارش‌ها\n" +
+      "  /status → کامل\n" +
+      "  /status simple → خلاصه\n" +
+      "  /work → یک‌خطی\n" +
+      "  /score → امتیاز کیفیت\n" +
+      "  /ping → پینگ\n" +
+      "  /filtering → فیلترینگ\n" +
+      "  /sites → سرویس‌ها\n\n" +
+      "┣━━━ 🆚 مقایسه\n" +
+      "  /compare → مقایسه اپراتورها\n" +
+      "  /top → رتبه‌بندی هفتگی\n" +
+      "  /isp X → چک ISP خاص\n" +
+      "  /world → مقایسه جهانی\n\n" +
+      "┣━━━ 📈 نمودار\n" +
+      "  /today → امروز\n" +
+      "  /history → ۳۰ روز\n" +
+      "  /trend → ۷ روز\n" +
+      "  /chart → میله‌ای\n" +
+      "  /pie → دایره‌ای\n\n" +
+      "┣━━━ ⚡ تست سرعت\n" +
+      "  /speed → راهنما\n" +
+      "  /best → بهترین زمان\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" }
     );
@@ -461,11 +537,98 @@ async function makeTrendChart() {
         }]
       },
       options: {
-        title: { display: true, text: "روند فیلترینگ 7 روز اخیر", fontSize: 18 },
+        title: { display: true, text: "روند فیلترینگ ۷ روز اخیر", fontSize: 18 },
         scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
     }),
     caption: "📈 <b>روند فیلترینگ ۷ روز اخیر</b>\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>"
+  };
+}
+
+async function makeHistoryChart() {
+  const ooni = await fetchOONI30d();
+  const p = parseOONI(ooni);
+  let days = Object.keys(p.dayData).sort();
+  let labels = [];
+  let values = [];
+  for (const d of days) {
+    const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0;
+    labels.push(d.substring(5));
+    values.push(blocked);
+  }
+  const avg = values.length > 0 ? Math.round(values.reduce((a,b) => a+b, 0) / values.length) : 0;
+  return {
+    url: quickChart({
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "درصد مسدودسازی",
+          data: values,
+          borderColor: "#3b82f6",
+          backgroundColor: "rgba(59,130,246,0.15)",
+          fill: true,
+          tension: 0.3,
+          borderWidth: 3
+        }]
+      },
+      options: {
+        title: { display: true, text: "روند فیلترینگ ۳۰ روز اخیر", fontSize: 18 },
+        scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
+      }
+    }),
+    caption: "📅 <b>تاریخچه ۳۰ روز اخیر</b>\n\n📊 میانگین: <b>%" + avg + "</b>\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>"
+  };
+}
+
+async function makeTodayChart() {
+  // نمودار کیفیت ۲۴ ساعت گذشته (شبیه‌سازی بر اساس پینگ فعلی)
+  const hours = [];
+  const pings = [];
+  const currentHour = getIranHour();
+  
+  for (let h = 0; h < 24; h++) {
+    hours.push(h + ":00");
+    // پترن معمول: شب‌ها بهتر، ظهر بدتر
+    let base = 50;
+    if (h >= 2 && h <= 7) base = 75;
+    else if (h >= 8 && h <= 12) base = 45;
+    else if (h >= 13 && h <= 17) base = 40;
+    else if (h >= 18 && h <= 22) base = 35;
+    else base = 55;
+    
+    // اگه ساعت فعلیه، مقدار واقعی بذار
+    if (h === currentHour) {
+      const t1 = await pingSite("https://www.google.com");
+      const t2 = await pingSite("https://digikala.com");
+      const avg = ((t1 || 500) + (t2 || 500)) / 2;
+      base = Math.max(10, Math.min(95, 100 - (avg / 5)));
+    }
+    
+    pings.push(Math.round(base));
+  }
+  
+  return {
+    url: quickChart({
+      type: "line",
+      data: {
+        labels: hours,
+        datasets: [{
+          label: "کیفیت تخمینی",
+          data: pings,
+          borderColor: "#22c55e",
+          backgroundColor: "rgba(34,197,94,0.15)",
+          fill: true,
+          tension: 0.3,
+          borderWidth: 3
+        }]
+      },
+      options: {
+        title: { display: true, text: "کیفیت اینترنت در ۲۴ ساعت", fontSize: 18 },
+        scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
+      }
+    }),
+    caption: "📅 <b>نمودار امروز</b>\n\n⏰ ساعت فعلی: <b>" + currentHour + ":00</b>\n📊 کیفیت فعلی: <b>%" + pings[currentHour] + "</b>"
   };
 }
 
@@ -627,62 +790,211 @@ async function makeTopReport() {
   return out;
 }
 
-async function makeSpeedReport() {
-  let out = "╭━━━ ⚡ تست سرعت ━━━╮\n\n";
-  out += "  📋 <b>راهنمای تست:</b>\n\n";
-  out += "  1️⃣ لینک تست رو باز کن\n";
-  out += "  2️⃣ سرعتت رو اندازه بگیر\n";
-  out += "  3️⃣ نتیجه رو به ما بفرست\n\n";
-  out += "┣━━━ 🔗 <b>لینک‌های تست</b>\n\n";
-  out += "  🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
-  out += "  📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
-  out += "  ⚡ <a href='https://fast.com/'>Fast.com</a>\n\n";
-  out += "┣━━━ 📤 <b>ارسال نتیجه</b>\n\n";
-  out += "  <code>/myspeed 25 8 20</code>\n\n";
-  out += "  🔹 اول: دانلود (Mbps)\n";
-  out += "  🔹 دوم: آپلود (Mbps)\n";
-  out += "  🔹 سوم: پینگ (ms)\n\n";
-  out += "  🎁 یه <b>کارت وایرال</b> برات می‌سازیم!\n";
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯";
+async function makeISPReport(query) {
+  const q = query.toLowerCase();
+  let asn = null;
+  for (const [name, code] of Object.entries(ISP_MAP)) {
+    if (q.includes(name) || name.includes(q)) { asn = code; break; }
+  }
+  
+  if (!asn) {
+    return "❌ ISP پیدا نشد: <b>" + query + "</b>\n\n" +
+      "ISPهای موجود:\nایرانسل، همراه اول، مخابرات، شاتل، پارس آنلاین، آسیاتک، رایتل، پارس پک، پیشگامان، صبانت";
+  }
+  
+  const ooni = await fetchOONI();
+  const p = parseOONI(ooni);
+  const d = p.asnData[asn];
+  
+  if (!d) {
+    return "❌ داده‌ای برای <b>" + asnName(asn) + "</b> یافت نشد.\n\nممکنه این ISP امروز تست نداشته باشه.";
+  }
+  
+  const rate = Math.round((d.ok / d.total) * 100);
+  let emoji = "🟢", status = "خوب";
+  if (rate >= 80) { emoji = "🟢"; status = "عالی"; }
+  else if (rate >= 60) { emoji = "🟡"; status = "خوب"; }
+  else if (rate >= 40) { emoji = "🟠"; status = "متوسط"; }
+  else { emoji = "🔴"; status = "ضعیف"; }
+  
+  let out = "╭━━━ 📡 " + asnName(asn) + " ━━━╮\n\n";
+  out += "  " + emoji + "  <b>" + status + "</b>\n\n";
+  out += "┣━━━ 📊 آمار امروز\n\n";
+  out += "  🔓 دسترسی آزاد: <b>%" + rate + "</b>\n";
+  out += "  " + makeBar(rate / 10) + "\n\n";
+  out += "  📈 تعداد تست: <code>" + d.count.toLocaleString("fa-IR") + "</code>\n";
+  out += "  🔒 مسدود: %" + (100 - rate) + "\n\n";
+  out += "╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "📌 منبع: OONI\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
   return out;
 }
 
-async function makeSpeedCard(download, upload, ping) {
-  const dl = parseFloat(download);
-  const ul = parseFloat(upload);
-  const pg = parseInt(ping);
-  if (isNaN(dl) || dl < 0 || dl > 10000) return "❌ عدد دانلود نامعتبر.";
-  if (isNaN(ul) || ul < 0 || ul > 10000) return "❌ عدد آپلود نامعتبر.";
-  if (isNaN(pg) || pg < 0 || pg > 10000) return "❌ عدد پینگ نامعتبر.";
+async function makeWorldReport() {
+  let out = "╭━━━ 🌍 مقایسه جهانی ━━━╮\n\n";
+  out += "📊 بر اساس OONI\n\n";
+  
+  let results = [];
+  for (const c of COUNTRIES) {
+    try {
+      const ooni = await fetchOONICountry(c.code, 1);
+      if (ooni && ooni.result && Array.isArray(ooni.result)) {
+        let total = 0, blocked = 0;
+        for (const row of ooni.result) {
+          total += row.measurement_count || 0;
+          blocked += (row.anomaly_count || 0) + (row.confirmed_count || 0);
+        }
+        const percent = total > 0 ? Math.round((blocked / total) * 100) : 0;
+        results.push({ name: c.name, percent: percent, count: total });
+      }
+    } catch(e) {}
+  }
+  
+  if (results.length === 0) {
+    return "❌ داده کافی نیست.";
+  }
+  
+  results.sort((a, b) => a.percent - b.percent);
+  
+  out += "┣━━━ 🏆 رتبه‌بندی\n\n";
+  results.forEach((r, i) => {
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
+    const e = r.percent < 15 ? "🟢" : r.percent < 30 ? "🟡" : r.percent < 50 ? "🟠" : "🔴";
+    out += "  " + medal + " " + r.name + "\n";
+    out += "     " + e + " %" + r.percent + " مسدود\n";
+  });
+  
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "📌 منبع: OONI\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
+  return out;
+}
 
-  let rank = "🐌 ضعیف", emoji = "🐌", percent = 15;
-  if (dl >= 50) { rank = "⚡ فوق‌العاده"; emoji = "⚡"; percent = 95; }
-  else if (dl >= 30) { rank = "🚀 خیلی خوب"; emoji = "🚀"; percent = 85; }
-  else if (dl >= 15) { rank = "✨ خوب"; emoji = "✨"; percent = 70; }
-  else if (dl >= 8) { rank = "🟡 متوسط"; emoji = "🟡"; percent = 50; }
-  else if (dl >= 3) { rank = "🟠 ضعیف"; emoji = "🟠"; percent = 30; }
-
-  let quality = "📱 پیام‌رسان";
-  if (dl >= 25 && pg < 50) quality = "🎮 مناسب گیمینگ";
-  else if (dl >= 15) quality = "🎬 مناسب استریم";
-  else if (dl >= 8) quality = "🌐 مناسب وبگردی";
-
-  const bar = makeBar(percent / 10);
-
-  return "╭━━━ ⚡ سرعت اینترنت من ━━━╮\n\n" +
-    "  " + emoji + "  <b>" + rank + "</b>\n\n" +
-    "┣━━━ 📊 نتایج\n\n" +
-    "  ⬇️ دانلود  <b>" + dl + " Mbps</b>\n" +
-    "  ⬆️ آپلود  <b>" + ul + " Mbps</b>\n" +
-    "  ⏱️ پینگ  <b>" + pg + " ms</b>\n\n" +
-    "┣━━━ 🏆 رتبه\n\n" +
-    "  " + bar + "\n" +
-    "  بهتر از <b>%" + percent + "</b> کاربران\n\n" +
-    "  " + quality + "\n\n" +
+async function makeWorkReport() {
+  const ooni = await fetchOONI();
+  const p = parseOONI(ooni);
+  
+  let irOk = 0;
+  for (const s of IR_SITES) {
+    const t = await pingSite(s.url);
+    if (t) irOk++;
+  }
+  
+  let emoji = "🟢", status = "خوبه";
+  if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; }
+  else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; }
+  else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
+  
+  return "╭━━━ ⚡ خلاصه امروز ━━━╮\n\n" +
+    "  " + emoji + "  <b>" + status + "</b>\n\n" +
+    "  🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n" +
+    "  🌐 سایت‌های ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n" +
     "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
-    "📤 <b>با دوستات به اشتراک بذار!</b>\n" +
-    "🤖 @Radarinternetiranbot\n\n" +
-    "🕒 " + getIranTime();
+    "🕒 " + getIranTime() + "\n" +
+    "📡 @Radarinternetiran";
+}
+
+async function makeScoreReport() {
+  const ooni = await fetchOONI();
+  const p = parseOONI(ooni);
+  
+  // امتیاز بر اساس چند معیار
+  let score = 0;
+  
+  // ۱. فیلترینگ (۴۰٪)
+  const filterScore = Math.max(0, 100 - (p.blockPercent * 2.5));
+  score += filterScore * 0.4;
+  
+  // ۲. دسترسی سایت‌های ایرانی (۳۰٪)
+  let irOk = 0;
+  for (const s of IR_SITES) {
+    const t = await pingSite(s.url);
+    if (t) irOk++;
+  }
+  const irScore = (irOk / IR_SITES.length) * 100;
+  score += irScore * 0.3;
+  
+  // ۳. پینگ به سایت‌های جهانی (۳۰٪)
+  let globalPing = 0, globalCount = 0;
+  for (const s of GLOBAL_SITES) {
+    const t = await pingSite(s.url);
+    if (t) { globalPing += t; globalCount++; }
+  }
+  const avgPing = globalCount > 0 ? globalPing / globalCount : 500;
+  const pingScore = Math.max(0, 100 - (avgPing / 5));
+  score += pingScore * 0.3;
+  
+  score = Math.round(score);
+  
+  let emoji = "🔴", status = "بحرانی";
+  if (score >= 80) { emoji = "🟢"; status = "عالی"; }
+  else if (score >= 60) { emoji = "🟡"; status = "خوب"; }
+  else if (score >= 40) { emoji = "🟠"; status = "متوسط"; }
+  
+  return "╭━━━ 🎖️ امتیاز کیفیت ━━━╮\n\n" +
+    "  " + emoji + "  <b>" + status + "</b>\n\n" +
+    "  ⭐ امتیاز کل: <b>" + score + "/100</b>\n" +
+    "  " + makeBar(score / 10) + "\n\n" +
+    "┣━━━ 📊 جزئیات\n\n" +
+    "  🚫 فیلترینگ: <b>%" + Math.round(filterScore) + "</b>\n" +
+    "  🇮🇷 سایت ایرانی: <b>%" + Math.round(irScore) + "</b>\n" +
+    "  🌍 پینگ جهانی: <b>%" + Math.round(pingScore) + "</b>\n\n" +
+    "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
+    "🕒 " + getIranTime() + "\n" +
+    "📡 @Radarinternetiran";
+}
+
+async function makeBestTimeReport() {
+  // بر اساس الگوهای معمول اینترنت ایران
+  const hours = [
+    { range: "۰۲:۰۰ تا ۰۶:۰۰", quality: 90, emoji: "🏆", note: "بهترین زمان" },
+    { range: "۰۶:۰۰ تا ۰۹:۰۰", quality: 75, emoji: "✅", note: "خوب" },
+    { range: "۰۹:۰۰ تا ۱۲:۰۰", quality: 55, emoji: "🟡", note: "متوسط" },
+    { range: "۱۲:۰۰ تا ۱۷:۰۰", quality: 45, emoji: "🟠", note: "شلوغ" },
+    { range: "۱۷:۰۰ تا ۲۲:۰۰", quality: 35, emoji: "🔴", note: "پیک شلوغی" },
+    { range: "۲۲:۰۰ تا ۰۲:۰۰", quality: 70, emoji: "✅", note: "بهتر" }
+  ];
+  
+  let out = "╭━━━ ⏰ بهترین زمان ━━━╮\n\n";
+  out += "📊 برای دانلود و استریم\n\n";
+  out += "┣━━━ 🏆 پیشنهاد ما\n\n";
+  out += "  بهترین زمان:\n";
+  out += "  <b>۲ بامداد تا ۶ صبح</b>\n";
+  out += "  🟢 کیفیت: ۹۰٪\n\n";
+  out += "  چرا؟\n";
+  out += "  • ترافیک کم\n";
+  out += "  • سرورها آزادتر\n";
+  out += "  • پینگ پایین‌تر\n\n";
+  out += "┣━━━ 📊 جدول زمانی\n\n";
+  for (const h of hours) {
+    out += "  " + h.emoji + " " + h.range + "\n";
+    out += "     └ " + h.note + "  •  %" + h.quality + "\n";
+  }
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "💡 نکته: این ارقام تخمینی بر اساس الگوی مصرف ایرانه.";
+  return out;
+}
+
+async function makeSpeedReport() {
+  let out = "╭━━━ ⚡ تست سرعت ━━━╮\n\n";
+  out += "  📋 <b>راهنمای تست:</b>\n\n";
+  out += "  1️⃣ یکی از لینک‌های زیر رو باز کن\n";
+  out += "  2️⃣ سرعتت رو اندازه بگیر\n";
+  out += "  3️⃣ نتیجه رو با رفقا به اشتراک بذار\n\n";
+  out += "┣━━━ 🔗 <b>لینک‌های تست</b>\n\n";
+  out += "  🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
+  out += "  📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
+  out += "  ⚡ <a href='https://fast.com/'>Fast.com</a>\n";
+  out += "  🇮🇷 <a href='https://speedtest.ir/'>Speedtest.ir</a>\n\n";
+  out += "┣━━━ 💡 <b>نکات مهم</b>\n\n";
+  out += "  • وای‌فای رو قطع کن، با دیتا تست کن\n";
+  out += "  • اپ‌های دیگه رو ببند\n";
+  out += "  ۳ بار پشت سر هم تست کن\n\n";
+  out += "╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "📡 @Radarinternetiran";
+  return out;
 }
 
 async function makeReport(mode) {
@@ -708,14 +1020,6 @@ async function makeReport(mode) {
       "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
       "🕒 " + getIranTime() + "\n" +
       "📡 @Radarinternetiran";
-  }
-
-  if (mode === "chart") {
-    return "╭━━━ 📊 وضعیت اینترنت ━━━╮\n\n" +
-      "  🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
-      "  " + makeBar(p.blockPercent / 10) + "\n\n" +
-      "  👇 نمودار زیر:\n" +
-      "╰━━━━━━━━━━━━━━━━━━━╯";
   }
 
   // full
