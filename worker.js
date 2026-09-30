@@ -39,47 +39,30 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const BOT_TOKEN = env.BOT_TOKEN;
-
-    // مسیر تست توکن
-    if (url.pathname === "/check") {
-      return new Response("TOKEN: " + BOT_TOKEN, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
-    }
-
-    // اگه توکن نباشه
-    if (!BOT_TOKEN) {
-      return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
-    }
-
-    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
-
     if (url.pathname === "/test") return new Response("Test OK");
+    if (url.pathname === "/check") return new Response("TOKEN: " + BOT_TOKEN);
+    if (!BOT_TOKEN) return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 
     if (url.pathname === "/setwebhook") {
       const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
       return new Response("Result: " + await r.text());
     }
-
     if (url.pathname === "/webhookinfo") {
       const r = await fetch(TG + "/getWebhookInfo");
       return new Response(await r.text());
     }
-
     if (url.pathname === "/sendreport") {
       await sendChannelReport(TG);
       return new Response("Report sent!");
     }
-
     if (request.method !== "POST") return new Response("Radar Bot is running!");
-
     try {
       const update = await request.json();
       await handleUpdate(update, TG);
     } catch(e) { console.log("Error: " + e.message); }
     return new Response("OK");
   },
-
   async scheduled(event, env, ctx) {
     const BOT_TOKEN = env.BOT_TOKEN;
     if (!BOT_TOKEN) return;
@@ -205,7 +188,7 @@ async function sendPhoto(TG, chatId, url, caption) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" })
     });
-  } catch(e) { console.log("sendPhoto error: " + e.message); }
+  } catch(e) {}
 }
 async function sendMessage(TG, chatId, text, extra) {
   const body = { chat_id: chatId, text: text };
@@ -224,10 +207,10 @@ async function sendMessage(TG, chatId, text, extra) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-  } catch(e) { console.log("sendMessage error: " + e.message); }
+  } catch(e) {}
 }
 async function sendChannelReport(TG) {
-  const report = await makeReport();
+  const report = await makeReport("full");
   try {
     await fetch(TG + "/sendMessage", {
       method: "POST",
@@ -264,13 +247,42 @@ async function handleUpdate(update, TG) {
 
   if (text === "/start") {
     await sendMessage(TG, chatId,
-      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
+      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/compare - مقایسه اپراتورها\n/top - رتبه‌بندی هفتگی\n/speed - تست سرعت\n/chart - نمودار\n/trend - روند ۷ روز اخیر\n/help - راهنما",
       { parse_mode: "HTML" }
     );
-  } else if (text === "/status") {
+  } else if (text === "/status" || text === "/status full") {
     await sendMessage(TG, chatId, "🔍 در حال دریافت...");
-    const report = await makeReport();
+    const report = await makeReport("full");
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/status simple") {
+    await sendMessage(TG, chatId, "🔍 در حال دریافت...");
+    const report = await makeReport("simple");
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/status chart") {
+    await sendMessage(TG, chatId, "📊 در حال ساخت...");
+    const summary = await makeReport("chart");
+    await sendMessage(TG, chatId, summary, { parse_mode: "HTML" });
+    const c = await makeBarChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/compare") {
+    await sendMessage(TG, chatId, "🆚 در حال مقایسه...");
+    const report = await makeCompareReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/top") {
+    await sendMessage(TG, chatId, "🏆 در حال رتبه‌بندی...");
+    const report = await makeTopReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/speed") {
+    const report = await makeSpeedReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text.startsWith("/myspeed ")) {
+    const parts = text.replace("/myspeed ", "").trim().split(/\s+/);
+    if (parts.length !== 3) {
+      await sendMessage(TG, chatId, "❌ فرمت اشتباه. مثال:\n<code>/myspeed 25 8 20</code>", { parse_mode: "HTML" });
+    } else {
+      const card = await makeSpeedCard(parts[0], parts[1], parts[2]);
+      await sendMessage(TG, chatId, card, { parse_mode: "HTML" });
+    }
   } else if (text === "/ping") {
     await sendMessage(TG, chatId, "🔍 در حال پینگ...");
     const report = await makePingReport();
@@ -297,7 +309,7 @@ async function handleUpdate(update, TG) {
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای ربات</b>\n\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
+      "📚 <b>راهنمای ربات</b>\n\n📊 گزارش‌ها:\n/status - کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ\n/sites - سرویس‌ها\n\n🆚 مقایسه:\n/compare - مقایسه اپراتورها\n/top - رتبه‌بندی هفتگی\n\n⚡ تست سرعت:\n/speed - لینک تست + راهنما\n/myspeed 25 8 20 - کارت وایرال\n\n📈 نمودارها:\n/chart - میله‌ای\n/pie - دایره‌ای\n/trend - روند ۷ روز",
       { parse_mode: "HTML" }
     );
   }
@@ -469,7 +481,143 @@ async function makeSitesReport() {
   return out;
 }
 
-async function makeReport() {
+// ==================== Compare ====================
+async function makeCompareReport() {
+  const ooni = await fetchOONI();
+  const p = parseOONI(ooni);
+  let ops = [];
+  for (const [asn, d] of Object.entries(p.asnData)) {
+    if (d.count >= 100) {
+      ops.push({ name: asnName(asn), asn: asn, rate: Math.round((d.ok / d.total) * 100), count: d.count });
+    }
+  }
+  if (ops.length === 0) return "❌ داده کافی برای مقایسه در دسترس نیست.";
+  ops.sort((a, b) => b.rate - a.rate);
+  const best = ops.slice(0, 3);
+  const worst = ops.slice(-3).reverse();
+  let out = "🆚 <b>مقایسه اپراتورها</b>\n\n";
+  out += "📊 بر اساس دسترسی آزاد به اینترنت\n\n";
+  out += "━━━━━━━━━━━━━━━\n🏆 <b>بهترین اپراتورها:</b>\n";
+  best.forEach((o, i) => {
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
+    out += medal + " <b>" + o.name + "</b>: %" + o.rate + " آزاد\n";
+  });
+  out += "\n━━━━━━━━━━━━━━━\n🔴 <b>بدترین اپراتورها:</b>\n";
+  worst.forEach(o => {
+    out += "• <b>" + o.name + "</b>: %" + o.rate + " آزاد\n";
+  });
+  out += "\n━━━━━━━━━━━━━━━\n📌 مجموع: " + ops.length + " اپراتور بررسی شده\n📊 منبع: OONI\n\n";
+  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  return out;
+}
+
+// ==================== Top ====================
+async function makeTopReport() {
+  const ooni7d = await fetchOONI7d();
+  const p = parseOONI(ooni7d);
+  let ops = [];
+  for (const [asn, d] of Object.entries(p.asnData)) {
+    if (d.count >= 500) {
+      ops.push({ name: asnName(asn), rate: Math.round((d.ok / d.total) * 100), count: d.count });
+    }
+  }
+  if (ops.length === 0) return "❌ داده کافی برای رتبه‌بندی در دسترس نیست.";
+  ops.sort((a, b) => b.rate - a.rate);
+  let out = "🏆 <b>رتبه‌بندی هفتگی اپراتورها</b>\n\n📅 بر اساس داده ۷ روز اخیر\n\n";
+  out += "━━━━━━━━━━━━━━━\n🥇 <b>بهترین‌ها:</b>\n";
+  ops.slice(0, 5).forEach((o, i) => {
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i+1) + ".";
+    out += medal + " " + o.name + ": %" + o.rate + "\n";
+  });
+  out += "\n━━━━━━━━━━━━━━━\n🔻 <b>پایین‌ترین‌ها:</b>\n";
+  ops.slice(-5).reverse().forEach(o => {
+    out += "• " + o.name + ": %" + o.rate + "\n";
+  });
+  out += "\n━━━━━━━━━━━━━━━\n📌 مجموع: " + ops.length + " اپراتور\n📊 منبع: OONI\n\n";
+  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  return out;
+}
+
+// ==================== Speed ====================
+async function makeSpeedReport() {
+  let out = "⚡ <b>تست سرعت اینترنت</b>\n\n";
+  out += "━━━━━━━━━━━━━━━\n🔗 <b>لینک تست سرعت:</b>\n";
+  out += "• <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
+  out += "• <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
+  out += "• <a href='https://fast.com/'>Fast.com</a>\n\n";
+  out += "━━━━━━━━━━━━━━━\n📋 <b>چطور نتیجه‌ات رو با ما به اشتراک بذاری؟</b>\n\n";
+  out += "بعد از تست، این پیام رو به ربات بفرست:\n";
+  out += "<code>/myspeed 25 8 20</code>\n\n";
+  out += "ترتیب اعداد:\n• دانلود (Mbps)\n• آپلود (Mbps)\n• پینگ (ms)\n\n";
+  out += "📊 ما یه <b>کارت گرافیکی</b> برات می‌سازیم که بتونی با دوستات به اشتراک بذاری!\n\n";
+  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  return out;
+}
+
+async function makeSpeedCard(download, upload, ping) {
+  const dl = parseFloat(download);
+  const ul = parseFloat(upload);
+  const pg = parseInt(ping);
+  if (isNaN(dl) || dl < 0 || dl > 10000) return "❌ عدد دانلود نامعتبر.";
+  if (isNaN(ul) || ul < 0 || ul > 10000) return "❌ عدد آپلود نامعتبر.";
+  if (isNaN(pg) || pg < 0 || pg > 10000) return "❌ عدد پینگ نامعتبر.";
+  let rank = "🐌 ضعیف";
+  let rankEmoji = "🐌";
+  let percent = 0;
+  if (dl >= 50) { rank = "⚡ فوق‌العاده"; rankEmoji = "⚡"; percent = 95; }
+  else if (dl >= 30) { rank = "🚀 خیلی خوب"; rankEmoji = "🚀"; percent = 85; }
+  else if (dl >= 15) { rank = "✅ خوب"; rankEmoji = "✅"; percent = 70; }
+  else if (dl >= 8) { rank = "🟡 متوسط"; rankEmoji = "🟡"; percent = 50; }
+  else if (dl >= 3) { rank = "🟠 ضعیف"; rankEmoji = "🟠"; percent = 30; }
+  else { rank = "🔴 خیلی ضعیف"; rankEmoji = "🔴"; percent = 10; }
+  const bar = makeBar(percent / 10);
+  return "⚡ <b>سرعت اینترنت من</b>\n\n" +
+    "━━━━━━━━━━━━━━━\n" +
+    "⬇️ دانلود: <b>" + dl + " Mbps</b>\n" +
+    "⬆️ آپلود: <b>" + ul + " Mbps</b>\n" +
+    "⏱️ پینگ: <b>" + pg + " ms</b>\n\n" +
+    "━━━━━━━━━━━━━━━\n" +
+    rankEmoji + " رتبه: <b>" + rank + "</b>\n" +
+    bar + " " + percent + "%\n\n" +
+    "🏆 بهتر از " + percent + "% کاربران\n\n" +
+    "━━━━━━━━━━━━━━━\n" +
+    "📤 <b>این کارت رو با دوستات به اشتراک بذار!</b>\n" +
+    "🤖 @Radarinternetiranbot\n\n" +
+    "🕒 " + getIranTime();
+}
+
+// ==================== Main Report ====================
+async function makeReport(mode) {
+  if (mode === undefined) mode = "full";
+  const ooni = await fetchOONI();
+  const p = parseOONI(ooni);
+  let ops = [];
+  for (const [asn, d] of Object.entries(p.asnData)) {
+    ops.push({ name: asnName(asn), rate: Math.round((d.ok / d.total) * 100) });
+  }
+  ops.sort((a, b) => a.rate - b.rate);
+
+  if (mode === "simple") {
+    let emoji = "🟢";
+    let status = "پایدار";
+    if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; }
+    else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; }
+    else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
+    return "📊 <b>وضعیت اینترنت</b>\n\n" +
+      emoji + " " + status + "\n" +
+      "🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
+      makeBar(p.blockPercent / 10) + "\n\n" +
+      "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  }
+
+  if (mode === "chart") {
+    return "📊 <b>وضعیت اینترنت - مود نموداری</b>\n\n" +
+      "🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
+      makeBar(p.blockPercent / 10) + "\n\n" +
+      "👇 نمودار زیر رو ببین:";
+  }
+
+  // full
   let irOk = 0, globalOk = 0, irList = "", globalList = "";
   for (const s of IR_SITES) {
     const t = await pingSite(s.url);
@@ -481,15 +629,6 @@ async function makeReport() {
     if (t) { globalOk++; globalList += "  ✅ " + s.name + ": " + t + "ms\n"; }
     else { globalList += "  ❌ " + s.name + "\n"; }
   }
-
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-
-  let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    ops.push({ name: asnName(asn), rate: Math.round((d.ok / d.total) * 100) });
-  }
-  ops.sort((a,b) => a.rate - b.rate);
 
   const ripe = await fetchRIPE();
 
@@ -517,7 +656,6 @@ async function makeReport() {
       out += "👁️ Visibility: <b>%" + v + "</b>\n";
       out += "وضعیت: " + (v > 95 ? "🟢 پایدار" : v > 80 ? "🟡 متوسط" : "🔴 ناپایدار") + "\n";
     }
-    if (ripe.data.total_count !== undefined) out += "📡 روت‌ها: " + ripe.data.total_count.toLocaleString("fa-IR") + "\n";
     out += "🔗 RIPE Stat\n";
   } else {
     out += "⚠️ RIPE در دسترس نیست\n";
@@ -525,4 +663,4 @@ async function makeReport() {
   out += "\n━━━━━━━━━━━━━━━\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n\n";
   out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
   return out;
-        }
+    }
