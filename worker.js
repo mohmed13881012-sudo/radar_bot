@@ -37,20 +37,41 @@ export default {
   }
 };
 
+// ==================== زمان تهران ====================
+function getIranTime() {
+  return new Intl.DateTimeFormat('fa-IR', {
+    timeZone: 'Asia/Tehran',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(new Date());
+}
+
+function getIranDate() {
+  return new Intl.DateTimeFormat('fa-IR', {
+    timeZone: 'Asia/Tehran',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
 // ==================== Debug ====================
 async function debugRadar() {
   const urls = [
     RADAR + "/quality/iqi/summary?location=IR&dateRange=1d",
     RADAR + "/quality/speed/summary?location=IR&dateRange=1d",
     RADAR + "/http/summary/traffic?location=IR&dateRange=1d",
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=7d"
+    RADAR + "/quality/iqi/summary?location=IR&dateRange=7d",
+    RADAR + "/attacks/summary/layers/7d?location=IR&dateRange=1d"
   ];
   let out = "";
   for (const u of urls) {
     try {
       const r = await fetch(u, { headers: { "Authorization": "Bearer " + RADAR_TOKEN } });
       const t = await r.text();
-      out += "=== " + u + "\n" + t.substring(0, 800) + "\n\n";
+      out += "=== " + u + "\n" + t.substring(0, 1200) + "\n\n";
     } catch(e) {
       out += "=== " + u + "\nERR: " + e.message + "\n\n";
     }
@@ -77,20 +98,29 @@ async function handleUpdate(update) {
   const chatId = msg.chat.id;
   const text = msg.text || "";
   const userId = msg.from.id;
+
   const inCh1 = await checkMember(userId, CH1);
   const inCh2 = await checkMember(userId, CH2);
+
   if (!inCh1 || !inCh2) {
-    await sendMessage(chatId, "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.", {
-      parse_mode: "HTML",
-      inline_keyboard: [
-        [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
-        [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
-      ]
-    });
+    await sendMessage(chatId,
+      "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.",
+      {
+        parse_mode: "HTML",
+        inline_keyboard: [
+          [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
+          [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
+        ]
+      }
+    );
     return;
   }
+
   if (text === "/start") {
-    await sendMessage(chatId, "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 برای دریافت گزارش لحظه‌ای اینترنت ایران، دستور /status را بزنید.\n\n📌 دستورات:\n/start - شروع\n/status - گزارش لحظه‌ای\n/speed - سرعت اینترنت\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها\n/help - راهنما", { parse_mode: "HTML" });
+    await sendMessage(chatId,
+      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📊 برای دریافت گزارش لحظه‌ای اینترنت ایران، دستور /status را بزنید.\n\n📌 دستورات:\n/start - شروع\n/status - گزارش لحظه‌ای\n/speed - سرعت اینترنت\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها\n/help - راهنما",
+      { parse_mode: "HTML" }
+    );
   } else if (text === "/status") {
     await sendMessage(chatId, "🔍 در حال دریافت اطلاعات...");
     const report = await makeReport();
@@ -108,7 +138,10 @@ async function handleUpdate(update) {
     const report = await makeOutagesReport();
     await sendMessage(chatId, report, { parse_mode: "HTML" });
   } else if (text === "/help") {
-    await sendMessage(chatId, "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/start - شروع\n/status - گزارش لحظه‌ای اینترنت ایران\n/speed - سرعت و کیفیت اتصال\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها و اختلالات\n/help - راهنما\n\n📡 کانال‌ها:\n@radarinternetiran\n@royal_trust_ir_official", { parse_mode: "HTML" });
+    await sendMessage(chatId,
+      "📚 <b>راهنمای ربات رادار اینترنت</b>\n\n/start - شروع\n/status - گزارش لحظه‌ای اینترنت ایران\n/speed - سرعت و کیفیت اتصال\n/traffic - ترافیک شبکه\n/outages - قطعی‌ها و اختلالات\n/help - راهنما\n\n📡 کانال‌ها:\n@radarinternetiran\n@royal_trust_ir_official",
+      { parse_mode: "HTML" }
+    );
   }
 }
 
@@ -135,7 +168,7 @@ async function sendMessage(chatId, text, extra) {
   } catch(e) {}
 }
 
-// ==================== Cloudflare Radar Helper ====================
+// ==================== Radar Helper ====================
 async function radarFetch(path) {
   try {
     const r = await fetch(RADAR + path, {
@@ -147,18 +180,18 @@ async function radarFetch(path) {
   return null;
 }
 
-// ==================== Extractor ====================
-function extractValue(result, path1, path2, path3) {
-  if (!result) return null;
-  for (const p of [path1, path2, path3]) {
+function extractValue(obj, ...paths) {
+  if (!obj) return null;
+  for (const p of paths) {
     if (!p) continue;
     const parts = p.split(".");
-    let v = result;
+    let v = obj;
+    let ok = true;
     for (const part of parts) {
       if (v && v[part] !== undefined) v = v[part];
-      else { v = null; break; }
+      else { ok = false; break; }
     }
-    if (v !== null && v !== undefined) {
+    if (ok && v !== null && v !== undefined) {
       const num = parseFloat(v);
       if (!isNaN(num)) return num;
     }
@@ -166,21 +199,39 @@ function extractValue(result, path1, path2, path3) {
   return null;
 }
 
+// ==================== Bar ====================
+function makeBar(v) {
+  const filled = Math.round(v / 10);
+  let color = "🔴";
+  if (v >= 80) color = "🟢";
+  else if (v >= 60) color = "🟡";
+  else if (v >= 40) color = "🟠";
+  let bar = "";
+  for (let i = 0; i < 10; i++) bar += (i < filled ? color : "▫️");
+  return bar;
+}
+
 // ==================== Main Report ====================
 async function makeReport() {
   const iqi = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d");
   const speed = await radarFetch("/quality/speed/summary?location=IR&dateRange=1d");
-  const traffic = await radarFetch("/http/summary/traffic?location=IR&dateRange=1d");
 
-  // استخراج مقادیر
-  let iqiScore = extractValue(iqi, "iqi.score", "summary_0.iqi", "iqi") ||
-                 extractValue(iqi, "summary.0.iqi", "iqiScore", "score");
-  let bandwidth = extractValue(iqi, "bandwidth.download", "summary_0.bandwidth", "bandwidth") ||
-                  extractValue(speed, "summary_0.bandwidth", "summary.0.bandwidth", "bandwidth");
-  let latency = extractValue(iqi, "latency.value", "summary_0.latency", "latency") ||
-                extractValue(speed, "summary_0.latency", "summary.0.latency", "latency");
+  let iqiScore = extractValue(iqi,
+    "iqi.score", "iqi", "summary_0.iqi", "summary.0.iqi",
+    "summary.iqi.score", "score"
+  );
+  let bandwidth = extractValue(iqi,
+    "bandwidth.download", "summary_0.bandwidth", "summary.0.bandwidth",
+    "bandwidth", "summary.bandwidth"
+  ) || extractValue(speed,
+    "summary_0.bandwidthDownload", "summary.0.download", "bandwidth.download"
+  );
+  let latency = extractValue(iqi,
+    "latency.value", "summary_0.latency", "summary.0.latency", "latency"
+  ) || extractValue(speed,
+    "summary_0.latency", "summary.0.latency", "latency"
+  );
 
-  // پاکسازی
   if (iqiScore !== null && iqiScore < 2) iqiScore = iqiScore * 100;
   iqiScore = iqiScore ? Math.round(iqiScore) : null;
   if (iqiScore === null || iqiScore === 0) {
@@ -196,10 +247,8 @@ async function makeReport() {
   else if (iqiScore >= 40) { emoji = "🟠"; status = "ناپایدار"; }
 
   const drop = 100 - iqiScore;
-  const time = new Date().toLocaleTimeString("fa-IR");
-  const date = new Date().toLocaleDateString("fa-IR");
-
-  // نوار پیشرفت
+  const time = getIranTime();
+  const date = getIranDate();
   const bar = makeBar(iqiScore);
 
   return "📊 <b>گزارش وضعیت شبکه</b>\n" +
@@ -235,7 +284,7 @@ async function makeSpeedReport() {
     "⬇️ دانلود: " + dl + " Mbps\n" +
     "⬆️ آپلود: " + ul + " Mbps\n" +
     "⏱️ تاخیر: " + lat + " ms\n\n" +
-    "🕒 " + new Date().toLocaleTimeString("fa-IR") + "\n" +
+    "🕒 " + getIranTime() + "\n" +
     "🤖 رادار اینترنت";
 }
 
@@ -252,7 +301,7 @@ async function makeTrafficReport() {
     "🔒 HTTPS: %" + https + "\n" +
     "🌍 HTTP: %" + http + "\n" +
     "📦 سایر: %" + other + "\n\n" +
-    "🕒 " + new Date().toLocaleTimeString("fa-IR") + "\n" +
+    "🕒 " + getIranTime() + "\n" +
     "🤖 رادار اینترنت";
 }
 
@@ -268,18 +317,6 @@ async function makeOutagesReport() {
   } else {
     out += "✅ هیچ قطعی ثبت نشده.\n";
   }
-  out += "\n🕒 " + new Date().toLocaleTimeString("fa-IR") + "\n🤖 رادار اینترنت";
+  out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
   return out;
-}
-
-// ==================== Bar ====================
-function makeBar(v) {
-  const filled = Math.round(v / 10);
-  let color = "🔴";
-  if (v >= 80) color = "🟢";
-  else if (v >= 60) color = "🟡";
-  else if (v >= 40) color = "🟠";
-  let bar = "";
-  for (let i = 0; i < 10; i++) bar += (i < filled ? color : "▫️");
-  return bar;
-    }
+      }
