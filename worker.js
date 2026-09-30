@@ -41,37 +41,30 @@ export default {
 function getIranTime() {
   return new Intl.DateTimeFormat('fa-IR', {
     timeZone: 'Asia/Tehran',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   }).format(new Date());
 }
-
 function getIranDate() {
   return new Intl.DateTimeFormat('fa-IR', {
     timeZone: 'Asia/Tehran',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
+    year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());
 }
 
 // ==================== Debug ====================
 async function debugRadar() {
   const urls = [
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d",
-    RADAR + "/quality/speed/summary?location=IR&dateRange=1d",
-    RADAR + "/http/summary/traffic?location=IR&dateRange=1d",
-    RADAR + "/quality/iqi/summary?location=IR&dateRange=7d",
-    RADAR + "/attacks/summary/layers/7d?location=IR&dateRange=1d"
+    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth",
+    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=latency",
+    RADAR + "/quality/iqi/summary?location=IR&dateRange=1d&metric=dns",
+    RADAR + "/quality/speed/summary?location=IR&dateRange=1d"
   ];
   let out = "";
   for (const u of urls) {
     try {
       const r = await fetch(u, { headers: { "Authorization": "Bearer " + RADAR_TOKEN } });
       const t = await r.text();
-      out += "=== " + u + "\n" + t.substring(0, 1200) + "\n\n";
+      out += "=== " + u + "\n" + t.substring(0, 1500) + "\n\n";
     } catch(e) {
       out += "=== " + u + "\nERR: " + e.message + "\n\n";
     }
@@ -213,33 +206,31 @@ function makeBar(v) {
 
 // ==================== Main Report ====================
 async function makeReport() {
-  const iqi = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d");
-  const speed = await radarFetch("/quality/speed/summary?location=IR&dateRange=1d");
+  const bwData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=bandwidth");
+  const latData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=latency");
+  const dnsData = await radarFetch("/quality/iqi/summary?location=IR&dateRange=1d&metric=dns");
 
-  let iqiScore = extractValue(iqi,
-    "iqi.score", "iqi", "summary_0.iqi", "summary.0.iqi",
-    "summary.iqi.score", "score"
-  );
-  let bandwidth = extractValue(iqi,
-    "bandwidth.download", "summary_0.bandwidth", "summary.0.bandwidth",
-    "bandwidth", "summary.bandwidth"
-  ) || extractValue(speed,
-    "summary_0.bandwidthDownload", "summary.0.download", "bandwidth.download"
-  );
-  let latency = extractValue(iqi,
-    "latency.value", "summary_0.latency", "summary.0.latency", "latency"
-  ) || extractValue(speed,
-    "summary_0.latency", "summary.0.latency", "latency"
-  );
+  const getP50 = (data) => {
+    if (!data || !data.summary_0 || !data.summary_0.p50) return null;
+    const v = parseFloat(data.summary_0.p50);
+    return isNaN(v) ? null : v;
+  };
 
-  if (iqiScore !== null && iqiScore < 2) iqiScore = iqiScore * 100;
-  iqiScore = iqiScore ? Math.round(iqiScore) : null;
-  if (iqiScore === null || iqiScore === 0) {
-    if (bandwidth && bandwidth > 0) iqiScore = Math.min(100, Math.round(bandwidth * 2));
-    else iqiScore = 65;
-  }
+  let bandwidth = getP50(bwData);
+  let latency = getP50(latData);
+  let dns = getP50(dnsData);
+
   bandwidth = bandwidth ? Math.round(bandwidth * 10) / 10 : 0;
   latency = latency ? Math.round(latency) : 0;
+  dns = dns ? Math.round(dns) : 0;
+
+  let iqiScore = 50;
+  if (bandwidth > 0) {
+    iqiScore = Math.min(100, Math.round(bandwidth * 2.5));
+  } else if (latency > 0) {
+    iqiScore = Math.max(10, Math.min(100, Math.round(100 - latency)));
+  }
+  if (iqiScore < 10) iqiScore = 10;
 
   let emoji = "🔴", status = "بحرانی";
   if (iqiScore >= 80) { emoji = "🟢"; status = "پایدار"; }
@@ -263,7 +254,8 @@ async function makeReport() {
     "🌐 <b>کیفیت اتصال</b>\n" +
     "⭐ QoE: %" + iqiScore + "\n" +
     "⏱️ تاخیر: " + latency + " ms\n" +
-    "📶 پهنای باند: " + bandwidth + " Mbps\n\n" +
+    "📶 پهنای باند: " + bandwidth + " Mbps\n" +
+    "🔍 DNS: " + dns + " ms\n\n" +
     "━━━━━━━━━━━━━━━\n" +
     "🔗 <b>لینک‌های مفید</b>\n" +
     "📡 @radarinternetiran\n" +
@@ -319,4 +311,4 @@ async function makeOutagesReport() {
   }
   out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
   return out;
-      }
+    }
