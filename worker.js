@@ -2,15 +2,27 @@ const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
 
 const ASN_NAMES = {
-  "42337": "پارس‌آنلاین", "58224": "مخابرات", "197207": "همراه اول",
-  "44244": "ایرانسل", "31549": "شاتل", "16322": "پارس‌پک",
-  "50810": "آسیاتک", "57218": "رایتل", "43754": "آسیاتک",
-  "12880": "زیرساخت", "48159": "پیشگامان", "39501": "ابر آروان",
-  "25184": "افرانِت", "56402": "صبانت", "208161": "ایرانسل جدید",
+  "12880": "زیرساخت (DCI)", "58224": "مخابرات ایران (TCI)", "6736": "شاتل قدیمی",
+  "44244": "ایرانسل", "197207": "همراه اول (MCI)", "57218": "رایتل",
+  "57497": "شاتل موبایل", "50810": "آسیاتک", "31549": "شاتل",
+  "42337": "پارس‌آنلاین", "16322": "پارس‌پک", "43754": "آسیاتک",
+  "48159": "پیشگامان", "25184": "افرانت", "56402": "صبانت",
   "205648": "رسپینا", "21478": "مبین‌نت", "206065": "پیشگامان",
-  "44208": "شبکه گستر", "49100": "زیرساخت", "202468": "ایران‌سرور",
-  "204213": "همراه نت", "57497": "شاتل موبایل", "51685": "پارس‌پک",
-  "48434": "پارس‌آنلاین", "6736": "شاتل", "51074": "شاتل"
+  "48434": "پارس‌آنلاین", "51685": "پارس‌پک", "51074": "شاتل",
+  "39501": "ابر آروان", "202468": "ایران‌سرور", "204213": "همراه نت",
+  "44208": "شبکه گستر", "49100": "ارتباطات زیرساخت", "208161": "ایرانسل جدید",
+  "48320": "شبکه نقره‌ای", "61167": "فناوران", "49666": "مهرگان",
+  "203087": "سیستم‌های نوین", "210644": "داده گستر", "211260": "ماهان",
+  "212097": "آسیاتک نوین", "213210": "زیتون", "51433": "های‌وب",
+  "62442": "مهر", "197749": "بهسازان", "201610": "پاسارگاد",
+  "202520": "ماد", "205172": "کنیا", "206779": "کامکار",
+  "207796": "شبکه سازان", "208296": "پژواک", "209103": "افق",
+  "209408": "سبز", "210787": "دیبا", "211120": "راهبر",
+  "213891": "ایده آل", "25124": "فناوری اطلاعات", "29049": "داده پرداز",
+  "43396": "نوین", "47257": "نسیم", "48431": "ماهان",
+  "48827": "همراه", "49189": "پارس", "51430": "آرمان",
+  "56688": "شبکه پرداز", "58090": "گسترش", "59397": "توسعه",
+  "61197": "ایده", "62229": "فرهنگ", "197967": "پیشرو"
 };
 
 const IR_SITES = [
@@ -233,7 +245,11 @@ async function handleUpdate(update, TG) {
 
   if (!inCh1 || !inCh2) {
     await sendMessage(TG, chatId,
-      "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.",
+      "╭━━━ 🔒 عضویت لازم ━━━╮\n\n" +
+      "  برای استفاده از ربات،\n  ابتدا در هر دو کانال زیر\n  عضو شوید:\n\n" +
+      "  📡 رادار اینترنت\n  👑 رویال تراست\n\n" +
+      "  پس از عضویت،\n  دوباره /start را بزنید.\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯",
       {
         parse_mode: "HTML",
         inline_keyboard: [
@@ -247,15 +263,34 @@ async function handleUpdate(update, TG) {
 
   if (text === "/start") {
     await sendMessage(TG, chatId,
-      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/compare - مقایسه اپراتورها\n/top - رتبه‌بندی هفتگی\n/speed - تست سرعت\n/chart - نمودار\n/trend - روند ۷ روز اخیر\n/help - راهنما",
+      "╭━━━ 👋 خوش آمدید ━━━╮\n\n" +
+      "  به <b>رادار اینترنت</b> خوش آمدی\n\n" +
+      "┣━━━ 📊 گزارش‌ها\n\n" +
+      "  /status  →  گزارش کامل\n" +
+      "  /status simple  →  خلاصه\n" +
+      "  /status chart  →  با نمودار\n" +
+      "  /ping  →  پینگ سایت‌ها\n" +
+      "  /filtering  →  فیلترینگ\n" +
+      "  /sites  →  وضعیت سرویس‌ها\n\n" +
+      "┣━━━ 🆚 مقایسه\n\n" +
+      "  /compare  →  مقایسه اپراتورها\n" +
+      "  /top  →  رتبه‌بندی هفتگی\n\n" +
+      "┣━━━ ⚡ تست سرعت\n\n" +
+      "  /speed  →  راهنما + لینک\n" +
+      "  /myspeed  →  کارت وایرال\n\n" +
+      "┣━━━ 📈 نمودارها\n\n" +
+      "  /chart  →  میله‌ای\n" +
+      "  /pie  →  دایره‌ای\n" +
+      "  /trend  →  روند ۷ روز\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" }
     );
   } else if (text === "/status" || text === "/status full") {
-    await sendMessage(TG, chatId, "🔍 در حال دریافت...");
+    await sendMessage(TG, chatId, "⏳ در حال دریافت...");
     const report = await makeReport("full");
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/status simple") {
-    await sendMessage(TG, chatId, "🔍 در حال دریافت...");
+    await sendMessage(TG, chatId, "⏳ در حال دریافت...");
     const report = await makeReport("simple");
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/status chart") {
@@ -284,15 +319,15 @@ async function handleUpdate(update, TG) {
       await sendMessage(TG, chatId, card, { parse_mode: "HTML" });
     }
   } else if (text === "/ping") {
-    await sendMessage(TG, chatId, "🔍 در حال پینگ...");
+    await sendMessage(TG, chatId, "⏳ در حال پینگ...");
     const report = await makePingReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/filtering") {
-    await sendMessage(TG, chatId, "🔍 در حال بررسی...");
+    await sendMessage(TG, chatId, "⏳ در حال بررسی...");
     const report = await makeFilteringReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/sites") {
-    await sendMessage(TG, chatId, "🔍 در حال بررسی سرویس‌ها...");
+    await sendMessage(TG, chatId, "⏳ در حال بررسی...");
     const report = await makeSitesReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/chart") {
@@ -309,7 +344,25 @@ async function handleUpdate(update, TG) {
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای ربات</b>\n\n📊 گزارش‌ها:\n/status - کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ\n/sites - سرویس‌ها\n\n🆚 مقایسه:\n/compare - مقایسه اپراتورها\n/top - رتبه‌بندی هفتگی\n\n⚡ تست سرعت:\n/speed - لینک تست + راهنما\n/myspeed 25 8 20 - کارت وایرال\n\n📈 نمودارها:\n/chart - میله‌ای\n/pie - دایره‌ای\n/trend - روند ۷ روز",
+      "╭━━━ 📚 راهنمای ربات ━━━╮\n\n" +
+      "┣━━━ 📊 گزارش‌ها\n\n" +
+      "  /status  →  کامل\n" +
+      "  /status simple  →  خلاصه\n" +
+      "  /status chart  →  با نمودار\n" +
+      "  /ping  →  پینگ سایت‌ها\n" +
+      "  /filtering  →  فیلترینگ\n" +
+      "  /sites  →  سرویس‌ها\n\n" +
+      "┣━━━ 🆚 مقایسه\n\n" +
+      "  /compare  →  مقایسه اپراتورها\n" +
+      "  /top  →  رتبه‌بندی هفتگی\n\n" +
+      "┣━━━ ⚡ تست سرعت\n\n" +
+      "  /speed  →  راهنما\n" +
+      "  /myspeed 25 8 20  →  کارت\n\n" +
+      "┣━━━ 📈 نمودارها\n\n" +
+      "  /chart  →  میله‌ای\n" +
+      "  /pie  →  دایره‌ای\n" +
+      "  /trend  →  روند ۷ روز\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" }
     );
   }
@@ -354,7 +407,7 @@ async function makeBarChart() {
         scales: { xAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
     }),
-    caption: "📊 <b>نمودار دسترسی اپراتورها</b>\n\nسطح فیلترینگ کل: %" + p.blockPercent
+    caption: "📊 <b>نمودار دسترسی اپراتورها</b>\n\nسطح فیلترینگ کل: <b>%" + p.blockPercent + "</b>"
   };
 }
 
@@ -377,7 +430,7 @@ async function makePieChart() {
       },
       options: { title: { display: true, text: "سهم اپراتورها", fontSize: 18 } }
     }),
-    caption: "🥧 <b>سهم اپراتورها</b>\n\nاز " + p.totalMs.toLocaleString("fa-IR") + " اندازه‌گیری"
+    caption: "🥧 <b>سهم اپراتورها</b>\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری"
   };
 }
 
@@ -412,7 +465,7 @@ async function makeTrendChart() {
         scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
     }),
-    caption: "📈 <b>روند فیلترینگ ۷ روز اخیر</b>\n\nبالاترین: %" + Math.max(...values) + "\nپایین‌ترین: %" + Math.min(...values)
+    caption: "📈 <b>روند فیلترینگ ۷ روز اخیر</b>\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>"
   };
 }
 
@@ -422,18 +475,22 @@ async function makePingReport() {
   let irOk = 0, globalOk = 0;
   for (const s of IR_SITES) {
     const t = await pingSite(s.url);
-    if (t) { irOk++; irList += "  ✅ " + s.name + ": " + t + " ms\n"; }
-    else { irList += "  ❌ " + s.name + "\n"; }
+    if (t) { irOk++; irList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
+    else { irList += "  ❌ " + s.name + "  <i>ناموفق</i>\n"; }
   }
   for (const s of GLOBAL_SITES) {
     const t = await pingSite(s.url);
-    if (t) { globalOk++; globalList += "  ✅ " + s.name + ": " + t + " ms\n"; }
-    else { globalList += "  ❌ " + s.name + "\n"; }
+    if (t) { globalOk++; globalList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
+    else { globalList += "  ❌ " + s.name + "  <i>ناموفق</i>\n"; }
   }
-  return "🌐 <b>پینگ سایت‌ها</b>\n\n" +
-    "🇮🇷 <b>ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n" + irList + "\n" +
-    "🌍 <b>جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n" + globalList + "\n" +
-    "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  return "╭━━━ 🌐 پینگ سایت‌ها ━━━╮\n\n" +
+    "┣━━━ 🇮🇷 <b>ایرانی</b>  <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n" +
+    irList + "\n" +
+    "┣━━━ 🌍 <b>جهانی</b>  <b>" + globalOk + "/" + GLOBAL_SITES.length + "</b>\n\n" +
+    globalList + "\n" +
+    "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
+    "🕒 " + getIranTime() + "\n" +
+    "📡 @Radarinternetiran";
 }
 
 async function makeFilteringReport() {
@@ -450,68 +507,88 @@ async function makeFilteringReport() {
   else if (p.blockPercent >= 40) level = "🟠 نسبتاً بالا";
   else if (p.blockPercent >= 20) level = "🟡 متوسط";
 
-  let out = "🚫 <b>سطح فیلترینگ ایران</b>\n\n";
-  out += "📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n";
-  out += "📈 وضعیت: " + level + "\n";
-  out += makeBar(p.blockPercent / 10) + "\n";
-  out += "📡 اندازه‌گیری: " + p.totalMs.toLocaleString("fa-IR") + "\n\n";
+  let out = "╭━━━ 🚫 فیلترینگ ایران ━━━╮\n\n";
+  out += "  📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n";
+  out += "  📈 سطح: " + level + "\n";
+  out += "  " + makeBar(p.blockPercent / 10) + "\n\n";
+  out += "  📡 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n";
+  out += "  🌐 تعداد ASN: <code>" + ops.length + "</code>\n\n";
 
   if (ops.length > 0) {
-    out += "━━━━━━━━━━━━━━━\n<b>به تفکیک اپراتور:</b>\n";
-    ops.slice(0, 10).forEach(o => {
+    out += "┣━━━ 📡 <b>وضعیت اپراتورها</b>\n\n";
+    ops.slice(0, 12).forEach(o => {
       const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴";
-      out += e + " <b>" + o.name + "</b>: %" + o.rate + " (" + o.count.toLocaleString("fa-IR") + ")\n";
+      out += "  " + e + " <b>" + o.name + "</b>\n";
+      out += "     └ %" + o.rate + " آزاد  •  " + o.count.toLocaleString("fa-IR") + " تست\n";
     });
   }
-  out += "\n🕒 " + getIranTime() + "\n📌 OONI\n🤖 رادار اینترنت";
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "📌 منبع: OONI\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
   return out;
 }
 
 async function makeSitesReport() {
-  let out = "🌐 <b>وضعیت سرویس‌ها</b>\n\n";
-  out += "⚠️ این تست از خارج ایران انجام شده.\n\n━━━━━━━━━━━━━━━\n";
+  let out = "╭━━━ 🌐 وضعیت سرویس‌ها ━━━╮\n\n";
+  out += "  ⚠️ <i>تست از خارج ایران</i>\n\n";
   let acc = 0, list = "";
   for (const s of FILTER_CHECK) {
     const ok = await checkAccessible(s.url);
     if (ok) { acc++; list += "  ✅ " + s.name + "\n"; }
     else { list += "  🚫 " + s.name + "\n"; }
   }
-  out += "<b>دسترسی از خارج:</b> " + acc + "/" + FILTER_CHECK.length + "\n\n" + list;
-  out += "\n🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  out += "┣━━━ 📊 نتیجه\n\n";
+  out += "  دسترسی: <b>" + acc + "/" + FILTER_CHECK.length + "</b>\n";
+  out += "  " + makeBar((acc/FILTER_CHECK.length) * 10) + "\n\n";
+  out += "┣━━━ 📋 جزئیات\n\n";
+  out += list;
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
   return out;
 }
 
-// ==================== Compare ====================
 async function makeCompareReport() {
   const ooni = await fetchOONI();
   const p = parseOONI(ooni);
   let ops = [];
   for (const [asn, d] of Object.entries(p.asnData)) {
     if (d.count >= 100) {
-      ops.push({ name: asnName(asn), asn: asn, rate: Math.round((d.ok / d.total) * 100), count: d.count });
+      ops.push({ name: asnName(asn), rate: Math.round((d.ok / d.total) * 100), count: d.count });
     }
   }
-  if (ops.length === 0) return "❌ داده کافی برای مقایسه در دسترس نیست.";
+  if (ops.length === 0) return "❌ داده کافی نیست.";
   ops.sort((a, b) => b.rate - a.rate);
-  const best = ops.slice(0, 3);
-  const worst = ops.slice(-3).reverse();
-  let out = "🆚 <b>مقایسه اپراتورها</b>\n\n";
-  out += "📊 بر اساس دسترسی آزاد به اینترنت\n\n";
-  out += "━━━━━━━━━━━━━━━\n🏆 <b>بهترین اپراتورها:</b>\n";
-  best.forEach((o, i) => {
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
-    out += medal + " <b>" + o.name + "</b>: %" + o.rate + " آزاد\n";
+
+  let out = "╭━━━ 🆚 مقایسه اپراتورها ━━━╮\n\n";
+  out += "📊 بر اساس دسترسی آزاد\n\n";
+
+  out += "┣━━━ 🏆 <b>بهترین‌ها</b>\n\n";
+  ops.slice(0, 5).forEach((o, i) => {
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🏅";
+    out += "  " + medal + " <b>" + o.name + "</b>\n";
+    out += "     └ %" + o.rate + " آزاد\n";
   });
-  out += "\n━━━━━━━━━━━━━━━\n🔴 <b>بدترین اپراتورها:</b>\n";
-  worst.forEach(o => {
-    out += "• <b>" + o.name + "</b>: %" + o.rate + " آزاد\n";
+
+  out += "\n┣━━━ 🔻 <b>ضعیف‌ترین‌ها</b>\n\n";
+  ops.slice(-5).reverse().forEach(o => {
+    out += "  🔴 <b>" + o.name + "</b>\n";
+    out += "     └ %" + o.rate + " آزاد\n";
   });
-  out += "\n━━━━━━━━━━━━━━━\n📌 مجموع: " + ops.length + " اپراتور بررسی شده\n📊 منبع: OONI\n\n";
-  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+
+  out += "\n┣━━━ 📊 خلاصه\n\n";
+  out += "  📡 تعداد: <b>" + ops.length + "</b>\n";
+  const avg = Math.round(ops.reduce((a, b) => a + b.rate, 0) / ops.length);
+  out += "  📈 میانگین: <b>%" + avg + "</b>\n";
+  out += "  " + makeBar(avg / 10) + "\n";
+
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
   return out;
 }
 
-// ==================== Top ====================
 async function makeTopReport() {
   const ooni7d = await fetchOONI7d();
   const p = parseOONI(ooni7d);
@@ -521,36 +598,52 @@ async function makeTopReport() {
       ops.push({ name: asnName(asn), rate: Math.round((d.ok / d.total) * 100), count: d.count });
     }
   }
-  if (ops.length === 0) return "❌ داده کافی برای رتبه‌بندی در دسترس نیست.";
+  if (ops.length === 0) return "❌ داده کافی نیست.";
   ops.sort((a, b) => b.rate - a.rate);
-  let out = "🏆 <b>رتبه‌بندی هفتگی اپراتورها</b>\n\n📅 بر اساس داده ۷ روز اخیر\n\n";
-  out += "━━━━━━━━━━━━━━━\n🥇 <b>بهترین‌ها:</b>\n";
-  ops.slice(0, 5).forEach((o, i) => {
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i+1) + ".";
-    out += medal + " " + o.name + ": %" + o.rate + "\n";
+
+  let out = "╭━━━ 🏆 رتبه‌بندی هفتگی ━━━╮\n\n";
+  out += "📅 ۷ روز اخیر\n\n";
+
+  out += "┣━━━ 🥇 <b>بهترین‌ها</b>\n\n";
+  ops.slice(0, 7).forEach((o, i) => {
+    const rank = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
+    out += "  " + rank + " <b>" + o.name + "</b>  %" + o.rate + "\n";
   });
-  out += "\n━━━━━━━━━━━━━━━\n🔻 <b>پایین‌ترین‌ها:</b>\n";
+
+  out += "\n┣━━━ 🔻 <b>پایین‌ترین‌ها</b>\n\n";
   ops.slice(-5).reverse().forEach(o => {
-    out += "• " + o.name + ": %" + o.rate + "\n";
+    out += "  🔴 <b>" + o.name + "</b>  %" + o.rate + "\n";
   });
-  out += "\n━━━━━━━━━━━━━━━\n📌 مجموع: " + ops.length + " اپراتور\n📊 منبع: OONI\n\n";
-  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+
+  out += "\n┣━━━ 📊 خلاصه\n\n";
+  out += "  📡 تعداد: <b>" + ops.length + "</b> اپراتور\n";
+  out += "  🥇 بهترین: <b>%" + ops[0].rate + "</b>\n";
+  out += "  🔻 بدترین: <b>%" + ops[ops.length-1].rate + "</b>\n";
+
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "📌 منبع: OONI\n";
+  out += "🕒 " + getIranTime() + "\n";
+  out += "📡 @Radarinternetiran";
   return out;
 }
 
-// ==================== Speed ====================
 async function makeSpeedReport() {
-  let out = "⚡ <b>تست سرعت اینترنت</b>\n\n";
-  out += "━━━━━━━━━━━━━━━\n🔗 <b>لینک تست سرعت:</b>\n";
-  out += "• <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
-  out += "• <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
-  out += "• <a href='https://fast.com/'>Fast.com</a>\n\n";
-  out += "━━━━━━━━━━━━━━━\n📋 <b>چطور نتیجه‌ات رو با ما به اشتراک بذاری؟</b>\n\n";
-  out += "بعد از تست، این پیام رو به ربات بفرست:\n";
-  out += "<code>/myspeed 25 8 20</code>\n\n";
-  out += "ترتیب اعداد:\n• دانلود (Mbps)\n• آپلود (Mbps)\n• پینگ (ms)\n\n";
-  out += "📊 ما یه <b>کارت گرافیکی</b> برات می‌سازیم که بتونی با دوستات به اشتراک بذاری!\n\n";
-  out += "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+  let out = "╭━━━ ⚡ تست سرعت ━━━╮\n\n";
+  out += "  📋 <b>راهنمای تست:</b>\n\n";
+  out += "  1️⃣ لینک تست رو باز کن\n";
+  out += "  2️⃣ سرعتت رو اندازه بگیر\n";
+  out += "  3️⃣ نتیجه رو به ما بفرست\n\n";
+  out += "┣━━━ 🔗 <b>لینک‌های تست</b>\n\n";
+  out += "  🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
+  out += "  📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
+  out += "  ⚡ <a href='https://fast.com/'>Fast.com</a>\n\n";
+  out += "┣━━━ 📤 <b>ارسال نتیجه</b>\n\n";
+  out += "  <code>/myspeed 25 8 20</code>\n\n";
+  out += "  🔹 اول: دانلود (Mbps)\n";
+  out += "  🔹 دوم: آپلود (Mbps)\n";
+  out += "  🔹 سوم: پینگ (ms)\n\n";
+  out += "  🎁 یه <b>کارت وایرال</b> برات می‌سازیم!\n";
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯";
   return out;
 }
 
@@ -561,32 +654,37 @@ async function makeSpeedCard(download, upload, ping) {
   if (isNaN(dl) || dl < 0 || dl > 10000) return "❌ عدد دانلود نامعتبر.";
   if (isNaN(ul) || ul < 0 || ul > 10000) return "❌ عدد آپلود نامعتبر.";
   if (isNaN(pg) || pg < 0 || pg > 10000) return "❌ عدد پینگ نامعتبر.";
-  let rank = "🐌 ضعیف";
-  let rankEmoji = "🐌";
-  let percent = 0;
-  if (dl >= 50) { rank = "⚡ فوق‌العاده"; rankEmoji = "⚡"; percent = 95; }
-  else if (dl >= 30) { rank = "🚀 خیلی خوب"; rankEmoji = "🚀"; percent = 85; }
-  else if (dl >= 15) { rank = "✅ خوب"; rankEmoji = "✅"; percent = 70; }
-  else if (dl >= 8) { rank = "🟡 متوسط"; rankEmoji = "🟡"; percent = 50; }
-  else if (dl >= 3) { rank = "🟠 ضعیف"; rankEmoji = "🟠"; percent = 30; }
-  else { rank = "🔴 خیلی ضعیف"; rankEmoji = "🔴"; percent = 10; }
+
+  let rank = "🐌 ضعیف", emoji = "🐌", percent = 15;
+  if (dl >= 50) { rank = "⚡ فوق‌العاده"; emoji = "⚡"; percent = 95; }
+  else if (dl >= 30) { rank = "🚀 خیلی خوب"; emoji = "🚀"; percent = 85; }
+  else if (dl >= 15) { rank = "✨ خوب"; emoji = "✨"; percent = 70; }
+  else if (dl >= 8) { rank = "🟡 متوسط"; emoji = "🟡"; percent = 50; }
+  else if (dl >= 3) { rank = "🟠 ضعیف"; emoji = "🟠"; percent = 30; }
+
+  let quality = "📱 پیام‌رسان";
+  if (dl >= 25 && pg < 50) quality = "🎮 مناسب گیمینگ";
+  else if (dl >= 15) quality = "🎬 مناسب استریم";
+  else if (dl >= 8) quality = "🌐 مناسب وبگردی";
+
   const bar = makeBar(percent / 10);
-  return "⚡ <b>سرعت اینترنت من</b>\n\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "⬇️ دانلود: <b>" + dl + " Mbps</b>\n" +
-    "⬆️ آپلود: <b>" + ul + " Mbps</b>\n" +
-    "⏱️ پینگ: <b>" + pg + " ms</b>\n\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    rankEmoji + " رتبه: <b>" + rank + "</b>\n" +
-    bar + " " + percent + "%\n\n" +
-    "🏆 بهتر از " + percent + "% کاربران\n\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "📤 <b>این کارت رو با دوستات به اشتراک بذار!</b>\n" +
+
+  return "╭━━━ ⚡ سرعت اینترنت من ━━━╮\n\n" +
+    "  " + emoji + "  <b>" + rank + "</b>\n\n" +
+    "┣━━━ 📊 نتایج\n\n" +
+    "  ⬇️ دانلود  <b>" + dl + " Mbps</b>\n" +
+    "  ⬆️ آپلود  <b>" + ul + " Mbps</b>\n" +
+    "  ⏱️ پینگ  <b>" + pg + " ms</b>\n\n" +
+    "┣━━━ 🏆 رتبه\n\n" +
+    "  " + bar + "\n" +
+    "  بهتر از <b>%" + percent + "</b> کاربران\n\n" +
+    "  " + quality + "\n\n" +
+    "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
+    "📤 <b>با دوستات به اشتراک بذار!</b>\n" +
     "🤖 @Radarinternetiranbot\n\n" +
     "🕒 " + getIranTime();
 }
 
-// ==================== Main Report ====================
 async function makeReport(mode) {
   if (mode === undefined) mode = "full";
   const ooni = await fetchOONI();
@@ -598,69 +696,86 @@ async function makeReport(mode) {
   ops.sort((a, b) => a.rate - b.rate);
 
   if (mode === "simple") {
-    let emoji = "🟢";
-    let status = "پایدار";
+    let emoji = "🟢", status = "پایدار";
     if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; }
     else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; }
     else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
-    return "📊 <b>وضعیت اینترنت</b>\n\n" +
-      emoji + " " + status + "\n" +
-      "🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
-      makeBar(p.blockPercent / 10) + "\n\n" +
-      "🕒 " + getIranTime() + "\n🤖 رادار اینترنت";
+
+    return "╭━━━ 📊 وضعیت اینترنت ━━━╮\n\n" +
+      "  " + emoji + "  <b>" + status + "</b>\n\n" +
+      "  🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
+      "  " + makeBar(p.blockPercent / 10) + "\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
+      "🕒 " + getIranTime() + "\n" +
+      "📡 @Radarinternetiran";
   }
 
   if (mode === "chart") {
-    return "📊 <b>وضعیت اینترنت - مود نموداری</b>\n\n" +
-      "🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
-      makeBar(p.blockPercent / 10) + "\n\n" +
-      "👇 نمودار زیر رو ببین:";
+    return "╭━━━ 📊 وضعیت اینترنت ━━━╮\n\n" +
+      "  🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n" +
+      "  " + makeBar(p.blockPercent / 10) + "\n\n" +
+      "  👇 نمودار زیر:\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯";
   }
 
   // full
   let irOk = 0, globalOk = 0, irList = "", globalList = "";
   for (const s of IR_SITES) {
     const t = await pingSite(s.url);
-    if (t) { irOk++; irList += "  ✅ " + s.name + ": " + t + "ms\n"; }
-    else { irList += "  ❌ " + s.name + "\n"; }
+    if (t) { irOk++; irList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
+    else { irList += "  ❌ " + s.name + "  <i>ناموفق</i>\n"; }
   }
   for (const s of GLOBAL_SITES) {
     const t = await pingSite(s.url);
-    if (t) { globalOk++; globalList += "  ✅ " + s.name + ": " + t + "ms\n"; }
-    else { globalList += "  ❌ " + s.name + "\n"; }
+    if (t) { globalOk++; globalList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
+    else { globalList += "  ❌ " + s.name + "  <i>ناموفق</i>\n"; }
   }
 
   const ripe = await fetchRIPE();
 
-  let out = "📊 <b>گزارش وضعیت اینترنت ایران</b>\n";
-  out += "📅 " + getIranDate() + " | 🕒 " + getIranTime() + "\n\n";
-  out += "━━━━━━━━━━━━━━━\n🌐 <b>دسترسی سایت‌ها</b>\n";
-  out += "🇮🇷 ایرانی: " + irOk + "/" + IR_SITES.length + "\n";
-  out += "🌍 جهانی: " + globalOk + "/" + GLOBAL_SITES.length + "\n\n";
-  out += irList + globalList + "\n";
-  out += "━━━━━━━━━━━━━━━\n🚫 <b>فیلترینگ (OONI)</b>\n";
-  out += "مسدودسازی: <b>%" + p.blockPercent + "</b>\n";
-  out += makeBar(p.blockPercent / 10) + "\n";
-  out += "📊 اندازه‌گیری: " + p.totalMs.toLocaleString("fa-IR") + "\n\n";
+  let mainEmoji = "🟢", mainStatus = "پایدار";
+  if (p.blockPercent >= 60) { mainEmoji = "🔴"; mainStatus = "بحرانی"; }
+  else if (p.blockPercent >= 40) { mainEmoji = "🟠"; mainStatus = "ناپایدار"; }
+  else if (p.blockPercent >= 20) { mainEmoji = "🟡"; mainStatus = "متوسط"; }
+
+  let out = "╭━━━ 📊 گزارش اینترنت ━━━╮\n\n";
+  out += "  📅 <b>" + getIranDate() + "</b>\n";
+  out += "  🕒 <b>" + getIranTime() + "</b>\n\n";
+  out += "  " + mainEmoji + "  <b>" + mainStatus + "</b>\n\n";
+
+  out += "┣━━━ 🌐 <b>دسترسی سایت‌ها</b>\n\n";
+  out += "  🇮🇷 ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n";
+  out += irList + "\n";
+  out += "  🌍 جهانی: <b>" + globalOk + "/" + GLOBAL_SITES.length + "</b>\n\n";
+  out += globalList + "\n";
+
+  out += "┣━━━ 🚫 <b>فیلترینگ</b>\n\n";
+  out += "  📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n";
+  out += "  " + makeBar(p.blockPercent / 10) + "\n\n";
+  out += "  📈 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n\n";
+
   if (ops.length > 0) {
-    out += "<b>بدترین اپراتورها:</b>\n";
+    out += "  🔻 <b>بدترین اپراتورها:</b>\n\n";
     ops.slice(0, 5).forEach(o => {
       const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴";
-      out += e + " " + o.name + ": %" + o.rate + "\n";
+      out += "  " + e + " " + o.name + "  <b>%" + o.rate + "</b>\n";
     });
+    out += "\n";
   }
-  out += "\n━━━━━━━━━━━━━━━\n🚨 <b>مسیریابی (BGP)</b>\n";
-  if (ripe && ripe.data) {
-    if (ripe.data.visibility !== undefined) {
-      const v = ripe.data.visibility;
-      out += "👁️ Visibility: <b>%" + v + "</b>\n";
-      out += "وضعیت: " + (v > 95 ? "🟢 پایدار" : v > 80 ? "🟡 متوسط" : "🔴 ناپایدار") + "\n";
-    }
-    out += "🔗 RIPE Stat\n";
+
+  out += "┣━━━ 🚨 <b>مسیریابی</b>\n\n";
+  if (ripe && ripe.data && ripe.data.visibility !== undefined) {
+    const v = ripe.data.visibility;
+    const vE = v > 95 ? "🟢" : v > 80 ? "🟡" : "🔴";
+    out += "  " + vE + " Visibility: <b>%" + v + "</b>\n";
+    out += "  " + makeBar(v / 10) + "\n";
   } else {
-    out += "⚠️ RIPE در دسترس نیست\n";
+    out += "  ⚠️ RIPE در دسترس نیست\n";
   }
-  out += "\n━━━━━━━━━━━━━━━\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n\n";
-  out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
+
+  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n";
+  out += "🔗 @radarinternetiran\n";
+  out += "👑 @royal_trust_ir_official";
+
   return out;
-    }
+      }
