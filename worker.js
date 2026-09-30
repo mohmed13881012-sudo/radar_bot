@@ -5,26 +5,38 @@ const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 
 // ==================== نقشه ASN به اسم اپراتور ====================
 const ASN_NAMES = {
-  "AS42337": "پارس‌آنلاین",
-  "AS58224": "مخابرات ایران (TCI)",
-  "AS197207": "همراه اول (MCI)",
-  "AS44244": "ایرانسل",
-  "AS31549": "شاتل",
-  "AS16322": "پارس‌پک",
-  "AS50810": "آسیاتک",
-  "AS57218": "رایتل",
-  "AS43754": "آسیاتک",
-  "AS12880": "زیرساخت",
-  "AS48159": "پیشگامان",
-  "AS39501": "ابر آروان",
-  "AS25184": "افرانِت",
-  "AS56402": "صبانت",
-  "AS208161": "ایرانسل نسل جدید",
-  "AS205648": "رسپینا",
-  "AS21478": "مبین‌نت"
+  "42337": "پارس‌آنلاین",
+  "58224": "مخابرات ایران (TCI)",
+  "197207": "همراه اول (MCI)",
+  "44244": "ایرانسل",
+  "31549": "شاتل",
+  "16322": "پارس‌پک",
+  "50810": "آسیاتک",
+  "57218": "رایتل",
+  "43754": "آسیاتک",
+  "12880": "زیرساخت",
+  "48159": "پیشگامان",
+  "39501": "ابر آروان",
+  "25184": "افرانِت",
+  "56402": "صبانت",
+  "208161": "ایرانسل جدید",
+  "205648": "رسپینا",
+  "21478": "مبین‌نت",
+  "206065": "پیشگامان",
+  "44208": "شبکه گستر",
+  "49100": "ارتباطات زیرساخت",
+  "202468": "ایران‌سرور",
+  "204213": "همراه نت",
+  "57497": "شاتل موبایل",
+  "51685": "پارس‌پک",
+  "48434": "پارس‌آنلاین",
+  "58224": "مخابرات",
+  "12880": "زیرساخت",
+  "6736": "شاتل",
+  "51074": "شاتل"
 };
 
-// ==================== سایت‌های تست پینگ ====================
+// ==================== سایت‌ها ====================
 const IR_SITES = [
   { name: "دیجی‌کالا", url: "https://digikala.com" },
   { name: "شاپرک", url: "https://shaparak.ir" },
@@ -36,8 +48,6 @@ const GLOBAL_SITES = [
   { name: "کلادفلر", url: "https://www.cloudflare.com" },
   { name: "مایکروسافت", url: "https://www.microsoft.com" }
 ];
-
-// ==================== سایت‌های مورد تست فیلترینگ ====================
 const FILTER_CHECK = [
   { name: "توییتر / X", url: "https://x.com" },
   { name: "یوتیوب", url: "https://www.youtube.com" },
@@ -95,7 +105,18 @@ function getIranDate() {
   }).format(new Date());
 }
 function asnName(asn) {
-  return ASN_NAMES[asn] || asn;
+  const clean = String(asn).replace(/^AS/i, "");
+  return ASN_NAMES[clean] || ("AS" + clean);
+}
+function makeBar(v) {
+  const filled = Math.max(0, Math.min(10, Math.round(v)));
+  let color = "🔴";
+  if (v >= 8) color = "🟢";
+  else if (v >= 6) color = "🟡";
+  else if (v >= 4) color = "🟠";
+  let bar = "";
+  for (let i = 0; i < 10; i++) bar += (i < filled ? color : "▫️");
+  return bar;
 }
 
 async function pingSite(url) {
@@ -124,16 +145,27 @@ async function debugAll() {
   let out = "=== OONI ===\n";
   const ooni = await fetchOONI();
   if (ooni && ooni.result) {
-    out += "Total rows: " + ooni.result.length + "\n";
-    out += JSON.stringify(ooni.result.slice(0, 3)).substring(0, 1500) + "\n\n";
-  } else {
-    out += "No data\n\n";
-  }
-  out += "=== RIPE ===\n";
+    out += "Rows: " + ooni.result.length + "\n";
+    out += JSON.stringify(ooni.result.slice(0, 2)).substring(0, 1200) + "\n\n";
+  } else out += "No data\n\n";
+
+  out += "=== RIPE routing-status ===\n";
   try {
     const r = await fetch("https://stat.ripe.net/data/routing-status/data.json?resource=IR");
-    out += (await r.text()).substring(0, 1000) + "\n";
-  } catch(e) { out += "ERR: " + e.message + "\n"; }
+    out += (await r.text()).substring(0, 800) + "\n\n";
+  } catch(e) { out += "ERR: " + e.message + "\n\n"; }
+
+  out += "=== RIPE bgp-state ===\n";
+  try {
+    const r = await fetch("https://stat.ripe.net/data/bgp-state/data.json?resource=IR");
+    out += (await r.text()).substring(0, 800) + "\n\n";
+  } catch(e) { out += "ERR: " + e.message + "\n\n"; }
+
+  out += "=== RIPE country-asns ===\n";
+  try {
+    const r = await fetch("https://stat.ripe.net/data/country-asns/data.json?resource=IR");
+    out += (await r.text()).substring(0, 800) + "\n\n";
+  } catch(e) { out += "ERR: " + e.message + "\n\n"; }
   return out;
 }
 
@@ -151,13 +183,20 @@ async function fetchOONI() {
 
 // ==================== RIPE ====================
 async function fetchRIPE() {
-  try {
-    const r = await fetch("https://stat.ripe.net/data/routing-status/data.json?resource=IR", { headers: { "Accept": "application/json" } });
-    if (r.ok) {
-      const d = await r.json();
-      if (d && d.data) return d;
-    }
-  } catch(e) {}
+  const endpoints = [
+    "https://stat.ripe.net/data/routing-status/data.json?resource=IR",
+    "https://stat.ripe.net/data/bgp-state/data.json?resource=IR",
+    "https://stat.ripe.net/data/country-asns/data.json?resource=IR"
+  ];
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (r.ok) {
+        const d = await r.json();
+        if (d && d.data) return d;
+      }
+    } catch(e) { console.log("RIPE err: " + e.message); }
+  }
   return null;
 }
 
@@ -250,17 +289,6 @@ async function sendMessage(chatId, text, extra) {
   } catch(e) {}
 }
 
-function makeBar(v) {
-  const filled = Math.max(0, Math.min(10, Math.round(v)));
-  let color = "🔴";
-  if (v >= 8) color = "🟢";
-  else if (v >= 6) color = "🟡";
-  else if (v >= 4) color = "🟠";
-  let bar = "";
-  for (let i = 0; i < 10; i++) bar += (i < filled ? color : "▫️");
-  return bar;
-}
-
 // ==================== Ping Report ====================
 async function makePingReport() {
   let irList = "";
@@ -278,15 +306,15 @@ async function makePingReport() {
     else { globalList += "  ❌ " + s.name + ": ناموفق\n"; }
   }
 
-  return "🌐 <b>پینگ از خارج ایران</b>\n\n" +
+  return "🌐 <b>پینگ سایت‌ها</b>\n\n" +
     "━━━━━━━━━━━━━━━\n" +
-    "🇮🇷 <b>سایت‌های ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n" + irList + "\n" +
-    "🌍 <b>سایت‌های جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n" + globalList + "\n" +
+    "🇮🇷 <b>ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n" + irList + "\n" +
+    "🌍 <b>جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n" + globalList + "\n" +
     "🕒 " + getIranTime() + "\n" +
     "🤖 رادار اینترنت";
 }
 
-// ==================== Filtering Report (با اسم اپراتورها) ====================
+// ==================== Filtering Report ====================
 async function makeFilteringReport() {
   const ooni = await fetchOONI();
   let totalMs = 0, blockedMs = 0;
@@ -304,7 +332,7 @@ async function makeFilteringReport() {
       blockedMs += (ac + cc);
 
       if (row.probe_asn && mc >= 50) {
-        const asn = row.probe_asn;
+        const asn = String(row.probe_asn).replace(/^AS/i, "");
         if (!asnData[asn]) asnData[asn] = { total: 0, ok: 0, count: 0 };
         asnData[asn].total += mc;
         asnData[asn].ok += ok;
@@ -320,7 +348,6 @@ async function makeFilteringReport() {
   else if (blockPercent >= 40) level = "🟠 نسبتاً بالا";
   else if (blockPercent >= 20) level = "🟡 متوسط";
 
-  // ساخت لیست اپراتورها
   let operatorList = [];
   for (const [asn, data] of Object.entries(asnData)) {
     const rate = Math.round((data.ok / data.total) * 100);
@@ -339,7 +366,7 @@ async function makeFilteringReport() {
     out += "<b>وضعیت به تفکیک اپراتور:</b>\n";
     operatorList.slice(0, 10).forEach(item => {
       const emoji = item.rate >= 80 ? "🟢" : item.rate >= 60 ? "🟡" : item.rate >= 40 ? "🟠" : "🔴";
-      out += emoji + " <b>" + item.name + "</b>: %" + item.rate + " آزاد (" + item.count + ")\n";
+      out += emoji + " <b>" + item.name + "</b>: %" + item.rate + " آزاد (" + item.count.toLocaleString("fa-IR") + ")\n";
     });
   }
 
@@ -349,11 +376,10 @@ async function makeFilteringReport() {
   return out;
 }
 
-// ==================== Sites Report (کدوم سایت‌ها فیلترن) ====================
+// ==================== Sites Report ====================
 async function makeSitesReport() {
   let out = "🌐 <b>وضعیت سرویس‌ها</b>\n\n";
-  out += "⚠️ این تست از سرور خارج از ایران انجام شده.\n";
-  out += "برای نمایش دقیق فیلترینگ به OONI مراجعه کنید.\n\n";
+  out += "⚠️ این تست از سرور خارج از ایران انجام شده.\n\n";
   out += "━━━━━━━━━━━━━━━\n";
 
   let accessible = 0;
@@ -401,7 +427,7 @@ async function makeReport() {
       totalMs += mc;
       blockedMs += (ac + cc);
       if (row.probe_asn && mc >= 50) {
-        const asn = row.probe_asn;
+        const asn = String(row.probe_asn).replace(/^AS/i, "");
         if (!asnData[asn]) asnData[asn] = { total: 0, ok: 0 };
         asnData[asn].total += mc;
         asnData[asn].ok += ok;
@@ -423,7 +449,6 @@ async function makeReport() {
   const time = getIranTime();
   const date = getIranDate();
 
-  // ساخت گزارش
   let out = "📊 <b>گزارش وضعیت اینترنت ایران</b>\n";
   out += "📅 " + date + " | 🕒 " + time + "\n\n";
 
@@ -454,14 +479,20 @@ async function makeReport() {
   out += "🚨 <b>مسیریابی (BGP)</b>\n";
   if (ripe && ripe.data) {
     if (ripe.data.visibility !== undefined) {
-      out += "👁️ Visibility: <b>%" + ripe.data.visibility + "</b>\n";
-      out += "وضعیت: " + (ripe.data.visibility > 95 ? "🟢 پایدار" : "🟡 ناپایدار") + "\n";
+      const vis = ripe.data.visibility;
+      out += "👁️ Visibility: <b>%" + vis + "</b>\n";
+      out += "وضعیت: " + (vis > 95 ? "🟢 پایدار" : vis > 80 ? "🟡 متوسط" : "🔴 ناپایدار") + "\n";
     }
     if (ripe.data.total_count !== undefined) {
       out += "📡 روت‌ها: " + ripe.data.total_count.toLocaleString("fa-IR") + "\n";
     }
+    if (ripe.data.observed_neighbours !== undefined) {
+      out += "🔗 همسایه‌ها: " + ripe.data.observed_neighbours + "\n";
+    }
+    out += "🔗 منبع: RIPE Stat\n";
   } else {
     out += "⚠️ RIPE در دسترس نیست\n";
+    out += "📌 فقط داده‌های OONI نمایش داده شد.\n";
   }
 
   out += "\n━━━━━━━━━━━━━━━\n";
@@ -470,4 +501,4 @@ async function makeReport() {
   out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
 
   return out;
-                                }
+  }
