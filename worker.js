@@ -1,4 +1,4 @@
-const BOT_TOKEN = "8579994081:AAFPiuiMPgANy7ARI9QiE7dWWwlnFrwY8gs";
+const BOT_TOKEN = env.BOT_TOKEN || "8579994081:AAFPiuiMPgANy7ARI9QiE7dWWwlnFrwY8gs";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
 const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
@@ -38,26 +38,39 @@ const FILTER_CHECK = [
 ];
 
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const BOT_TOKEN = env.BOT_TOKEN;
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
+
     if (url.pathname === "/test") return new Response("Test OK");
+
     if (url.pathname === "/setwebhook") {
       const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
       return new Response("Result: " + await r.text());
     }
+
+    if (url.pathname === "/webhookinfo") {
+      const r = await fetch(TG + "/getWebhookInfo");
+      return new Response(await r.text());
+    }
+
     if (url.pathname === "/sendreport") {
-      await sendChannelReport();
+      await sendChannelReport(TG);
       return new Response("Report sent!");
     }
+
     if (request.method !== "POST") return new Response("Radar Bot is running!");
+
     try {
       const update = await request.json();
-      await handleUpdate(update);
+      await handleUpdate(update, TG);
     } catch(e) { console.log("Error: " + e.message); }
     return new Response("OK");
   },
+
   async scheduled(event, env, ctx) {
-    await sendChannelReport();
+    await sendChannelReport("https://api.telegram.org/bot" + env.BOT_TOKEN);
   }
 };
 
@@ -80,7 +93,6 @@ function makeBar(v) {
   for (let i = 0; i < 10; i++) b += (i < f ? c : "▫️");
   return b;
 }
-
 async function pingSite(url) {
   const s = Date.now();
   try {
@@ -100,14 +112,12 @@ async function checkAccessible(url) {
     return r.ok || r.status < 400;
   } catch(e) { return false; }
 }
-
-// ==================== QuickChart ====================
 function quickChart(config) {
   const json = JSON.stringify(config);
   return "https://quickchart.io/chart?w=900&h=500&bkg=%23ffffff&c=" + encodeURIComponent(json);
 }
 
-// ==================== OONI ====================
+// ==================== APIs ====================
 async function fetchOONI() {
   try {
     const until = new Date().toISOString().split("T")[0];
@@ -126,8 +136,6 @@ async function fetchOONI7d() {
   } catch(e) {}
   return null;
 }
-
-// ==================== RIPE ====================
 async function fetchRIPE() {
   const eps = [
     "https://stat.ripe.net/data/routing-status/data.json?resource=IR",
@@ -141,8 +149,6 @@ async function fetchRIPE() {
   }
   return null;
 }
-
-// ==================== Parse OONI ====================
 function parseOONI(ooni) {
   let totalMs = 0, blockedMs = 0;
   let asnData = {};
@@ -156,7 +162,6 @@ function parseOONI(ooni) {
       const ok = mc - ac - cc - fc;
       totalMs += mc;
       blockedMs += (ac + cc);
-
       if (row.probe_asn && mc >= 30) {
         const asn = String(row.probe_asn).replace(/^AS/i, "");
         if (!asnData[asn]) asnData[asn] = { total: 0, ok: 0, count: 0 };
@@ -164,7 +169,6 @@ function parseOONI(ooni) {
         asnData[asn].ok += ok;
         asnData[asn].count += mc;
       }
-
       if (row.measurement_start_day) {
         const day = row.measurement_start_day;
         if (!dayData[day]) dayData[day] = { total: 0, blocked: 0 };
@@ -177,6 +181,124 @@ function parseOONI(ooni) {
     blockPercent: totalMs > 0 ? Math.round((blockedMs / totalMs) * 100) : 0,
     totalMs, blockedMs, asnData, dayData
   };
+}
+
+// ==================== Send ====================
+async function sendPhoto(TG, chatId, url, caption) {
+  try {
+    await fetch(TG + "/sendPhoto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" })
+    });
+  } catch(e) { console.log("sendPhoto error: " + e.message); }
+}
+async function sendMessage(TG, chatId, text, extra) {
+  const body = { chat_id: chatId, text: text };
+  if (extra) {
+    Object.keys(extra).forEach(k => {
+      if (k === "inline_keyboard") {
+        body.reply_markup = { inline_keyboard: extra[k] };
+      } else {
+        body[k] = extra[k];
+      }
+    });
+  }
+  try {
+    await fetch(TG + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch(e) { console.log("sendMessage error: " + e.message); }
+}
+async function sendChannelReport(TG) {
+  const report = await makeReport();
+  try {
+    await fetch(TG + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CH1, text: report, parse_mode: "HTML" })
+    });
+  } catch(e) {}
+}
+
+// ==================== Handle Update ====================
+async function handleUpdate(update, TG) {
+  if (!update.message) return;
+  const msg = update.message;
+  const chatId = msg.chat.id;
+  const text = msg.text || "";
+  const userId = msg.from.id;
+
+  const inCh1 = await checkMember(TG, userId, CH1);
+  const inCh2 = await checkMember(TG, userId, CH2);
+
+  if (!inCh1 || !inCh2) {
+    await sendMessage(TG, chatId,
+      "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.",
+      {
+        parse_mode: "HTML",
+        inline_keyboard: [
+          [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
+          [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
+        ]
+      }
+    );
+    return;
+  }
+
+  if (text === "/start") {
+    await sendMessage(TG, chatId,
+      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
+      { parse_mode: "HTML" }
+    );
+  } else if (text === "/status") {
+    await sendMessage(TG, chatId, "🔍 در حال دریافت...");
+    const report = await makeReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/ping") {
+    await sendMessage(TG, chatId, "🔍 در حال پینگ...");
+    const report = await makePingReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/filtering") {
+    await sendMessage(TG, chatId, "🔍 در حال بررسی...");
+    const report = await makeFilteringReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/sites") {
+    await sendMessage(TG, chatId, "🔍 در حال بررسی سرویس‌ها...");
+    const report = await makeSitesReport();
+    await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
+  } else if (text === "/chart") {
+    await sendMessage(TG, chatId, "📊 در حال ساخت نمودار...");
+    const c = await makeBarChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/pie") {
+    await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار...");
+    const c = await makePieChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/trend") {
+    await sendMessage(TG, chatId, "📈 در حال ساخت نمودار...");
+    const c = await makeTrendChart();
+    await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/help") {
+    await sendMessage(TG, chatId,
+      "📚 <b>راهنمای ربات</b>\n\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
+      { parse_mode: "HTML" }
+    );
+  }
+}
+
+async function checkMember(TG, userId, channel) {
+  try {
+    const r = await fetch(TG + "/getChatMember?chat_id=" + channel + "&user_id=" + userId);
+    const d = await r.json();
+    if (d.ok && d.result) {
+      const s = d.result.status;
+      return s === "member" || s === "administrator" || s === "creator";
+    }
+  } catch(e) {}
+  return false;
 }
 
 // ==================== Charts ====================
@@ -201,7 +323,7 @@ async function makeBarChart() {
         }]
       },
       options: {
-        title: { display: true, text: "دسترسی آزاد اپراتورها (24h)", fontSize: 18 },
+        title: { display: true, text: "دسترسی آزاد اپراتورها", fontSize: 18 },
         legend: { display: false },
         scales: { xAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
@@ -225,14 +347,9 @@ async function makePieChart() {
       type: "pie",
       data: {
         labels: ops.map(o => o.name),
-        datasets: [{
-          data: ops.map(o => o.count),
-          backgroundColor: colors
-        }]
+        datasets: [{ data: ops.map(o => o.count), backgroundColor: colors }]
       },
-      options: {
-        title: { display: true, text: "سهم اپراتورها از اندازه‌گیری‌ها", fontSize: 18 }
-      }
+      options: { title: { display: true, text: "سهم اپراتورها", fontSize: 18 } }
     }),
     caption: "🥧 <b>سهم اپراتورها</b>\n\nاز " + p.totalMs.toLocaleString("fa-IR") + " اندازه‌گیری"
   };
@@ -271,127 +388,6 @@ async function makeTrendChart() {
     }),
     caption: "📈 <b>روند فیلترینگ ۷ روز اخیر</b>\n\nبالاترین: %" + Math.max(...values) + "\nپایین‌ترین: %" + Math.min(...values)
   };
-}
-
-// ==================== Send Photo ====================
-async function sendPhoto(chatId, url, caption) {
-  try {
-    await fetch(TG + "/sendPhoto", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" })
-    });
-  } catch(e) { console.log("sendPhoto error: " + e.message); }
-}
-
-// ==================== Send Message (اصلاح‌شده) ====================
-async function sendMessage(chatId, text, extra) {
-  const body = { chat_id: chatId, text: text };
-  if (extra) {
-    Object.keys(extra).forEach(k => {
-      if (k === "inline_keyboard") {
-        body.reply_markup = { inline_keyboard: extra[k] };
-      } else {
-        body[k] = extra[k];
-      }
-    });
-  }
-  try {
-    await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-  } catch(e) { console.log("sendMessage error: " + e.message); }
-}
-
-async function sendChannelReport() {
-  const report = await makeReport();
-  try {
-    await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CH1, text: report, parse_mode: "HTML" })
-    });
-  } catch(e) {}
-}
-
-// ==================== Update Handler ====================
-async function handleUpdate(update) {
-  if (!update.message) return;
-  const msg = update.message;
-  const chatId = msg.chat.id;
-  const text = msg.text || "";
-  const userId = msg.from.id;
-
-  const inCh1 = await checkMember(userId, CH1);
-  const inCh2 = await checkMember(userId, CH2);
-
-  if (!inCh1 || !inCh2) {
-    await sendMessage(chatId,
-      "🔒 برای استفاده از ربات، ابتدا در <b>هر دو کانال</b> زیر عضو شوید:\n\n📡 رادار اینترنت\n👑 رویال تراست\n\nپس از عضویت، دوباره /start را بزنید.",
-      {
-        parse_mode: "HTML",
-        inline_keyboard: [
-          [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
-          [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
-        ]
-      }
-    );
-    return;
-  }
-
-  if (text === "/start") {
-    await sendMessage(chatId,
-      "سلام! 👋\n\nبه ربات <b>رادار اینترنت</b> خوش آمدید.\n\n📌 دستورات:\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
-      { parse_mode: "HTML" }
-    );
-  } else if (text === "/status") {
-    await sendMessage(chatId, "🔍 در حال دریافت...");
-    const report = await makeReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/ping") {
-    await sendMessage(chatId, "🔍 در حال پینگ...");
-    const report = await makePingReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/filtering") {
-    await sendMessage(chatId, "🔍 در حال بررسی...");
-    const report = await makeFilteringReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/sites") {
-    await sendMessage(chatId, "🔍 در حال بررسی سرویس‌ها...");
-    const report = await makeSitesReport();
-    await sendMessage(chatId, report, { parse_mode: "HTML" });
-  } else if (text === "/chart") {
-    await sendMessage(chatId, "📊 در حال ساخت نمودار...");
-    const c = await makeBarChart();
-    await sendPhoto(chatId, c.url, c.caption);
-  } else if (text === "/pie") {
-    await sendMessage(chatId, "🥧 در حال ساخت نمودار...");
-    const c = await makePieChart();
-    await sendPhoto(chatId, c.url, c.caption);
-  } else if (text === "/trend") {
-    await sendMessage(chatId, "📈 در حال ساخت نمودار...");
-    const c = await makeTrendChart();
-    await sendPhoto(chatId, c.url, c.caption);
-  } else if (text === "/help") {
-    await sendMessage(chatId,
-      "📚 <b>راهنمای ربات</b>\n\n/status - گزارش کامل\n/ping - پینگ سایت‌ها\n/filtering - فیلترینگ اپراتورها\n/sites - وضعیت سرویس‌ها\n/chart - نمودار اپراتورها\n/pie - نمودار سهم اپراتورها\n/trend - روند ۷ روز اخیر\n/help - راهنما",
-      { parse_mode: "HTML" }
-    );
-  }
-}
-
-async function checkMember(userId, channel) {
-  try {
-    const r = await fetch(TG + "/getChatMember?chat_id=" + channel + "&user_id=" + userId);
-    const d = await r.json();
-    if (d.ok && d.result) {
-      const s = d.result.status;
-      return s === "member" || s === "administrator" || s === "creator";
-    }
-  } catch(e) {}
-  return false;
 }
 
 // ==================== Reports ====================
@@ -515,4 +511,4 @@ async function makeReport() {
   out += "\n━━━━━━━━━━━━━━━\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n\n";
   out += "🤖 <i>رادار اینترنت - مانیتورینگ زنده</i>";
   return out;
-}
+                                                       }
