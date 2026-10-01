@@ -4,3 +4,7 @@ compatibility_date = "2024-01-01"
 
 [vars]
 BOT_TOKEN = "8579994081:AAEtX2imLRjAcbeXrBB48XoV_5-7-6ZtsoY"
+
+[[kv_namespaces]]
+binding = "STATS"
+id = "ccd79a9e930a444ca67fccc6c18317a4"
