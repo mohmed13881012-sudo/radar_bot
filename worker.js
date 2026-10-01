@@ -50,12 +50,10 @@ export default {
     if (!BOT_TOKEN) return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
     const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
 
-    // ====== API عمومی ======
     if (url.pathname.startsWith("/api")) {
       return await handleAPI(url, STATS);
     }
 
-    // ====== داشبورد ادمین ======
     if (url.pathname === "/admin") {
       const pass = url.searchParams.get("pass");
       if (pass !== ADMIN_PASS) {
@@ -103,10 +101,7 @@ function getIranDate() {
 }
 function getGregDate() {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return y + "/" + m + "/" + day;
+  return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
 }
 function getDateBoth() {
   return "📅 " + getIranDate() + "  •  🗓 " + getGregDate();
@@ -283,11 +278,12 @@ async function addPoints(STATS, userId, points) {
     const key = "points:" + userId;
     const cur = parseInt(await STATS.get(key) || "0");
     await STATS.put(key, String(cur + points));
+    const name = await STATS.get("name:" + userId) || ("کاربر " + userId.slice(-4));
     const lb = await STATS.get("leaderboard");
     let list = lb ? JSON.parse(lb) : [];
     const found = list.find(x => x.id === userId);
-    if (found) found.p = cur + points;
-    else list.push({ id: userId, p: cur + points });
+    if (found) { found.p = cur + points; found.n = name; }
+    else list.push({ id: userId, p: cur + points, n: name });
     list.sort((a, b) => b.p - a.p);
     list = list.slice(0, 50);
     await STATS.put("leaderboard", JSON.stringify(list));
@@ -301,7 +297,7 @@ async function getPoints(STATS, userId) {
   } catch(e) { return 0; }
 }
 
-async function trackUser(STATS, userId) {
+async function trackUser(STATS, userId, userName) {
   if (!STATS) return;
   try {
     const today = getToday();
@@ -312,6 +308,7 @@ async function trackUser(STATS, userId) {
       const total = parseInt(await STATS.get("total_users") || "0");
       await STATS.put("total_users", String(total + 1));
     }
+    if (userName) await STATS.put("name:" + userId, userName);
     const dkey = "dau:" + today;
     const dauRaw = await STATS.get(dkey);
     let dau = dauRaw ? JSON.parse(dauRaw) : [];
@@ -337,6 +334,33 @@ async function handleUpdate(update, TG, STATS) {
   const chatId = msg.chat.id;
   const text = msg.text || "";
   const userId = String(msg.from.id);
+  const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
+
+  if (STATS) await STATS.put("name:" + userId, userName);
+
+  // ====== دستور /admin ======
+  if (text === "/admin") {
+    await sendMessage(TG, chatId,
+      "╭━━━ 🔐 ورود به پنل ━━━╮\n\n" +
+      "  🔑 لطفاً رمز ادمین رو بفرست:\n\n" +
+      "  ⚠️ <i>دسترسی فقط برای مدیر</i>\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯",
+      { parse_mode: "HTML" });
+    return;
+  }
+
+  // ====== چک رمز ادمین ======
+  if (text === ADMIN_PASS) {
+    const dash = "https://radar-bot.royal-trust-ir-official.workers.dev/admin?pass=" + ADMIN_PASS;
+    await sendMessage(TG, chatId,
+      "╭━━━ 🔐 داشبورد ادمین ━━━╮\n\n" +
+      "  ✅ رمز صحیح!\n\n" +
+      "  🔗 <a href='" + dash + "'>ورود به داشبورد</a>\n\n" +
+      "  <i>لینک رو در مرورگر باز کن</i>\n\n" +
+      "╰━━━━━━━━━━━━━━━━━━━╯",
+      { parse_mode: "HTML" });
+    return;
+  }
 
   // ====== عضویت اجباری ======
   const inCh1 = await checkMember(TG, userId, CH1);
@@ -360,19 +384,8 @@ async function handleUpdate(update, TG, STATS) {
     return;
   }
 
-  // ====== رمز ادمین ======
-  if (text === ADMIN_PASS) {
-    const dash = "https://radar-bot.royal-trust-ir-official.workers.dev/admin?pass=" + ADMIN_PASS;
-    await sendMessage(TG, chatId,
-      "🔐 <b>داشبورد ادمین</b>\n\n🔗 <a href='" + dash + "'>ورود به داشبورد</a>",
-      { parse_mode: "HTML" });
-    return;
-  }
+  await trackUser(STATS, userId, userName);
 
-  // ====== ثبت کاربر ======
-  await trackUser(STATS, userId);
-
-  // ====== بررسی ارجاع ======
   if (text.startsWith("/start ref_")) {
     const refCode = text.replace("/start ref_", "").trim();
     if (refCode && refCode !== userId && STATS) {
@@ -382,7 +395,7 @@ async function handleUpdate(update, TG, STATS) {
         await addPoints(STATS, refCode, 10);
         await addPoints(STATS, userId, 5);
         await sendMessage(TG, chatId,
-          "🎉 <b>خوش آمدی!</b>\n\n" +
+          "🎉 <b>خوش آمدی " + userName + "!</b>\n\n" +
           "✅ ۵ امتیاز به خاطر دعوت گرفتی!\n" +
           "🎁 دعات هم ۱۰ امتیاز گرفت.",
           { parse_mode: "HTML" });
@@ -390,13 +403,12 @@ async function handleUpdate(update, TG, STATS) {
     }
   }
 
-  // ====== دستورات ======
   if (text === "/start" || text.startsWith("/start ")) {
     await addPoints(STATS, userId, 1);
     const pts = await getPoints(STATS, userId);
     await sendMessage(TG, chatId,
       "╭━━━ 👋 خوش آمدید ━━━╮\n\n" +
-      "  به <b>رادار اینترنت</b> خوش آمدی\n\n" +
+      "  سلام <b>" + userName + "</b> عزیز!\n\n" +
       "  🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
       "┣━━━ 📊 گزارش‌ها\n" +
       "  /status → کامل\n" +
@@ -433,6 +445,7 @@ async function handleUpdate(update, TG, STATS) {
     const rank = lb.findIndex(x => x.id === userId) + 1;
     await sendMessage(TG, chatId,
       "╭━━━ 🎖️ رتبه شما ━━━╮\n\n" +
+      "  👤 <b>" + userName + "</b>\n" +
       "  🏆 امتیاز: <b>" + pts + "</b>\n" +
       "  📊 رتبه: <b>#" + (rank || "?") + "</b>\n" +
       "  👥 از " + lb.length + " کاربر\n\n" +
@@ -451,7 +464,8 @@ async function handleUpdate(update, TG, STATS) {
     } else {
       lb.slice(0, 10).forEach((u, i) => {
         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
-        out += "  " + medal + " <code>" + u.id + "</code>  →  <b>" + u.p + "</b>\n";
+        const name = u.n || u.id;
+        out += "  " + medal + " <b>" + name + "</b>  →  " + u.p + "\n";
       });
     }
     out += "\n╰━━━━━━━━━━━━━━━━━━━╯";
@@ -461,6 +475,7 @@ async function handleUpdate(update, TG, STATS) {
     const pts = await getPoints(STATS, userId);
     await sendMessage(TG, chatId,
       "╭━━━ 🎁 دعوت دوستان ━━━╮\n\n" +
+      "  👤 <b>" + userName + "</b>\n" +
       "  🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
       "┣━━━ 🔗 لینک اختصاصی\n\n" +
       "  <code>" + link + "</code>\n\n" +
@@ -710,7 +725,7 @@ async function handleAPI(url, STATS) {
 
 // ==================== Admin Dashboard ====================
 async function makeAdminDashboard(STATS) {
-  if (!STATS) return "<h1>KV not connected</h1>";
+  if (!STATS) return "<h1 style='color:#fff;font-family:Tahoma;padding:40px'>⚠️ KV not connected</h1>";
   const today = getToday();
   const totalUsers = await STATS.get("total_users") || "0";
   const dauRaw = await STATS.get("dau:" + today);
@@ -720,24 +735,29 @@ async function makeAdminDashboard(STATS) {
   
   let lbHtml = "";
   lb.slice(0, 10).forEach((u, i) => {
-    lbHtml += "<tr><td>" + (i+1) + "</td><td><code>" + u.id + "</code></td><td>" + u.p + "</td></tr>";
+    const name = u.n || u.id;
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i+1);
+    lbHtml += "<tr><td>" + medal + "</td><td><b>" + name + "</b></td><td>" + u.p + "</td></tr>";
   });
   
   return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>داشبورد رادار</title>" +
-    "<style>body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}h1{color:#d4af37;text-align:center}" +
+    "<style>body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}h1{color:#d4af37;text-align:center;margin-bottom:20px}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
-    ".stat{display:inline-block;margin:10px 20px;text-align:center}.stat-v{font-size:32px;color:#d4af37;font-weight:bold}" +
-    ".stat-l{color:#8899bb;font-size:12px}table{width:100%;border-collapse:collapse}th,td{padding:10px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)}" +
-    "th{color:#d4af37}code{background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;font-size:12px}</style></head><body>" +
+    ".stat{display:inline-block;margin:10px 20px;text-align:center}.stat-v{font-size:36px;color:#d4af37;font-weight:bold}" +
+    ".stat-l{color:#8899bb;font-size:13px;margin-top:5px}table{width:100%;border-collapse:collapse}th,td{padding:12px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)}" +
+    "th{color:#d4af37;font-size:14px}code{background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;font-size:12px}" +
+    ".date{color:#8899bb;font-size:14px;text-align:center;margin-bottom:20px}a{color:#d4af37;text-decoration:none}" +
+    ".head{color:#d4af37;border-bottom:2px solid #d4af37;padding-bottom:10px;margin-bottom:15px;display:inline-block}</style></head><body>" +
     "<h1>🔐 داشبورد ادمین رادار اینترنت</h1>" +
-    "<div class='card'><h3>📊 آمار کلی</h3>" +
-    "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>کاربر کل</div></div>" +
-    "<div class='stat'><div class='stat-v'>" + dau.length + "</div><div class='stat-l'>فعال امروز</div></div>" +
-    "<div class='stat'><div class='stat-v'>" + lb.length + "</div><div class='stat-l'>در جدول</div></div>" +
+    "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTime() + "</div>" +
+    "<div class='card'><div class='head'>📊 آمار کلی</div>" +
+    "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>👥 کاربر کل</div></div>" +
+    "<div class='stat'><div class='stat-v'>" + dau.length + "</div><div class='stat-l'>✅ فعال امروز</div></div>" +
+    "<div class='stat'><div class='stat-v'>" + lb.length + "</div><div class='stat-l'>🏆 در جدول</div></div>" +
     "</div>" +
-    "<div class='card'><h3>📅 تاریخ</h3><p>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTime() + "</p></div>" +
-    "<div class='card'><h3>🏆 جدول برترین‌ها</h3><table><tr><th>#</th><th>آیدی</th><th>امتیاز</th></tr>" + lbHtml + "</table></div>" +
-    "<div class='card'><h3>🔌 API عمومی</h3><p><a href='/api' style='color:#d4af37'>/api</a> - لیست endpoints</p></div>" +
+    "<div class='card'><div class='head'>🏆 جدول برترین‌ها</div><table><tr><th>#</th><th>نام</th><th>امتیاز</th></tr>" + lbHtml + "</table></div>" +
+    "<div class='card'><div class='head'>🔌 API عمومی</div><p><a href='/api'>/api</a> — لیست endpoints</p><p><a href='/api/status'>/api/status</a> — وضعیت لحظه‌ای</p></div>" +
+    "<div class='card'><div class='head'>📅 تاریخ</div><p>" + getDateBoth() + "</p></div>" +
     "</body></html>";
 }
 
@@ -863,8 +883,7 @@ async function makeMapChart() {
     },
     options: {
       title: { display: true, text: "نقشه حرارتی فیلترینگ ایران", fontSize: 20, fontColor: "#d4af37" },
-      legend: { labels: { fontColor: "#fff" } },
-      plugins: { datalabels: { color: "#fff", font: { size: 20 } } }
+      legend: { labels: { fontColor: "#fff" } }
     }
   });
   
@@ -1197,4 +1216,4 @@ async function makeReport(mode) {
   } else out += "  ⚠️ RIPE در دسترس نیست\n";
   out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official";
   return out;
-  }
+    }
