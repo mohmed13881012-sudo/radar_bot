@@ -137,22 +137,28 @@ async function asnNameAuto(asn) {
   const clean = String(asn).replace(/^AS/i, "");
   if (ASN_NAMES[clean]) return ASN_NAMES[clean];
   if (GLOBAL_STATS) {
-    const cached = await GLOBAL_STATS.get("asnname:" + clean);
-    if (cached) return cached;
+    try {
+      const cached = await GLOBAL_STATS.get("asnname:" + clean);
+      if (cached) return cached;
+    } catch(e) {}
   }
   try {
     const r = await fetch("https://api.bgpview.io/asn/" + clean);
     if (r.ok) {
       const d = await r.json();
       if (d.status === "ok" && d.data && d.data.name) {
-        let name = d.data.name;
-        if (name.length > 25) name = name.substring(0, 25) + "…";
-        if (GLOBAL_STATS) await GLOBAL_STATS.put("asnname:" + clean, name, { expirationTtl: 2592000 });
-        return name;
+        let name = d.data.name.trim();
+        if (name.length > 22) name = name.substring(0, 22) + "…";
+        if (name.length >= 2 && !/^\d+$/.test(name)) {
+          if (GLOBAL_STATS) {
+            try { await GLOBAL_STATS.put("asnname:" + clean, name, { expirationTtl: 2592000 }); } catch(e) {}
+          }
+          return name;
+        }
       }
     }
   } catch(e) {}
-  return "اپراتور " + clean;
+  return "AS" + clean;
 }
 
 function makeBar(v) {
@@ -354,8 +360,10 @@ async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
   try {
     const today = getToday();
-    const exists = await STATS.get("snap:" + today);
-    if (!exists) {
+    const yesterday = getYesterday();
+    
+    const existsToday = await STATS.get("snap:" + today);
+    if (!existsToday) {
       const ooni = await fetchOONI();
       const p = parseOONI(ooni);
       await STATS.put("snap:" + today, JSON.stringify({
@@ -363,6 +371,25 @@ async function ensureTodaySnapshot(STATS) {
         totalMs: p.totalMs,
         saved: new Date().toISOString()
       }), { expirationTtl: 2592000 });
+    }
+    
+    const existsYesterday = await STATS.get("snap:" + yesterday);
+    if (!existsYesterday) {
+      try {
+        const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + yesterday + "&until=" + yesterday + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
+        if (r.ok) {
+          const d = await r.json();
+          const p = parseOONI(d);
+          if (p.totalMs > 0) {
+            await STATS.put("snap:" + yesterday, JSON.stringify({
+              blockPercent: p.blockPercent,
+              totalMs: p.totalMs,
+              saved: new Date().toISOString(),
+              retrospective: true
+            }), { expirationTtl: 2592000 });
+          }
+        }
+      } catch(e) {}
     }
   } catch(e) {}
 }
@@ -1006,33 +1033,64 @@ async function makeHistoryChart() {
 }
 
 async function makeTodayChart(STATS) {
-  const hourly = await getHourlyData(STATS);
   const currentHour = getIranHour();
+  const today = getToday();
   
-  let labels = [], values = [];
-  let currentQuality = null;
+  const pattern = [];
+  for (let h = 0; h < 24; h++) {
+    let base;
+    if (h >= 2 && h <= 6) base = 85;
+    else if (h >= 7 && h <= 9) base = 72;
+    else if (h >= 10 && h <= 12) base = 55;
+    else if (h >= 13 && h <= 17) base = 45;
+    else if (h >= 18 && h <= 22) base = 35;
+    else base = 60;
+    pattern.push(base);
+  }
   
+  let realData = {};
+  if (STATS) {
+    for (let h = 0; h < 24; h++) {
+      try {
+        const raw = await STATS.get("hourly:" + today + ":" + h);
+        if (raw) {
+          const d = JSON.parse(raw);
+          realData[h] = d.quality;
+        }
+      } catch(e) {}
+    }
+  }
+  
+  const t1 = await pingSite("https://www.google.com");
+  const t2 = await pingSite("https://digikala.com");
+  const t3 = await pingSite("https://irancell.ir");
+  const times = [t1, t2, t3].filter(x => x !== null);
+  let liveQuality = null;
+  if (times.length > 0) {
+    const avg = Math.round(times.reduce((a,b) => a+b, 0) / times.length);
+    liveQuality = Math.round(Math.max(10, Math.min(95, 100 - (avg / 5))));
+    realData[currentHour] = liveQuality;
+    if (STATS) {
+      try {
+        await STATS.put("hourly:" + today + ":" + currentHour, JSON.stringify({
+          hour: currentHour,
+          quality: liveQuality,
+          avg_ping: avg,
+          saved: new Date().toISOString()
+        }), { expirationTtl: 172800 });
+      } catch(e) {}
+    }
+  }
+  
+  const labels = [];
+  const values = [];
   for (let h = 0; h <= currentHour; h++) {
     labels.push(h + ":00");
-    const item = hourly.find(x => x.hour === h);
-    if (item && item.quality !== null) {
-      values.push(item.quality);
-      if (h === currentHour) currentQuality = item.quality;
-    } else {
-      values.push(null);
-    }
+    values.push(realData[h] !== undefined ? realData[h] : pattern[h]);
   }
   
-  if (currentQuality === null) {
-    const t1 = await pingSite("https://www.google.com");
-    const t2 = await pingSite("https://digikala.com");
-    const times = [t1, t2].filter(x => x !== null);
-    if (times.length > 0) {
-      const avg = Math.round(times.reduce((a,b) => a+b, 0) / times.length);
-      currentQuality = Math.round(Math.max(10, Math.min(95, 100 - (avg / 5))));
-      values[values.length - 1] = currentQuality;
-    }
-  }
+  const realCount = Object.keys(realData).length;
+  const totalShown = currentHour + 1;
   
   return {
     url: quickChart({
@@ -1047,7 +1105,7 @@ async function makeTodayChart(STATS) {
           fill: true,
           tension: 0.3,
           borderWidth: 3,
-          spanGaps: true
+          pointRadius: 3
         }]
       },
       options: {
@@ -1057,8 +1115,9 @@ async function makeTodayChart(STATS) {
     }),
     caption: "📅 <b>نمودار امروز</b>\n\n" + getDateBoth() + "\n\n" +
       "⏰ ساعت فعلی: <b>" + currentHour + ":00</b>\n" +
-      "📊 کیفیت: <b>%" + (currentQuality || "—") + "</b>\n" +
-      "📈 تعداد ساعات ثبت‌شده: <b>" + values.filter(v => v !== null).length + "</b>"
+      "📊 کیفیت زنده: <b>%" + (liveQuality || "—") + "</b>\n" +
+      "📈 داده واقعی: <b>" + realCount + "/" + totalShown + " ساعت</b>\n" +
+      "💡 ساعات بدون داده با الگو تخمین زده می‌شن"
   };
 }
 
@@ -1282,9 +1341,35 @@ async function makeVsReport(STATS) {
   const yesterday = getYesterday();
   const ooni = await fetchOONI();
   const p = parseOONI(ooni);
+  const todayPercent = p.blockPercent;
   
-  let ySnap = await getDailySnapshot(STATS, yesterday);
-  let yPercent = ySnap ? ySnap.blockPercent : null;
+  let yPercent = null;
+  
+  if (STATS) {
+    const ySnap = await getDailySnapshot(STATS, yesterday);
+    if (ySnap) yPercent = ySnap.blockPercent;
+  }
+  
+  if (yPercent === null) {
+    try {
+      const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + yesterday + "&until=" + yesterday + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
+      if (r.ok) {
+        const d = await r.json();
+        const yp = parseOONI(d);
+        if (yp.totalMs > 0) {
+          yPercent = yp.blockPercent;
+          if (STATS) {
+            await STATS.put("snap:" + yesterday, JSON.stringify({
+              blockPercent: yPercent,
+              totalMs: yp.totalMs,
+              saved: new Date().toISOString(),
+              retrospective: true
+            }), { expirationTtl: 2592000 });
+          }
+        }
+      }
+    } catch(e) {}
+  }
   
   let out = "╭━━━ 📊 مقایسه روز ━━━╮\n\n";
   out += "📅 " + getIranDate() + "  •  " + getGregDate() + "\n\n";
@@ -1292,18 +1377,21 @@ async function makeVsReport(STATS) {
   
   if (yPercent !== null) {
     out += "  دیروز: <b>%" + yPercent + "</b>\n";
-    out += "  امروز: <b>%" + p.blockPercent + "</b>\n\n";
-    const diff = p.blockPercent - yPercent;
+    out += "  امروز: <b>%" + todayPercent + "</b>\n\n";
+    const diff = todayPercent - yPercent;
     let trend = "➖ ثابت";
     if (diff > 3) trend = "📈 بدتر (" + diff + "+)";
     else if (diff > 0) trend = "🔺 کمی بدتر (+" + diff + ")";
     else if (diff < -3) trend = "📉 بهتر (" + diff + ")";
     else if (diff < 0) trend = "🔻 کمی بهتر (" + diff + ")";
-    out += "  " + trend + "\n";
+    out += "  " + trend + "\n\n";
+    out += "  " + makeBar(todayPercent / 10) + "\n";
   } else {
-    out += "  امروز: <b>%" + p.blockPercent + "</b>\n";
-    out += "  ⚠️ داده دیروز ثبت نشده\n";
+    out += "  امروز: <b>%" + todayPercent + "</b>\n";
+    out += "  " + makeBar(todayPercent / 10) + "\n\n";
+    out += "  ⚠️ داده دیروز در دسترس نیست\n";
   }
+  
   out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime();
   return out;
 }
@@ -1427,4 +1515,4 @@ async function makeReport(mode) {
   } else out += "  ⚠️ RIPE در دسترس نیست\n";
   out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official";
   return out;
-  }
+        }
