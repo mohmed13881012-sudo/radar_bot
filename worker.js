@@ -1,8 +1,9 @@
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
+const CH3 = "@radarinternetirangruop";
 const ADMIN_PASS = "mohmedkord1388";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "5.0";
+const CURRENT_VERSION = "6.0";
 
 let GLOBAL_STATS = null;
 
@@ -124,7 +125,6 @@ async function asnNameAuto(asn) {
   return "AS" + clean;
 }
 
-// ===== نوار پیشرفت جدید و زیبا =====
 function makeBar(v) {
   const f = Math.max(0, Math.min(10, Math.round(v)));
   let filled = "🟩";
@@ -234,7 +234,6 @@ async function getOONIData() {
   return p;
 }
 
-// ===== ایموجی و وضعیت‌ساز هوشمند =====
 function getStatusMood(blockPercent) {
   if (blockPercent < 15) return { emoji: "🎉", label: "اینترنت آزاد و روان", mood: "عالی", color: "#22c55e" };
   if (blockPercent < 30) return { emoji: "😊", label: "وضعیت مطلوب", mood: "خوب", color: "#84cc16" };
@@ -293,7 +292,7 @@ async function trackChat(STATS, chatId) {
   } catch(e) {}
 }
 async function getTrackedChats(STATS) {
-  let chats = [CH1, CH2];
+  let chats = [CH1, CH2, CH3];
   if (STATS) {
     try {
       const raw = await STATS.get("bot_chats");
@@ -321,12 +320,12 @@ async function sendChannelReport(TG, STATS) {
   }
 }
 
-// ==================== Channel Status (طراحی جدید) ====================
+// ==================== Channel Status ====================
 async function sendOrUpdateChannelStatus(TG, STATS) {
   try {
     const p = await getOONIData();
     const mood = getStatusMood(p.blockPercent);
-    
+
     let chartUrl;
     if (p.hasData) {
       chartUrl = quickChart({
@@ -360,10 +359,10 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
         options: { title: { display: true, text: "⏳ در حال جمع‌آوری داده", fontSize: 22, fontColor: "#0f172a" } }
       });
     }
-    
+
     let caption;
     if (p.hasData) {
-      caption = 
+      caption =
         "<b>🛰 رادار اینترنت ایران</b>\n" +
         "<i>پایش زنده از دید کاربران ایرانی</i>\n\n" +
         mood.emoji + " <b>" + mood.label + "</b>\n" +
@@ -377,7 +376,7 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
         "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
         "🤖 <b>@Radarinternetiranbot</b> | <i>همراه همیشگی شما</i>";
     } else {
-      caption = 
+      caption =
         "<b>🛰 رادار اینترنت ایران</b>\n\n" +
         "⏳ <b>در حال جمع‌آوری داده...</b>\n\n" +
         "🕒 " + getIranTime() + "  •  📅 " + getIranDate() + "\n\n" +
@@ -385,7 +384,7 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
         "به‌زودی داده‌های زنده در همین کانال منتشر می‌شود.\n\n" +
         "🤖 <b>@Radarinternetiranbot</b>";
     }
-    
+
     const chats = await getTrackedChats(STATS);
     for (const ch of chats) {
       try {
@@ -536,6 +535,7 @@ async function checkVersion(STATS, userId, TG, chatId) {
         "📊 <b>گزارش‌های دقیق‌تر</b>\n     داده‌های واقعی از OONI\n\n" +
         "🖼 <b>نمودار تصویری</b>\n     نمایش بصری وضعیت ترافیک\n\n" +
         "🎯 <b>امتیازبندی هوشمند</b>\n     رقابت با بقیه کاربران\n\n" +
+        "👥 <b>گروه پرسش و پاسخ</b>\n     پشتیبانی و تبادل نظر\n\n" +
         "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
         "🔹 برای استفاده از نسخه جدید دوباره /start را بزن.",
         { parse_mode: "HTML" });
@@ -586,18 +586,28 @@ async function handleUpdate(update, TG, STATS) {
     return;
   }
 
+  // ====== بررسی عضویت در ۲ کانال و ۱ گروه ======
   const inCh1 = await checkMember(TG, userId, CH1);
   const inCh2 = await checkMember(TG, userId, CH2);
-  if (!inCh1 || !inCh2) {
+  const inCh3 = await checkMember(TG, userId, CH3);
+
+  if (!inCh1 || !inCh2 || !inCh3) {
     await sendMessage(TG, chatId,
       "🔒 <b>دسترسی محدود</b>\n\n" +
-      "برای استفاده از ربات، ابتدا در کانال‌های زیر عضو شوید:\n\n" +
-      "📡 <b>رادار اینترنت</b>\n" +
-      "👑 <b>رویال تراست</b>\n\n" +
-      "پس از عضویت، دوباره <b>/start</b> را بزنید 👇",
+      "برای استفاده از ربات، ابتدا در بخش‌های زیر عضو شوید:\n\n" +
+      "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
+      "📡 <b>کانال رادار اینترنت</b>\n" +
+      "     <i>آمار زنده و گزارش‌های روزانه</i>\n\n" +
+      "👑 <b>کانال رویال تراست</b>\n" +
+      "     <i>اخبار و اطلاع‌رسانی</i>\n\n" +
+      "💬 <b>گروه رادار اینترنت</b>\n" +
+      "     <i>پرسش و پاسخ و تبادل نظر</i>\n" +
+      "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n\n" +
+      "پس از عضویت در هر سه، دوباره <b>/start</b> را بزنید 👇",
       { parse_mode: "HTML", inline_keyboard: [
-        [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
-        [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
+        [{ text: "📡 عضویت در کانال رادار اینترنت", url: "https://t.me/radarinternetiran" }],
+        [{ text: "👑 عضویت در کانال رویال تراست", url: "https://t.me/royal_trust_ir_official" }],
+        [{ text: "💬 عضویت در گروه رادار اینترنت", url: "https://t.me/radarinternetirangruop" }]
       ] });
     return;
   }
@@ -660,6 +670,8 @@ async function handleUpdate(update, TG, STATS) {
       "├ /best → بهترین زمان دانلود\n" +
       "└ /api → API رایگان\n\n" +
       "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
+      "💬 <b>گروه پرسش و پاسخ:</b>\n" +
+      "@radarinternetirangruop\n\n" +
       "💡 <i>هر دستور ۱ امتیاز، هر دعوت ۱۰ امتیاز!</i>",
       { parse_mode: "HTML" });
   } else if (text === "/myrank") {
@@ -857,6 +869,8 @@ async function handleUpdate(update, TG, STATS) {
       "⚡ <b>ابزارها:</b>\n" +
       "<code>/ping</code> · <code>/speed</code> · <code>/best</code> · <code>/api</code>\n\n" +
       "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
+      "💬 <b>گروه پرسش و پاسخ:</b>\n" +
+      "@radarinternetirangruop\n\n" +
       "🤖 <b>@Radarinternetiranbot</b>",
       { parse_mode: "HTML" });
   }
@@ -930,7 +944,7 @@ async function handleAPI(url, STATS) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok: true, name: "Radar Internet Public API", version: "5.0",
+        ok: true, name: "Radar Internet Public API", version: "6.0",
         endpoints: { status: "/api/status", operators: "/api/operators", top: "/api/top", history: "/api/history" },
         source: "OONI, RIPE", free: true
       }, null, 2), { headers: cors });
@@ -1142,7 +1156,7 @@ async function makeMapChart() {
   };
 }
 
-// ==================== Reports (با طراحی جذاب) ====================
+// ==================== Reports ====================
 async function makePingReport() {
   let irList = "", globalList = "";
   let irOk = 0, globalOk = 0;
@@ -1512,6 +1526,7 @@ async function makeReport(mode) {
   out += "\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
     "🕒 " + getIranTime() + "  •  📅 " + getIranDate() + "\n\n" +
     "🔗 @radarinternetiran\n" +
-    "👑 @royal_trust_ir_official";
+    "👑 @royal_trust_ir_official\n" +
+    "💬 @radarinternetirangruop";
   return out;
-                                 }
+  }
