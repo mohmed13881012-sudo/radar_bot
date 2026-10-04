@@ -2,7 +2,7 @@ const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
 const ADMIN_PASS = "mohmedkord1388";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "2.0";
+const CURRENT_VERSION = "3.0";
 
 let GLOBAL_STATS = null;
 
@@ -76,7 +76,7 @@ export default {
       return new Response(await r.text());
     }
     if (url.pathname === "/sendreport") {
-      await sendChannelReport(TG);
+      await sendChannelReport(TG, STATS);
       await sendOrUpdateChannelStatus(TG, STATS);
       if (STATS) {
         await saveDailySnapshot(STATS);
@@ -282,31 +282,58 @@ async function sendMessage(TG, chatId, text, extra) {
     });
   } catch(e) {}
 }
-async function sendChannelReport(TG) {
-  const report = await makeReport("full");
+
+// ==================== Chat Tracking (NEW) ====================
+async function trackChat(STATS, chatId) {
+  if (!STATS || chatId >= 0) return; // فقط گروه‌ها و کانال‌ها (آیدی منفی)
   try {
-    await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CH1, text: report, parse_mode: "HTML" })
-    });
+    const key = "bot_chats";
+    const raw = await STATS.get(key);
+    let list = raw ? JSON.parse(raw) : [];
+    if (!list.includes(chatId)) {
+      list.push(chatId);
+      await STATS.put(key, JSON.stringify(list));
+      console.log("New chat tracked: " + chatId);
+    }
   } catch(e) {}
+}
+
+async function getTrackedChats(STATS) {
+  let chats = [CH1, CH2]; // کانال‌های پیش‌فرض
+  if (STATS) {
+    try {
+      const raw = await STATS.get("bot_chats");
+      if (raw) {
+        const list = JSON.parse(raw);
+        for (const c of list) {
+          if (!chats.includes(c)) chats.push(c);
+        }
+      }
+    } catch(e) {}
+  }
+  return chats;
+}
+
+async function sendChannelReport(TG, STATS) {
+  const report = await makeReport("full");
+  const chats = await getTrackedChats(STATS);
+  
+  for (const ch of chats) {
+    try {
+      const r = await fetch(TG + "/sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: ch, text: report, parse_mode: "HTML" })
+      });
+      const d = await r.json();
+      if (!d.ok) console.log("Failed to send report to " + ch + ": " + JSON.stringify(d));
+    } catch(e) { console.log("Channel report error for " + ch + ": " + e.message); }
+  }
 }
 
 // ==================== Channel Status ====================
 async function sendOrUpdateChannelStatus(TG, STATS) {
   try {
-    const lastMsgId = STATS ? await STATS.get("channel_msg_id") : null;
-    if (lastMsgId) {
-      try {
-        await fetch(TG + "/deleteMessage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: CH1, message_id: parseInt(lastMsgId) })
-        });
-      } catch(e) {}
-    }
-    
     const ooni = await fetchOONI();
     const p = parseOONI(ooni);
     
@@ -324,22 +351,40 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
       "  📊 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯\n\n" +
       "🤖 @Radarinternetiranbot";
+
+    const chats = await getTrackedChats(STATS);
     
-    const r = await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CH1, text: text, parse_mode: "HTML" })
-    });
-    const d = await r.json();
-    if (d.ok && d.result) {
-      await fetch(TG + "/pinChatMessage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: CH1, message_id: d.result.message_id, disable_notification: true })
-      });
-      if (STATS) await STATS.put("channel_msg_id", String(d.result.message_id));
+    for (const ch of chats) {
+      try {
+        const lastMsgId = STATS ? await STATS.get("msg_id:" + ch) : null;
+        if (lastMsgId) {
+          await fetch(TG + "/deleteMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: ch, message_id: parseInt(lastMsgId) })
+          }).catch(() => {});
+        }
+        
+        const r = await fetch(TG + "/sendMessage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: ch, text: text, parse_mode: "HTML" })
+        });
+        const d = await r.json();
+        if (d.ok && d.result) {
+          await fetch(TG + "/pinChatMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: ch, message_id: d.result.message_id, disable_notification: true })
+          }).catch(() => {});
+          
+          if (STATS) await STATS.put("msg_id:" + ch, String(d.result.message_id));
+        } else {
+          console.log("Failed to send status to " + ch + ": " + JSON.stringify(d));
+        }
+      } catch(e) { console.log("Channel status error for " + ch + ": " + e.message); }
     }
-  } catch(e) { console.log("Channel status error: " + e.message); }
+  } catch(e) { console.log("Channel status general error: " + e.message); }
 }
 
 // ==================== KV Stats ====================
@@ -522,12 +567,29 @@ async function checkVersion(STATS, userId, TG, chatId) {
 
 // ==================== Handle Update ====================
 async function handleUpdate(update, TG, STATS) {
+  // ثبت گروه/کانال جدید در دیتابیس
+  if (update.my_chat_member) {
+    const chatId = update.my_chat_member.chat.id;
+    const chatType = update.my_chat_member.chat.type;
+    if (chatType === "group" || chatType === "supergroup" || chatType === "channel") {
+      await trackChat(STATS, chatId);
+    }
+    return;
+  }
+
   if (!update.message) return;
   const msg = update.message;
   const chatId = msg.chat.id;
   const text = msg.text || "";
   const userId = String(msg.from.id);
   const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
+
+  // اگر پیام از گروه یا کانال است، فقط ثبت شود و به دستورات عادی جواب ندهد
+  if (msg.chat.type !== "private") {
+    await trackChat(STATS, chatId);
+    // در گروه‌ها فقط به دستور /admin و رمز ادمین جواب بده
+    if (text !== "/admin" && text !== ADMIN_PASS) return;
+  }
 
   if (STATS) await STATS.put("name:" + userId, userName);
 
@@ -897,7 +959,7 @@ async function handleAPI(url, STATS) {
       return new Response(JSON.stringify({
         ok: true,
         name: "Radar Internet Public API",
-        version: "2.0",
+        version: "3.0",
         endpoints: {
           status: "/api/status",
           operators: "/api/operators",
@@ -1036,18 +1098,7 @@ async function makeTodayChart(STATS) {
   const currentHour = getIranHour();
   const today = getToday();
   
-  const pattern = [];
-  for (let h = 0; h < 24; h++) {
-    let base;
-    if (h >= 2 && h <= 6) base = 85;
-    else if (h >= 7 && h <= 9) base = 72;
-    else if (h >= 10 && h <= 12) base = 55;
-    else if (h >= 13 && h <= 17) base = 45;
-    else if (h >= 18 && h <= 22) base = 35;
-    else base = 60;
-    pattern.push(base);
-  }
-  
+  // حذف کامل الگوی تخمینی (Pattern) - فقط داده‌های واقعی
   let realData = {};
   if (STATS) {
     for (let h = 0; h < 24; h++) {
@@ -1061,6 +1112,7 @@ async function makeTodayChart(STATS) {
     }
   }
   
+  // دریافت پینگ زنده برای ساعت جاری (داده واقعی)
   const t1 = await pingSite("https://www.google.com");
   const t2 = await pingSite("https://digikala.com");
   const t3 = await pingSite("https://irancell.ir");
@@ -1086,38 +1138,42 @@ async function makeTodayChart(STATS) {
   const values = [];
   for (let h = 0; h <= currentHour; h++) {
     labels.push(h + ":00");
-    values.push(realData[h] !== undefined ? realData[h] : pattern[h]);
+    // فقط داده واقعی، در غیر این صورت null
+    values.push(realData[h] !== undefined ? realData[h] : null);
   }
   
   const realCount = Object.keys(realData).length;
   const totalShown = currentHour + 1;
   
+  let captionText = "📅 <b>نمودار امروز (داده واقعی)</b>\n\n" + getDateBoth() + "\n\n" +
+    "⏰ ساعت فعلی: <b>" + currentHour + ":00</b>\n" +
+    "📊 کیفیت زنده: <b>%" + (liveQuality || "—") + "</b>\n" +
+    "📈 داده‌های ثبت‌شده: <b>" + realCount + "/" + totalShown + " ساعت</b>\n" +
+    "⚠️ نمودار فقط شامل پینگ‌های واقعی سرور است (بدون تخمین)";
+
   return {
     url: quickChart({
       type: "line",
       data: {
         labels: labels,
         datasets: [{
-          label: "کیفیت",
+          label: "کیفیت (واقعی)",
           data: values,
           borderColor: "#22c55e",
           backgroundColor: "rgba(34,197,94,0.15)",
           fill: true,
           tension: 0.3,
           borderWidth: 3,
-          pointRadius: 3
+          pointRadius: 4,
+          spanGaps: true
         }]
       },
       options: {
-        title: { display: true, text: "کیفیت اینترنت امروز (ساعتی)", fontSize: 18 },
+        title: { display: true, text: "کیفیت اینترنت امروز (پینگ مستقیم)", fontSize: 18 },
         scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
       }
     }),
-    caption: "📅 <b>نمودار امروز</b>\n\n" + getDateBoth() + "\n\n" +
-      "⏰ ساعت فعلی: <b>" + currentHour + ":00</b>\n" +
-      "📊 کیفیت زنده: <b>%" + (liveQuality || "—") + "</b>\n" +
-      "📈 داده واقعی: <b>" + realCount + "/" + totalShown + " ساعت</b>\n" +
-      "💡 ساعات بدون داده با الگو تخمین زده می‌شن"
+    caption: captionText
   };
 }
 
@@ -1515,4 +1571,4 @@ async function makeReport(mode) {
   } else out += "  ⚠️ RIPE در دسترس نیست\n";
   out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official";
   return out;
-        }
+  }
