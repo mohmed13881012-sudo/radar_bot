@@ -3,7 +3,7 @@ const CH2 = "@royal_trust_ir_official";
 const CH3 = "@radarinternetirangruop";
 const ADMIN_PASS = "mohmedkord1388";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "7.3";
+const CURRENT_VERSION = "7.4";
 const WEEKLY_PIN_MSG_KEY = "weekly_pin_msg_id";
 const ALERT_THRESHOLD = 70;
 const QUALITY_DROP_THRESHOLD = 30;
@@ -139,9 +139,10 @@ export default {
     }
     await checkAndAlertQuality(TG, env.STATS);
     await checkISPSubscriptions(TG, env.STATS);
+    await saveHourlySnapshot(env.STATS);
+    await saveDailySnapshot(env.STATS);
     
     await sendOrUpdateChannelStatus(TG, env.STATS);
-    if (env.STATS) { await saveDailySnapshot(env.STATS); await saveHourlySnapshot(env.STATS); }
   }
 };
 
@@ -209,6 +210,71 @@ async function checkAccessible(url) {
   } catch(e) { return false; }
 }
 
+// ====== اندازه‌گیری کیفیت زنده با پینگ مستقیم ======
+async function measureLiveQuality() {
+  const targets = [
+    { name: "Google", url: "https://www.google.com" },
+    { name: "Cloudflare", url: "https://www.cloudflare.com" },
+    { name: "Microsoft", url: "https://www.microsoft.com" },
+    { name: "Apple", url: "https://www.apple.com" },
+    { name: "Amazon", url: "https://www.amazon.com" },
+    { name: "Digikala", url: "https://digikala.com" },
+    { name: "Shaparak", url: "https://shaparak.ir" }
+  ];
+  
+  let successCount = 0, totalPing = 0, failCount = 0;
+  
+  const pingPromises = targets.map(async (t) => {
+    const start = Date.now();
+    try {
+      const c = new AbortController();
+      const timer = setTimeout(() => c.abort(), 5000);
+      const r = await fetch(t.url, { method: "HEAD", signal: c.signal, redirect: "follow" });
+      clearTimeout(timer);
+      const ping = Date.now() - start;
+      if (r.ok || r.status < 400) {
+        return { name: t.name, ping, ok: true };
+      }
+      return { name: t.name, ping: null, ok: false };
+    } catch(e) {
+      return { name: t.name, ping: null, ok: false };
+    }
+  });
+  
+  const pingResults = await Promise.all(pingPromises);
+  
+  for (const r of pingResults) {
+    if (r.ok && r.ping !== null) {
+      successCount++;
+      totalPing += r.ping;
+    } else {
+      failCount++;
+    }
+  }
+  
+  const totalCount = targets.length;
+  const avgPing = successCount > 0 ? Math.round(totalPing / successCount) : 999;
+  const successRate = Math.round((successCount / totalCount) * 100);
+  const pingScore = Math.max(0, 100 - (avgPing / 5));
+  const lossScore = Math.max(0, 100 - (failCount * 15));
+  const quality = Math.round((pingScore * 0.6) + (lossScore * 0.4));
+  const safeQuality = Math.max(0, Math.min(100, quality));
+  
+  return {
+    quality: safeQuality,
+    avgPing: avgPing,
+    successCount: successCount,
+    failCount: failCount,
+    totalCount: totalCount,
+    successRate: successRate,
+    blockPercent: 100 - safeQuality,
+    accessPercent: safeQuality,
+    hasData: true,
+    totalMs: successCount * 10,
+    asnData: {}
+  };
+}
+
 async function getChartImage(config) {
   try {
     const r = await fetch("https://quickchart.io/chart", {
@@ -232,7 +298,6 @@ async function getChartImage(config) {
   return null;
 }
 
-// ====== Chart Dark Mode ======
 async function getChartImageDark(config) {
   try {
     const r = await fetch("https://quickchart.io/chart", {
@@ -1142,7 +1207,7 @@ async function makeHistoryChart() {
   return { image: img, caption: "📅 <b>تاریخچه ۷ روز اخیر</b>\n\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n📊 <b>میانگین:</b> <code>" + avg + "%</code>\n📉 <b>روند:</b> " + (values[values.length-1] > values[0] ? "🔺 افزایشی" : "🔻 کاهشی") + "\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n📌 OONI" };
 }
 
-// ===== نمودار حرفه‌ای امروز با طراحی منحصربفرد =====
+// ===== نمودار حرفه‌ای امروز (با داده زنده) =====
 async function makeTodayChart(STATS) {
   const currentHour = getIranHour();
   const today = getToday();
@@ -1155,7 +1220,12 @@ async function makeTodayChart(STATS) {
         if (raw) {
           try {
             const d = JSON.parse(raw);
-            realData[h] = { quality: d.quality, blockPercent: d.blockPercent || (100 - d.quality) };
+            realData[h] = { 
+              quality: d.quality, 
+              blockPercent: d.blockPercent || (100 - d.quality),
+              avgPing: d.avgPing || null,
+              source: d.source || "unknown"
+            };
           } catch(e) {}
         }
       }).catch(() => {}));
@@ -1163,18 +1233,21 @@ async function makeTodayChart(STATS) {
     await Promise.all(promises);
   }
   
-  const p = await getOONIData();
-  if (p.hasData) {
-    realData[currentHour] = { quality: p.accessPercent, blockPercent: p.blockPercent };
-    if (STATS) {
-      try {
-        await STATS.put("hourly:" + today + ":" + currentHour, JSON.stringify({
-          hour: currentHour, quality: p.accessPercent, blockPercent: p.blockPercent,
-          totalMs: p.totalMs, saved: new Date().toISOString()
-        }), { expirationTtl: 172800 });
-      } catch(e) {}
+  // داده زنده برای ساعت جاری
+  let liveData = null;
+  try {
+    liveData = await measureLiveQuality();
+    if (liveData) {
+      realData[currentHour] = {
+        quality: liveData.quality,
+        blockPercent: liveData.blockPercent,
+        avgPing: liveData.avgPing,
+        source: "live"
+      };
     }
-  }
+  } catch(e) { console.log("Live measure failed: " + e.message); }
+  
+  const p = await getOONIData();
   
   const labels = [];
   const healthData = [];
@@ -1186,7 +1259,10 @@ async function makeTodayChart(STATS) {
     if (realData[h]) {
       healthData.push(realData[h].quality);
       disruptionData.push(realData[h].blockPercent);
-      trafficData.push(Math.max(0, realData[h].quality - 10));
+      const traffic = realData[h].avgPing 
+        ? Math.max(20, Math.min(100, 100 - (realData[h].avgPing / 3)))
+        : Math.max(0, realData[h].quality - 10);
+      trafficData.push(Math.round(traffic));
     } else {
       healthData.push(null);
       disruptionData.push(null);
@@ -1331,12 +1407,15 @@ async function makeTodayChart(STATS) {
   const img = await getChartImageDark(config);
   const realCount = Object.keys(realData).length;
   const totalShown = currentHour + 1;
-  const mood = p.hasData ? getStatusMood(p.blockPercent) : null;
+  const mood = liveData ? getStatusMood(liveData.blockPercent) : (p.hasData ? getStatusMood(p.blockPercent) : null);
+  const currentQuality = liveData ? liveData.quality : (p.hasData ? p.accessPercent : null);
+  const currentPing = liveData ? liveData.avgPing : null;
   
   let captionText = "📊 <b>تحلیل لحظه‌ای اینترنت</b>\n\n" +
     "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
     "🕒 <b>ساعت فعلی:</b> " + currentHour + ":00\n" +
-    "📡 <b>وضعیت زنده:</b> " + (p.hasData ? mood.emoji + " %" + p.accessPercent : "—") + "\n" +
+    "📡 <b>وضعیت زنده:</b> " + (mood ? mood.emoji + " %" + currentQuality : "—") + "\n" +
+    (currentPing ? "📶 <b>پینگ:</b> <code>" + currentPing + "ms</code>\n" : "") +
     "📈 <b>ثبت‌شده:</b> " + realCount + "/" + totalShown + " ساعت\n" +
     "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
     "◆ شاخص  •  ▲ اختلال  •  ■ ترافیک\n" +
@@ -1388,7 +1467,7 @@ async function makeReport(mode) {
   } else out += "  ⚠️ RIPE در دسترس نیست\n";
   out += "\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n🕒 " + getIranTime() + "  •  📅 " + getIranDate() + "\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarinternetirangruop";
   return out;
-                            }
+  }
 // ==================== Channel Report ====================
 async function sendChannelReport(TG, STATS) {
   const report = await makeReport("full");
@@ -1405,48 +1484,140 @@ async function sendChannelReport(TG, STATS) {
   }
 }
 
-// ==================== Channel Status ====================
+// ==================== Channel Status (نمودار Dark Mode) ====================
 async function sendOrUpdateChannelStatus(TG, STATS) {
   try {
     const p = await getOONIData();
     const mood = getStatusMood(p.blockPercent);
-    let chartImage;
-    if (p.hasData) {
-      chartImage = await getChartImage({
-        type: "doughnut",
+    const today = getToday();
+    const currentHour = getIranHour();
+    
+    let realData = {};
+    if (STATS) {
+      const promises = [];
+      for (let h = 0; h <= currentHour; h++) {
+        promises.push(STATS.get("hourly:" + today + ":" + h).then(raw => {
+          if (raw) {
+            try {
+              const d = JSON.parse(raw);
+              realData[h] = { quality: d.quality, blockPercent: d.blockPercent || (100 - d.quality), avgPing: d.avgPing || null };
+            } catch(e) {}
+          }
+        }).catch(() => {}));
+      }
+      await Promise.all(promises);
+    }
+    
+    // داده زنده
+    let liveData = null;
+    try {
+      liveData = await measureLiveQuality();
+      if (liveData) {
+        realData[currentHour] = { quality: liveData.quality, blockPercent: liveData.blockPercent, avgPing: liveData.avgPing };
+      }
+    } catch(e) {}
+    
+    const labels = [];
+    const healthData = [];
+    const disruptionData = [];
+    const trafficData = [];
+    
+    for (let h = 0; h <= currentHour; h++) {
+      labels.push(String(h).padStart(2, "0") + ":00");
+      if (realData[h]) {
+        healthData.push(realData[h].quality);
+        disruptionData.push(realData[h].blockPercent);
+        const traffic = realData[h].avgPing ? Math.max(20, Math.min(100, 100 - (realData[h].avgPing / 3))) : Math.max(0, realData[h].quality - 10);
+        trafficData.push(Math.round(traffic));
+      } else {
+        healthData.push(null);
+        disruptionData.push(null);
+        trafficData.push(null);
+      }
+    }
+    
+    const trendData = healthData.map((v, i) => {
+      let sum = 0, count = 0;
+      for (let j = Math.max(0, i - 2); j <= Math.min(healthData.length - 1, i + 2); j++) {
+        if (healthData[j] !== null) { sum += healthData[j]; count++; }
+      }
+      return count > 0 ? Math.round(sum / count) : null;
+    });
+    
+    const hasAnyData = healthData.some(v => v !== null);
+    
+    let chartImage = null;
+    if (hasAnyData) {
+      const config = {
+        type: "line",
         data: {
-          labels: ["دسترسی آزاد", "مسدود"],
-          datasets: [{ data: [p.accessPercent, p.blockPercent], backgroundColor: [mood.color, "#1e293b"], borderColor: "#ffffff", borderWidth: 3 }]
+          labels: labels,
+          datasets: [
+            { label: "◆ شاخص پایداری", data: healthData, borderColor: "#a78bfa", backgroundColor: "rgba(167,139,250,0.10)", borderWidth: 3.5, tension: 0.45, fill: true, yAxisID: "y-left", pointRadius: 4, pointBackgroundColor: "#a78bfa", pointBorderColor: "#0f172a", pointBorderWidth: 2, spanGaps: true },
+            { label: "▲ نرخ اختلال", data: disruptionData, borderColor: "#fb7185", borderDash: [3, 5], borderWidth: 2.5, tension: 0.45, fill: false, yAxisID: "y-left", pointRadius: 0, spanGaps: true },
+            { label: "○ روند کلی", data: trendData, borderColor: "#94a3b8", borderDash: [1, 3], borderWidth: 2, tension: 0.45, fill: false, yAxisID: "y-left", pointRadius: 0, spanGaps: true },
+            { label: "■ حجم ترافیک", data: trafficData, borderColor: "#22d3ee", backgroundColor: "rgba(34,211,238,0.14)", borderWidth: 3, tension: 0.45, fill: true, yAxisID: "y-right", pointRadius: 4, pointBackgroundColor: "#22d3ee", pointBorderColor: "#0f172a", pointBorderWidth: 2, spanGaps: true }
+          ]
         },
         options: {
-          title: { display: true, text: "🚦 وضعیت زنده اینترنت ایران", fontSize: 22, fontColor: "#0f172a" },
-          legend: { position: "bottom", labels: { fontColor: "#0f172a", fontSize: 14, padding: 20 } },
-          plugins: { doughnutlabel: { labels: [
-            { text: p.accessPercent + "%", font: { size: 42, weight: "bold" }, color: mood.color },
-            { text: "دسترسی آزاد", font: { size: 16 }, color: "#475569" }
-          ] } }
+          title: { display: true, text: "📡 پایش زنده کیفیت اینترنت  •  رادار ایران", fontSize: 21, fontColor: "#f1f5f9", padding: 22, fontStyle: "bold" },
+          legend: { position: "bottom", labels: { fontColor: "#cbd5e1", fontSize: 12, usePointStyle: true, padding: 16, boxWidth: 10 } },
+          scales: {
+            xAxes: [{ ticks: { fontColor: "#94a3b8", fontSize: 10, maxRotation: 45, minRotation: 45, padding: 8 }, gridLines: { color: "rgba(148,163,184,0.06)", drawBorder: false, zeroLineColor: "rgba(148,163,184,0.15)" } }],
+            yAxes: [
+              { id: "y-left", position: "left", ticks: { min: 0, max: 100, fontColor: "#a78bfa", fontSize: 11, stepSize: 25, padding: 8 }, gridLines: { color: "rgba(167,139,250,0.08)", drawBorder: false }, scaleLabel: { display: true, labelString: "درصد پایداری", fontColor: "#a78bfa", fontSize: 11, fontStyle: "bold" } },
+              { id: "y-right", position: "right", ticks: { min: 0, max: 100, fontColor: "#22d3ee", fontSize: 11, stepSize: 25, padding: 8 }, gridLines: { display: false, drawBorder: false }, scaleLabel: { display: true, labelString: "حجم ترافیک", fontColor: "#22d3ee", fontSize: 11, fontStyle: "bold" } }
+            ]
+          },
+          layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
+          elements: { line: { capBezierPoints: true } }
+        }
+      };
+      chartImage = await getChartImageDark(config);
+    } else {
+      chartImage = await getChartImageDark({
+        type: "line",
+        data: { labels: ["در انتظار داده"], datasets: [{ data: [0], borderColor: "#64748b" }] },
+        options: {
+          title: { display: true, text: "⏳ در حال جمع‌آوری داده...", fontSize: 20, fontColor: "#e2e8f0" },
+          legend: { display: false },
+          scales: {
+            yAxes: [{ ticks: { beginAtZero: true, max: 100, fontColor: "#94a3b8" }, gridLines: { color: "rgba(148,163,184,0.08)" } }],
+            xAxes: [{ ticks: { fontColor: "#94a3b8" }, gridLines: { color: "rgba(148,163,184,0.08)" } }]
+          }
         }
       });
-    } else {
-      chartImage = await getChartImage({
-        type: "doughnut",
-        data: { labels: ["در انتظار داده"], datasets: [{ data: [100], backgroundColor: ["#94a3b8"] }] },
-        options: { title: { display: true, text: "⏳ در حال جمع‌آوری داده", fontSize: 22, fontColor: "#0f172a" } }
-      });
     }
+    
     let caption;
-    if (p.hasData) {
-      caption = "<b>🛰 رادار اینترنت ایران</b>\n<i>پایش زنده از دید کاربران ایرانی</i>\n\n" +
-        mood.emoji + " <b>" + mood.label + "</b>\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n\n" +
-        "🎯 <b>دسترسی آزاد:</b> <code>" + p.accessPercent + "%</code>\n" +
-        "🚫 <b>مسدود شده:</b> <code>" + p.blockPercent + "%</code>\n\n" +
-        makeBar(p.accessPercent / 10) + "\n\n" +
-        "📡 <b>پایگاه داده:</b> OONI\n🔬 <b>تعداد تست:</b> <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n" +
-        "🕒 <b>آخرین بروزرسانی:</b> " + getIranTime() + "\n\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
+    const realCount = Object.keys(realData).length;
+    const totalShown = currentHour + 1;
+    const currentQuality = liveData ? liveData.quality : (p.hasData ? p.accessPercent : null);
+    const currentPing = liveData ? liveData.avgPing : null;
+    
+    if (p.hasData || liveData) {
+      caption = "<b>🛰 رادار اینترنت ایران</b>\n" +
+        "<i>پایش زنده از دید کاربران ایرانی</i>\n" +
+        "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n\n" +
+        mood.emoji + " <b>وضعیت:</b> " + mood.label + "\n\n" +
+        "◆ <b>شاخص پایداری:</b> <code>" + currentQuality + "%</code>\n" +
+        "▲ <b>نرخ اختلال:</b> <code>" + (100 - currentQuality) + "%</code>\n" +
+        "○ <b>روند:</b> " + (mood.mood === "عالی" || mood.mood === "خوب" ? "🔻 کاهشی" : mood.mood === "متوسط" ? "➖ پایدار" : "🔺 افزایشی") + "\n" +
+        "■ <b>حجم ترافیک:</b> <code>" + Math.max(20, Math.min(100, currentPing ? Math.round(100 - (currentPing / 3)) : currentQuality - 10)) + "%</code>\n\n" +
+        makeBar(currentQuality / 10) + "\n\n" +
+        "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n" +
+        "🕒 <b>ساعت:</b> " + currentHour + ":00\n" +
+        (currentPing ? "📶 <b>پینگ:</b> <code>" + currentPing + "ms</code>\n" : "") +
+        "📊 <b>داده‌های امروز:</b> " + realCount + "/" + totalShown + " ساعت\n" +
+        "🔬 <b>تست:</b> <code>" + (p.totalMs || 0).toLocaleString("fa-IR") + "</code>\n" +
+        "📡 <b>منبع:</b> OONI + Live Ping\n" +
+        "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n\n" +
+        "📚 <b>راهنما:</b> /help\n" +
         "🤖 <b>@Radarinternetiranbot</b>";
     } else {
-      caption = "<b>🛰 رادار اینترنت ایران</b>\n\n⏳ <b>در حال جمع‌آوری داده...</b>\n\n🕒 " + getIranTime() + "  •  📅 " + getIranDate() + "\n\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\nبه‌زودی داده‌های زنده منتشر می‌شود.\n\n🤖 <b>@Radarinternetiranbot</b>";
+      caption = "<b>🛰 رادار اینترنت ایران</b>\n\n⏳ <b>در حال جمع‌آوری داده...</b>\n\n🕒 " + getIranTime() + "  •  📅 " + getIranDate() + "\n\n🤖 <b>@Radarinternetiranbot</b>";
     }
+    
     const chats = await getTrackedChats(STATS);
     for (const ch of chats) {
       try {
@@ -1494,19 +1665,45 @@ async function saveDailySnapshot(STATS) {
     }), { expirationTtl: 2592000 });
   } catch(e) {}
 }
+
+// ===== saveHourlySnapshot اصلاح‌شده (با Live Ping) =====
 async function saveHourlySnapshot(STATS) {
   if (!STATS) return;
   try {
     const today = getToday();
     const hour = getIranHour();
+    const key = "hourly:" + today + ":" + hour;
+    
+    // اگر قبلاً ثبت شده، دیگه ثبت نکن
+    const existing = await STATS.get(key);
+    if (existing) {
+      console.log("Hour " + hour + " already recorded");
+      return;
+    }
+    
+    // اندازه‌گیری زنده با پینگ مستقیم
+    const live = await measureLiveQuality();
     const p = await getOONIData();
-    if (!p.hasData) return;
-    await STATS.put("hourly:" + today + ":" + hour, JSON.stringify({
-      hour, quality: p.accessPercent, blockPercent: p.blockPercent,
-      totalMs: p.totalMs, saved: new Date().toISOString()
+    
+    await STATS.put(key, JSON.stringify({
+      hour: hour,
+      quality: live.quality,
+      blockPercent: live.blockPercent,
+      accessPercent: live.accessPercent,
+      avgPing: live.avgPing,
+      successCount: live.successCount,
+      failCount: live.failCount,
+      totalCount: live.totalCount,
+      ooniBlock: p.hasData ? p.blockPercent : null,
+      ooniAccess: p.hasData ? p.accessPercent : null,
+      source: "live-ping",
+      saved: new Date().toISOString()
     }), { expirationTtl: 172800 });
-  } catch(e) {}
+    
+    console.log("Hour " + hour + " saved: quality=" + live.quality + "%, ping=" + live.avgPing + "ms");
+  } catch(e) { console.log("saveHourlySnapshot error: " + e.message); }
 }
+
 async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
   try {
@@ -1550,9 +1747,11 @@ async function checkVersion(STATS, userId, TG, chatId) {
     if (userVer !== CURRENT_VERSION) {
       await sendMessage(TG, chatId,
         "🎉 <b>خبر خوب! ربات آپدیت شد</b>\n\n" +
-        "✨ <b>قابلیت‌های جدید نسخه ۷.۳:</b>\n\n" +
+        "✨ <b>قابلیت‌های جدید نسخه ۷.۴:</b>\n\n" +
         "🎨 <b>نمودار حرفه‌ای امروز</b>\n" +
-        "📊 نمایش لحظه‌ای پایداری\n" +
+        "📊 <b>اندازه‌گیری زنده</b> با پینگ مستقیم\n" +
+        "🌑 <b>Dark Mode</b> برای نمودارها\n" +
+        "⚡ <b>به‌روزرسانی ساعتی واقعی</b>\n" +
         "🎰 اسپین روزانه\n" +
         "🔥 سیستم Streak\n" +
         "💎 نشان‌ها و امتیازها\n" +
@@ -1587,7 +1786,6 @@ async function handleUpdate(update, TG, STATS) {
   const userId = String(msg.from.id);
   const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
 
-  // ====== تشخیص خودکار مالک ======
   if (msg.from.username && OWNER_USERNAMES.includes(msg.from.username)) {
     if (!isOwner(userId)) {
       await saveOwnerId(STATS, userId);
@@ -1783,10 +1981,10 @@ async function handleUpdate(update, TG, STATS) {
   } else if (text === "/live") {
     await addPoints(STATS, userId, 1);
     await sendMessage(TG, chatId, "🔴 <i>حالت زنده...</i>");
-    const p = await getOONIData();
-    if (p.hasData) {
-      const mood = getStatusMood(p.blockPercent);
-      await sendMessage(TG, chatId, "🔴 <b>وضعیت زنده</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n✅ <b>دسترسی آزاد:</b> <code>" + p.accessPercent + "%</code>\n" + makeBar(p.accessPercent / 10) + "\n\n🕒 " + getIranTime(), { parse_mode: "HTML" });
+    const live = await measureLiveQuality();
+    if (live) {
+      const mood = getStatusMood(live.blockPercent);
+      await sendMessage(TG, chatId, "🔴 <b>وضعیت زنده</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n✅ <b>پایداری:</b> <code>" + live.quality + "%</code>\n📶 <b>پینگ:</b> <code>" + live.avgPing + "ms</code>\n" + makeBar(live.quality / 10) + "\n\n🕒 " + getIranTime(), { parse_mode: "HTML" });
     } else {
       await sendMessage(TG, chatId, "⏳ داده زنده در دسترس نیست.");
     }
@@ -2030,17 +2228,21 @@ async function handleAPI(url, STATS) {
   try {
     if (url.pathname === "/api/status") {
       const p = await getOONIData();
+      const live = await measureLiveQuality();
       const ripe = await fetchRIPE();
       return new Response(JSON.stringify({
         ok: true,
         data: {
           block_percent: p.hasData ? p.blockPercent : null,
           access_percent: p.hasData ? p.accessPercent : null,
+          live_quality: live ? live.quality : null,
+          live_ping_ms: live ? live.avgPing : null,
+          live_success_rate: live ? live.successRate : null,
           total_measurements: p.totalMs,
           has_data: p.hasData,
           ripe_visibility: ripe && ripe.data ? ripe.data.visibility : null,
           date_iran: getIranDate(), date_greg: getGregDate(), time_iran: getIranTime(),
-          source: "OONI + RIPE"
+          source: "OONI + RIPE + Live Ping"
         }
       }, null, 2), { headers: cors });
     }
@@ -2080,9 +2282,9 @@ async function handleAPI(url, STATS) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok: true, name: "Radar Internet Public API", version: "7.3",
+        ok: true, name: "Radar Internet Public API", version: "7.4",
         endpoints: { status: "/api/status", operators: "/api/operators", top: "/api/top", history: "/api/history" },
-        source: "OONI, RIPE", free: true
+        source: "OONI, RIPE, Live Ping", free: true
       }, null, 2), { headers: cors });
     }
     return new Response(JSON.stringify({ ok: false, error: "Not found" }), { status: 404, headers: cors });
@@ -2145,4 +2347,4 @@ async function makeAdminDashboard(STATS) {
     "<p><a href='/sendreport'>/sendreport</a> — ارسال دستی گزارش</p>" +
     "<p><a href='/alert'>/alert</a> — بررسی دستی هشدار</p></div>" +
     "</body></html>";
-}
+      }
