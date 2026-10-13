@@ -1,13 +1,15 @@
 // ============================================================
-// 🛰 RADAR INTERNET IRAN — v13.0.1
+// 🛰 RADAR INTERNET IRAN — v13.0.2
 // PART 1/2 : Core + Utils + Data + Charts
 // ============================================================
-// ⚠️ این فایل جایگزین کامل فایل قبلی بشه. هیچ کد قدیمی نگه ندار!
-// 🔧 اصلاحات: یوزرنیم ربات و گروه درست شد
+// ✅ اصلاحات v13.0.2:
+//   • یوزرنیم گروه درست شد: radarinternetirangruop
+//   • معافیت مالک از بررسی عضویت
+//   • دستور /reset-version برای تست اعلان آپدیت
 // ============================================================
 
 // ================== ⚙️ CONSTANTS ==================
-const CURRENT_VERSION = "13.0.1";
+const CURRENT_VERSION = "13.0.2";
 const CHART_POINTS = 96;
 const ALERT_THRESHOLD = 70;
 const QUALITY_DROP_THRESHOLD = 15;
@@ -15,7 +17,7 @@ const BOT_USERNAME = "Radarinternetiranbot";
 const ADMIN_PASS = "RadarAdmin@2025";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
-const CH3 = "@radarinetirangruop";
+const CH3 = "@radarinternetirangruop";   // ✅ اصلاح شد
 const OWNER_USERNAMES = ["royal_trust", "royal_trust_ir"];
 const OWNER_IDS_MANUAL = [];
 const OWNER_DISPLAY_NAME = "👑 مالک ربات";
@@ -23,16 +25,25 @@ const WEEKLY_PIN_MSG_KEY = "weekly_pin_msg_id";
 let TG_GLOBAL = null;
 let CACHED_OWNER_IDS = [];
 
-// 📌 لاگ تغییرات هر نسخه — هر آپدیت جدید اینجا اضافه کن
+// 📌 لاگ تغییرات هر نسخه
 const CHANGELOG = {
+  "13.0.2": {
+    date: "۱۴۰۴/۰۷/۲۱",
+    emoji: "🐛",
+    title: "رفع باگ یوزرنیم گروه و اعلان آپدیت",
+    changes: [
+      { icon:"✅", text:"یوزرنیم گروه درست شد" },
+      { icon:"👑", text:"مالک ربات از بررسی عضویت معاف شد" },
+      { icon:"🎉", text:"اعلان آپدیت خودکار حالا کار می‌کنه" },
+      { icon:"🔧", text:"دستور جدید <code>/reset-version</code>" }
+    ]
+  },
   "13.0.1": {
     date: "۱۴۰۴/۰۷/۲۱",
     emoji: "🔧",
-    title: "رفع باگ یوزرنیم گروه و ربات",
+    title: "رفع باگ یوزرنیم",
     changes: [
-      { icon:"🐛", text:"رفع باگ <b>یوزرنیم گروه</b> و <b>ربات</b>" },
-      { icon:"📡", text:"لینک‌های عضویت اجباری حالا درست کار می‌کنن" },
-      { icon:"🎨", text:"همه امکانات نسخه ۱۳.۰ حفظ شده" }
+      { icon:"🐛", text:"رفع باگ یوزرنیم ربات" }
     ]
   },
   "13.0": {
@@ -236,7 +247,6 @@ async function trackUser(STATS, userId, userName) {
       if (dau.length > 500) dau = dau.slice(-500);
       await STATS.put("dau:" + today, JSON.stringify(dau), { expirationTtl:604800 });
     }
-    // 🔥 ذخیره در لیست کل کاربرا (برای broadcast)
     await saveUserToList(STATS, userId);
   } catch(e) {}
 }
@@ -1117,8 +1127,13 @@ async function postUpdateToChannel(STATS, TG) {
 }
 
 // ========== END OF PART 1 ==========// ============================================================
-// 🛰 RADAR INTERNET IRAN — v13.0.1
+// 🛰 RADAR INTERNET IRAN — v13.0.2
 // PART 2/2 : Handlers + Channel + API + Worker Export
+// ============================================================
+// ✅ اصلاحات v13.0.2:
+//   • معافیت مالک از بررسی عضویت
+//   • دستور /reset-version
+//   • یوزرنیم گروه درست
 // ============================================================
 
 // ============================================================
@@ -1193,7 +1208,7 @@ async function makeReport(mode, env, combinedInput) {
   else out += "در دسترس نیست\n";
 
   out += "\n🕒 " + getIranTimeFull() + "  •  📅 " + getIranDate() + "\n\n" +
-    "🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarinetirangruop";
+    "🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarinternetirangruop";
   return out;
 }
 
@@ -1493,7 +1508,7 @@ async function sendChannelReport(TG, STATS, env) {
 }
 
 // ============================================================
-// 📡 ارسال/آپدیت کانال — بدون سنجاق
+// 📡 ارسال/آپدیت کانال
 // ============================================================
 async function sendOrUpdateChannelStatus(TG, STATS, env) {
   try {
@@ -1849,7 +1864,8 @@ async function checkMember(TG, userId, channel) {
       const s = d.result.status;
       return s === "member" || s === "administrator" || s === "creator";
     }
-  } catch(e) {}
+    console.log("checkMember fail for " + channel + ": " + (d.description || "?"));
+  } catch(e) { console.log("checkMember err: " + e.message); }
   return false;
 }
 
@@ -1862,7 +1878,7 @@ async function sendJoinRequest(TG, chatId) {
     { parse_mode:"HTML", inline_keyboard:[
       [{ text:"📡 کانال رادار", url:"https://t.me/radarinternetiran" }],
       [{ text:"👑 کانال رویال", url:"https://t.me/royal_trust_ir_official" }],
-      [{ text:"💬 گروه رادار", url:"https://t.me/radarinetirangruop" }],
+      [{ text:"💬 گروه رادار", url:"https://t.me/radarinternetirangruop" }],
       [{ text:"✅ تایید عضویت", callback_data:"check_membership" }]
     ]});
 }
@@ -1889,7 +1905,7 @@ async function sendUserPanel(TG, chatId, userId, userName, STATS) {
     "🎮 /spin · /leaderboard · /myrank · /invite · /badges · /mystats\n" +
     "🔮 /predict · /yearago · /subscribe\n" +
     "⚡ /ping · /speed · /best · /api · /live · /check\n\n" +
-    "━━━━━━━━━━━━━━━━━━━\n💬 @radarinetirangruop",
+    "━━━━━━━━━━━━━━━━━━━\n💬 @radarinternetirangruop",
     { parse_mode:"HTML" });
 }
 
@@ -1908,6 +1924,22 @@ async function handleUpdate(update, TG, STATS, env) {
     const userName = cq.from.first_name || cq.from.username || ("کاربر " + userId.slice(-4));
 
     if (cq.data === "check_membership") {
+      // 🔥 مالک بدون بررسی رد میشه
+      if (isOwner(userId)) {
+        await answerCallback(TG, cq.id, "✅ خوش آمدید مالک عزیز!", false);
+        if (cq.message) {
+          await fetch(TG + "/deleteMessage", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ chat_id:chatId, message_id:cq.message.message_id })
+          }).catch(() => {});
+        }
+        await trackUser(STATS, userId, userName);
+        await ensureTodaySnapshot(STATS, env);
+        await checkVersion(STATS, userId, TG, chatId);
+        await sendUserPanel(TG, chatId, userId, userName, STATS);
+        return;
+      }
       const [inCh1, inCh2, inCh3] = await Promise.all([
         checkMember(TG, userId, CH1),
         checkMember(TG, userId, CH2),
@@ -1973,13 +2005,16 @@ async function handleUpdate(update, TG, STATS, env) {
     return;
   }
 
-  // ---- Membership ----
-  const [inCh1, inCh2, inCh3] = await Promise.all([
-    checkMember(TG, userId, CH1),
-    checkMember(TG, userId, CH2),
-    checkMember(TG, userId, CH3)
-  ]);
-  if (!inCh1 || !inCh2 || !inCh3) { await sendJoinRequest(TG, chatId); return; }
+  // ---- Membership (معافیت مالک) ----
+  const isOwnerUser = isOwner(userId);
+  if (!isOwnerUser) {
+    const [inCh1, inCh2, inCh3] = await Promise.all([
+      checkMember(TG, userId, CH1),
+      checkMember(TG, userId, CH2),
+      checkMember(TG, userId, CH3)
+    ]);
+    if (!inCh1 || !inCh2 || !inCh3) { await sendJoinRequest(TG, chatId); return; }
+  }
 
   await trackUser(STATS, userId, userName);
   await ensureTodaySnapshot(STATS, env);
@@ -2021,6 +2056,12 @@ async function handleUpdate(update, TG, STATS, env) {
   else if (text === "/preview-update" && isOwner(userId)) {
     await sendMessage(TG, chatId, buildUpdateMessage(CURRENT_VERSION), { parse_mode:"HTML" });
   }
+  else if (text === "/reset-version" && isOwner(userId)) {
+    await STATS.delete("v:" + userId);
+    await sendMessage(TG, chatId,
+      "🔄 <b>نسخه شما ریست شد!</b>\n\nحالا دستور /start رو بزن → پیام آپدیت v" + CURRENT_VERSION + " باید بیاد ✅",
+      { parse_mode:"HTML" });
+  }
   else if (text === "/debugsnap" && isOwner(userId)) {
     const today = getToday();
     const raw = await STATS.get("snap:" + today);
@@ -2039,22 +2080,25 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/test-groups" && isOwner(userId)) {
     const lines = [];
-    for (const [name, ch] of [["CH1", CH1], ["CH2", CH2], ["CH3", CH3]]) {
+    for (const [name, ch] of [["CH1 (کانال رادار)", CH1], ["CH2 (کانال رویال)", CH2], ["CH3 (گروه رادار)", CH3]]) {
       try {
         const r = await fetch(TG + "/getChat?chat_id=" + ch);
         const d = await r.json();
         if (d.ok && d.result) {
-          lines.push("✅ " + name + ": <b>" + (d.result.title || ch) + "</b>\n   یوزرنیم: @" + (d.result.username || "—") + "\n   نوع: " + d.result.type);
+          lines.push("✅ <b>" + name + "</b>\n   📛 " + (d.result.title || "—") +
+            "\n   🔗 @" + (d.result.username || "—") +
+            "\n   📦 نوع: " + d.result.type);
         } else {
-          lines.push("❌ " + name + " (<code>" + ch + "</code>)\n   خطا: " + (d.description || "?"));
+          lines.push("❌ <b>" + name + "</b>\n   🔗 <code>" + ch + "</code>\n   ⚠️ " + (d.description || "خطای نامشخص"));
         }
       } catch(e) {
-        lines.push("❌ " + name + ": " + e.message);
+        lines.push("❌ <b>" + name + "</b>\n   " + e.message);
       }
     }
     await sendMessage(TG, chatId,
       "🧪 <b>تست گروه‌ها و کانال‌ها</b>\n\n" + lines.join("\n\n") +
-      "\n\n🤖 یوزرنیم ربات: <code>" + BOT_USERNAME + "</code>",
+      "\n\n━━━━━━━━━━━━━━━━━━━\n🤖 ربات: <code>@" + BOT_USERNAME + "</code>\n" +
+      "📌 نسخه: <code>" + CURRENT_VERSION + "</code>",
       { parse_mode:"HTML" });
   }
   else if (text === "/spin" || text === "🎰 اسپین") {
@@ -2177,7 +2221,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/api") {
     const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api";
-    await sendMessage(TG, chatId, "🔌 <b>API v13.0.1</b>\n\n🔹 <code>" + base + "/status</code>\n🔹 <code>" + base + "/operators</code>\n🔹 <code>" + base + "/shares</code>\n🔹 <code>" + base + "/history</code>", { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "🔌 <b>API v13.0.2</b>\n\n🔹 <code>" + base + "/status</code>\n🔹 <code>" + base + "/operators</code>\n🔹 <code>" + base + "/shares</code>\n🔹 <code>" + base + "/history</code>", { parse_mode:"HTML" });
   }
   else if (text === "/status" || text === "/status full") {
     await addPoints(STATS, userId, 1);
@@ -2225,13 +2269,16 @@ async function handleUpdate(update, TG, STATS, env) {
   else if (text === "/map") { await addPoints(STATS, userId, 1); const c = await makeMapChart(); if (c.image) await sendPhoto(TG, chatId, c.image, c.caption); else await sendMessage(TG, chatId, c.caption, { parse_mode:"HTML" }); }
   else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای v13.0.1</b>\n\n" +
+      "📚 <b>راهنمای v13.0.2</b>\n\n" +
       "📊 /status /work /score /vs\n" +
       "🆚 /compare /top /isp /world\n" +
       "📈 /today /history /trend /chart /pie /map\n" +
       "🎮 /spin /leaderboard /myrank /invite /badges /mystats\n" +
       "🔮 /predict /yearago /subscribe /check\n" +
       "⚡ /ping /speed /best /api /live\n\n" +
+      "👑 <b>ادمین:</b>\n" +
+      "<code>/test-groups</code> · <code>/debugsnap</code>\n" +
+      "<code>/preview-update</code> · <code>/reset-version</code>\n\n" +
       "📡 @Radarinternetiranbot",
       { parse_mode:"HTML" });
   }
@@ -2278,7 +2325,7 @@ async function handleAPI(url, STATS, env) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok:true, name:"Radar API v13.0.1",
+        ok:true, name:"Radar API v13.0.2",
         endpoints:{ status:"/api/status", operators:"/api/operators", shares:"/api/shares", history:"/api/history" },
         sources:["OONI","Cloudflare Radar","IQI","Live Ping","Voidly"], free:true
       }, null, 2), { headers:cors });
@@ -2317,7 +2364,7 @@ async function makeAdminDashboard(STATS) {
 
   return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'>" +
     "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-    "<title>داشبورد v13.0.1</title><style>" +
+    "<title>داشبورد v13.0.2</title><style>" +
     "body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}" +
     "h1{color:#d4af37;text-align:center}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
@@ -2331,7 +2378,7 @@ async function makeAdminDashboard(STATS) {
     ".source{display:inline-block;background:#1e293b;padding:5px 10px;border-radius:5px;margin:5px;font-size:12px}" +
     ".btn{display:inline-block;padding:10px 20px;background:#d4af37;color:#0a1128;border-radius:8px;text-decoration:none;margin:5px;font-weight:bold}" +
     "</style></head><body>" +
-    "<h1>🔐 داشبورد v13.0.1</h1>" +
+    "<h1>🔐 داشبورد v13.0.2</h1>" +
     "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTimeFull() + "</div>" +
     "<div class='card'><div class='head'>🧠 منابع</div>" +
     "<div class='source'>◉ OONI ۳۵٪</div><div class='source'>▣ Radar ۲۰٪</div>" +
@@ -2347,9 +2394,9 @@ async function makeAdminDashboard(STATS) {
       "<table><tr><th>#</th><th>نام</th><th>امتیاز</th></tr>" + ownerHtml + "</table></div>" : "") +
     "<div class='card'><div class='head'>🎉 مدیریت آپدیت</div>" +
     "<p>نسخه فعلی: <b>" + CURRENT_VERSION + "</b></p>" +
-    "<a href='/preview-update' class='btn'>👁 پیش‌نمایش پیام آپدیت</a>" +
+    "<a href='/preview-update' class='btn'>👁 پیش‌نمایش</a>" +
     "<a href='/broadcast-update' class='btn'>📢 ارسال گروهی</a>" +
-    "<a href='/reset-broadcast' class='btn'>🔄 ریست اعلان</a>" +
+    "<a href='/reset-broadcast' class='btn'>🔄 ریست</a>" +
     "</div>" +
     "<div class='card'><div class='head'>🔗 لینک‌ها</div>" +
     "<p><a href='/api'>/api</a> | <a href='/api/status'>/api/status</a> | <a href='/api/shares'>/api/shares</a></p>" +
