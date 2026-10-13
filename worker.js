@@ -1,20 +1,21 @@
 // ============================================================
-// 🛰 RADAR INTERNET IRAN — v13.0
+// 🛰 RADAR INTERNET IRAN — v13.0.1
 // PART 1/2 : Core + Utils + Data + Charts
 // ============================================================
 // ⚠️ این فایل جایگزین کامل فایل قبلی بشه. هیچ کد قدیمی نگه ندار!
+// 🔧 اصلاحات: یوزرنیم ربات و گروه درست شد
 // ============================================================
 
 // ================== ⚙️ CONSTANTS ==================
-const CURRENT_VERSION = "13.0";
+const CURRENT_VERSION = "13.0.1";
 const CHART_POINTS = 96;
 const ALERT_THRESHOLD = 70;
 const QUALITY_DROP_THRESHOLD = 15;
-const BOT_USERNAME = "Radarineternetiranbot";
+const BOT_USERNAME = "Radarinternetiranbot";
 const ADMIN_PASS = "RadarAdmin@2025";
 const CH1 = "@radarinternetiran";
 const CH2 = "@royal_trust_ir_official";
-const CH3 = "@radarineternetirangruop";
+const CH3 = "@radarinetirangruop";
 const OWNER_USERNAMES = ["royal_trust", "royal_trust_ir"];
 const OWNER_IDS_MANUAL = [];
 const OWNER_DISPLAY_NAME = "👑 مالک ربات";
@@ -24,6 +25,16 @@ let CACHED_OWNER_IDS = [];
 
 // 📌 لاگ تغییرات هر نسخه — هر آپدیت جدید اینجا اضافه کن
 const CHANGELOG = {
+  "13.0.1": {
+    date: "۱۴۰۴/۰۷/۲۱",
+    emoji: "🔧",
+    title: "رفع باگ یوزرنیم گروه و ربات",
+    changes: [
+      { icon:"🐛", text:"رفع باگ <b>یوزرنیم گروه</b> و <b>ربات</b>" },
+      { icon:"📡", text:"لینک‌های عضویت اجباری حالا درست کار می‌کنن" },
+      { icon:"🎨", text:"همه امکانات نسخه ۱۳.۰ حفظ شده" }
+    ]
+  },
   "13.0": {
     date: "۱۴۰۴/۰۷/۲۱",
     emoji: "🎨",
@@ -880,7 +891,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
     "📡 " + activeSources + "\n" +
     "🕒 بروزرسانی: " + getIranTimeFull() + "\n" +
     "━━━━━━━━━━━━━━━━━━━\n" +
-    "🛰 @Radarineternetiranbot";
+    "🛰 @Radarinternetiranbot";
 
   return { image: img, caption };
 }
@@ -1034,7 +1045,7 @@ function buildUpdateMessage(version) {
   });
   out += "━━━━━━━━━━━━━━━━━━━\n";
   out += "🎯 <b>پیشنهاد:</b> /help برای مشاهده همه امکانات\n\n";
-  out += "🛰 @Radarineternetiranbot";
+  out += "🛰 @Radarinternetiranbot";
   return out;
 }
 
@@ -1097,7 +1108,7 @@ async function postUpdateToChannel(STATS, TG) {
     caption += "<code>/today</code> — نمودار جدید\n";
     caption += "<code>/live</code> — وضعیت زنده\n";
     caption += "<code>/help</code> — راهنما\n\n";
-    caption += "🛰 @Radarineternetiranbot";
+    caption += "🛰 @Radarinternetiranbot";
     const chats = await getTrackedChats(STATS);
     for (const ch of chats) {
       try { await sendMessage(TG, ch, caption, { parse_mode:"HTML" }); } catch(e) {}
@@ -1106,7 +1117,7 @@ async function postUpdateToChannel(STATS, TG) {
 }
 
 // ========== END OF PART 1 ==========// ============================================================
-// 🛰 RADAR INTERNET IRAN — v13.0
+// 🛰 RADAR INTERNET IRAN — v13.0.1
 // PART 2/2 : Handlers + Channel + API + Worker Export
 // ============================================================
 
@@ -1182,7 +1193,7 @@ async function makeReport(mode, env, combinedInput) {
   else out += "در دسترس نیست\n";
 
   out += "\n🕒 " + getIranTimeFull() + "  •  📅 " + getIranDate() + "\n\n" +
-    "🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarineternetirangruop";
+    "🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarinetirangruop";
   return out;
 }
 
@@ -1465,7 +1476,7 @@ async function makeYearAgoReport() {
 }
 
 // ============================================================
-// 📢 ارسال به کانال‌ها (گزارش کامل متنی)
+// 📢 ارسال به کانال‌ها
 // ============================================================
 async function sendChannelReport(TG, STATS, env) {
   const report = await makeReport("full", env);
@@ -1482,7 +1493,7 @@ async function sendChannelReport(TG, STATS, env) {
 }
 
 // ============================================================
-// 📡 ارسال/آپدیت کانال — بدون سنجاق + با سهم اپراتورها
+// 📡 ارسال/آپدیت کانال — بدون سنجاق
 // ============================================================
 async function sendOrUpdateChannelStatus(TG, STATS, env) {
   try {
@@ -1560,7 +1571,6 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
       };
       chartImage = await getChartImageDark(config, "#0a1128");
     } else {
-      // 🔥 FALLBACK — یک نقطه از داده فعلی
       chartImage = await getChartImageDark({
         type: "line",
         data: { labels:["زنده"], datasets:[{
@@ -1608,7 +1618,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
       "📡 " + activeSources + "\n" +
       "🕒 " + getIranTimeFull() + "\n" +
       "━━━━━━━━━━━━━━━━━━━\n" +
-      "📚 /help  •  🛰 @Radarineternetiranbot";
+      "📚 /help  •  🛰 @Radarinternetiranbot";
 
     const chats = await getTrackedChats(STATS);
     for (const ch of chats) {
@@ -1852,7 +1862,7 @@ async function sendJoinRequest(TG, chatId) {
     { parse_mode:"HTML", inline_keyboard:[
       [{ text:"📡 کانال رادار", url:"https://t.me/radarinternetiran" }],
       [{ text:"👑 کانال رویال", url:"https://t.me/royal_trust_ir_official" }],
-      [{ text:"💬 گروه رادار", url:"https://t.me/radarineternetirangruop" }],
+      [{ text:"💬 گروه رادار", url:"https://t.me/radarinetirangruop" }],
       [{ text:"✅ تایید عضویت", callback_data:"check_membership" }]
     ]});
 }
@@ -1879,7 +1889,7 @@ async function sendUserPanel(TG, chatId, userId, userName, STATS) {
     "🎮 /spin · /leaderboard · /myrank · /invite · /badges · /mystats\n" +
     "🔮 /predict · /yearago · /subscribe\n" +
     "⚡ /ping · /speed · /best · /api · /live · /check\n\n" +
-    "━━━━━━━━━━━━━━━━━━━\n💬 @radarineternetirangruop",
+    "━━━━━━━━━━━━━━━━━━━\n💬 @radarinetirangruop",
     { parse_mode:"HTML" });
 }
 
@@ -2027,6 +2037,26 @@ async function handleUpdate(update, TG, STATS, env) {
     }
     await sendMessage(TG, chatId, out, { parse_mode:"HTML" });
   }
+  else if (text === "/test-groups" && isOwner(userId)) {
+    const lines = [];
+    for (const [name, ch] of [["CH1", CH1], ["CH2", CH2], ["CH3", CH3]]) {
+      try {
+        const r = await fetch(TG + "/getChat?chat_id=" + ch);
+        const d = await r.json();
+        if (d.ok && d.result) {
+          lines.push("✅ " + name + ": <b>" + (d.result.title || ch) + "</b>\n   یوزرنیم: @" + (d.result.username || "—") + "\n   نوع: " + d.result.type);
+        } else {
+          lines.push("❌ " + name + " (<code>" + ch + "</code>)\n   خطا: " + (d.description || "?"));
+        }
+      } catch(e) {
+        lines.push("❌ " + name + ": " + e.message);
+      }
+    }
+    await sendMessage(TG, chatId,
+      "🧪 <b>تست گروه‌ها و کانال‌ها</b>\n\n" + lines.join("\n\n") +
+      "\n\n🤖 یوزرنیم ربات: <code>" + BOT_USERNAME + "</code>",
+      { parse_mode:"HTML" });
+  }
   else if (text === "/spin" || text === "🎰 اسپین") {
     await handleSpin(STATS, userId, TG, chatId);
   }
@@ -2147,7 +2177,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/api") {
     const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api";
-    await sendMessage(TG, chatId, "🔌 <b>API v13.0</b>\n\n🔹 <code>" + base + "/status</code>\n🔹 <code>" + base + "/operators</code>\n🔹 <code>" + base + "/shares</code>\n🔹 <code>" + base + "/history</code>", { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "🔌 <b>API v13.0.1</b>\n\n🔹 <code>" + base + "/status</code>\n🔹 <code>" + base + "/operators</code>\n🔹 <code>" + base + "/shares</code>\n🔹 <code>" + base + "/history</code>", { parse_mode:"HTML" });
   }
   else if (text === "/status" || text === "/status full") {
     await addPoints(STATS, userId, 1);
@@ -2195,14 +2225,14 @@ async function handleUpdate(update, TG, STATS, env) {
   else if (text === "/map") { await addPoints(STATS, userId, 1); const c = await makeMapChart(); if (c.image) await sendPhoto(TG, chatId, c.image, c.caption); else await sendMessage(TG, chatId, c.caption, { parse_mode:"HTML" }); }
   else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای v13.0</b>\n\n" +
+      "📚 <b>راهنمای v13.0.1</b>\n\n" +
       "📊 /status /work /score /vs\n" +
       "🆚 /compare /top /isp /world\n" +
       "📈 /today /history /trend /chart /pie /map\n" +
       "🎮 /spin /leaderboard /myrank /invite /badges /mystats\n" +
       "🔮 /predict /yearago /subscribe /check\n" +
       "⚡ /ping /speed /best /api /live\n\n" +
-      "📡 @Radarineternetiranbot",
+      "📡 @Radarinternetiranbot",
       { parse_mode:"HTML" });
   }
 }
@@ -2248,7 +2278,7 @@ async function handleAPI(url, STATS, env) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok:true, name:"Radar API v13.0",
+        ok:true, name:"Radar API v13.0.1",
         endpoints:{ status:"/api/status", operators:"/api/operators", shares:"/api/shares", history:"/api/history" },
         sources:["OONI","Cloudflare Radar","IQI","Live Ping","Voidly"], free:true
       }, null, 2), { headers:cors });
@@ -2287,7 +2317,7 @@ async function makeAdminDashboard(STATS) {
 
   return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'>" +
     "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-    "<title>داشبورد v13.0</title><style>" +
+    "<title>داشبورد v13.0.1</title><style>" +
     "body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}" +
     "h1{color:#d4af37;text-align:center}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
@@ -2301,7 +2331,7 @@ async function makeAdminDashboard(STATS) {
     ".source{display:inline-block;background:#1e293b;padding:5px 10px;border-radius:5px;margin:5px;font-size:12px}" +
     ".btn{display:inline-block;padding:10px 20px;background:#d4af37;color:#0a1128;border-radius:8px;text-decoration:none;margin:5px;font-weight:bold}" +
     "</style></head><body>" +
-    "<h1>🔐 داشبورد v13.0</h1>" +
+    "<h1>🔐 داشبورد v13.0.1</h1>" +
     "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTimeFull() + "</div>" +
     "<div class='card'><div class='head'>🧠 منابع</div>" +
     "<div class='source'>◉ OONI ۳۵٪</div><div class='source'>▣ Radar ۲۰٪</div>" +
@@ -2318,12 +2348,13 @@ async function makeAdminDashboard(STATS) {
     "<div class='card'><div class='head'>🎉 مدیریت آپدیت</div>" +
     "<p>نسخه فعلی: <b>" + CURRENT_VERSION + "</b></p>" +
     "<a href='/preview-update' class='btn'>👁 پیش‌نمایش پیام آپدیت</a>" +
-    "<a href='/broadcast-update' class='btn' onclick=\"return confirm('ارسال به همه کاربران؟')\">📢 ارسال گروهی</a>" +
+    "<a href='/broadcast-update' class='btn'>📢 ارسال گروهی</a>" +
     "<a href='/reset-broadcast' class='btn'>🔄 ریست اعلان</a>" +
     "</div>" +
     "<div class='card'><div class='head'>🔗 لینک‌ها</div>" +
     "<p><a href='/api'>/api</a> | <a href='/api/status'>/api/status</a> | <a href='/api/shares'>/api/shares</a></p>" +
     "<p><a href='/debugsnap'>/debugsnap</a> | <a href='/updateshares'>/updateshares</a> | <a href='/snapshot'>/snapshot</a></p>" +
+    "<p><a href='/test-groups'>/test-groups</a> — تست یوزرنیم‌ها</p>" +
     "</div></body></html>";
 }
 
@@ -2338,10 +2369,8 @@ export default {
     TG_GLOBAL = TG;
     if (STATS && CACHED_OWNER_IDS.length === 0) await loadOwnerIds(STATS);
 
-    // API routes
     if (url.pathname.startsWith("/api")) return await handleAPI(url, STATS, env);
 
-    // Admin
     if (url.pathname === "/admin") {
       const pass = url.searchParams.get("pass");
       if (pass !== ADMIN_PASS) {
@@ -2354,7 +2383,6 @@ export default {
       });
     }
 
-    // Manual triggers
     if (url.pathname === "/snapshot") {
       await saveSnapshot(STATS, new Date(), env);
       return new Response("✅ Snapshot saved", { headers:{ "Content-Type":"text/plain; charset=utf-8" } });
@@ -2382,6 +2410,30 @@ export default {
       }, null, 2), { headers:{ "Content-Type":"application/json" } });
     }
 
+    // 🧪 تست یوزرنیم‌ها
+    if (url.pathname === "/test-groups") {
+      const results = { bot_username: BOT_USERNAME, version: CURRENT_VERSION, checks: {} };
+      for (const [name, ch] of [["CH1", CH1], ["CH2", CH2], ["CH3", CH3]]) {
+        try {
+          const r = await fetch(TG + "/getChat?chat_id=" + ch);
+          const d = await r.json();
+          results.checks[name] = {
+            chat_id: ch,
+            ok: d.ok,
+            title: d.result ? d.result.title : null,
+            username: d.result ? d.result.username : null,
+            type: d.result ? d.result.type : null,
+            error: d.ok ? null : d.description
+          };
+        } catch(e) {
+          results.checks[name] = { chat_id: ch, ok: false, error: e.message };
+        }
+      }
+      return new Response(JSON.stringify(results, null, 2), {
+        headers:{ "Content-Type":"application/json" }
+      });
+    }
+
     // 🎉 Update system
     if (url.pathname === "/preview-update") {
       return new Response(buildUpdateMessage(CURRENT_VERSION), {
@@ -2404,7 +2456,6 @@ export default {
       });
     }
 
-    // Telegram webhook
     if (request.method === "POST") {
       try {
         const update = await request.json();
@@ -2425,7 +2476,6 @@ export default {
     if (STATS && CACHED_OWNER_IDS.length === 0) await loadOwnerIds(STATS);
     const cron = event.cron;
 
-    // ⏰ هر ساعت
     if (cron === "0 * * * *") {
       await updateHourlyOperatorShares(STATS, env);
       await saveSnapshot(STATS, new Date(), env);
@@ -2434,20 +2484,14 @@ export default {
       await sendOrUpdateChannelStatus(TG, STATS, env);
       return;
     }
-
-    // ⏱ هر ۱۵ دقیقه
     if (cron === "*/15 * * * *") {
       await saveSnapshot(STATS, new Date(), env);
       return;
     }
-
-    // 📊 ۹ صبح
     if (cron === "0 9 * * *") {
       await sendChannelReport(TG, STATS, env);
       return;
     }
-
-    // 🏆 جمعه ۹ شب
     if (cron === "0 21 * * 5") {
       await unpinWeeklyLeaderboard(TG, STATS);
       await postWeeklyLeaderboard(TG, STATS);
