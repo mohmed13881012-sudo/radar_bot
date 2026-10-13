@@ -1,17 +1,16 @@
 // ============================================================
-// 🛰 RADAR INTERNET IRAN — v14.0.0
-// PART 1/2 : Core + Utils + Data + Charts
+// 🛰 RADAR INTERNET IRAN — v15.0.0
+// PART 1/2 : Core + Data Sources + New Charts
 // ============================================================
-// ✅ ویژگی‌های v14.0.0:
-//   • منابع جدید: OONI + IODA + Voidly + Live (بدون Cloudflare)
-//   • OONI از ۲۴ ساعت اخیر (نه فقط امروز)
-//   • کش ۶۰ ثانیه‌ای برای getCombinedData
-//   • طراحی جدید نمودار
-//   • نمودار میله‌ای سهم اپراتورها
+// ✅ ویژگی‌ها:
+//   • منابع دقیق: OONI + Foreign Sites + Global + Iranian
+//   • حذف IODA و Voidly (نادقیق)
+//   • Auto-snapshot خودکار روی هر دستور کاربر
+//   • نام‌گذاری خودکار ASN از RIPE
+//   • طراحی جدید نمودار با gradient
 // ============================================================
 
-// ================== ⚙️ CONSTANTS ==================
-const CURRENT_VERSION = "14.0.0";
+const CURRENT_VERSION = "15.0.0";
 const CHART_POINTS = 96;
 const QUALITY_DROP_THRESHOLD = 15;
 const BOT_USERNAME = "Radarinternetiranbot";
@@ -23,34 +22,47 @@ const OWNER_USERNAMES = ["royal_trust", "royal_trust_ir"];
 const OWNER_IDS_MANUAL = [];
 const OWNER_DISPLAY_NAME = "👑 مالک ربات";
 const WEEKLY_PIN_MSG_KEY = "weekly_pin_msg_id";
+const SNAP_AUTO_INTERVAL = 600000; // ۱۰ دقیقه
 let TG_GLOBAL = null;
 let CACHED_OWNER_IDS = [];
 
-// 📌 لاگ تغییرات
 const CHANGELOG = {
-  "14.0.0": {
+  "15.0.0": {
     date: "۱۴۰۴/۰۷/۲۱",
-    emoji: "🚀",
-    title: "منابع جدید + طراحی حرفه‌ای",
+    emoji: "🎯",
+    title: "منابع دقیق + Auto-Snapshot + نمودار جدید",
     changes: [
-      { icon:"🌐", text:"منابع جدید: <b>IODA</b> و <b>Voidly</b>" },
-      { icon:"⏱", text:"OONI از <b>۲۴ ساعت اخیر</b>" },
-      { icon:"🎨", text:"طراحی جدید نمودار با ۵ خط رنگی" },
-      { icon:"📊", text:"نمودار میله‌ای سهم اپراتورها" },
-      { icon:"⚡", text:"سرعت ۵ برابر با کش هوشمند" },
-      { icon:"❌", text:"حذف Cloudflare Radar (نادقیق برای ایران)" }
-    ]
-  },
-  "13.1.0": {
-    date: "۱۴۰۴/۰۷/۲۱",
-    emoji: "⚡",
-    title: "بهینه‌سازی سرعت",
-    changes: [
-      { icon:"⚡", text:"سرعت اجرا ۵ برابر" },
-      { icon:"📡", text:"گروه در ارسال خودکار" }
+      { icon:"🎯", text:"منابع دقیق: <b>OONI + Live Sites</b>" },
+      { icon:"🚫", text:"حذف IODA و Voidly (نادقیق)" },
+      { icon:"💾", text:"<b>Auto-Snapshot</b> روی هر دستور کاربر" },
+      { icon:"🏷", text:"نام خودکار اپراتور از RIPE" },
+      { icon:"🎨", text:"طراحی جدید نمودار با gradient" }
     ]
   }
 };
+
+// ✅ سایت‌های حساس به فیلترینگ
+const FOREIGN_FILTERED_SITES = [
+  { name:"Instagram", url:"https://www.instagram.com" },
+  { name:"Twitter/X", url:"https://x.com" },
+  { name:"YouTube",   url:"https://www.youtube.com" },
+  { name:"Facebook",  url:"https://www.facebook.com" },
+  { name:"Telegram",  url:"https://telegram.org" }
+];
+
+// ✅ سایت‌های جهانی (شاخص سالم بودن اینترنت)
+const GLOBAL_SITES = [
+  { name:"Google",     url:"https://www.google.com" },
+  { name:"Cloudflare", url:"https://1.1.1.1" },
+  { name:"Wikipedia",  url:"https://www.wikipedia.org" }
+];
+
+// ✅ سایت‌های ایرانی (شاخص سالم بودن شبکه داخلی)
+const IRANIAN_SITES = [
+  { name:"Digikala", url:"https://www.digikala.com" },
+  { name:"Aparat",   url:"https://www.aparat.com" },
+  { name:"Shad",     url:"https://shad.ir" }
+];
 
 const IR_SITES = [
   { name:"Google.ir", url:"https://www.google.ir" },
@@ -63,7 +75,7 @@ const IR_SITES = [
   { name:"Divar",     url:"https://divar.ir" }
 ];
 
-const GLOBAL_SITES = [
+const ALL_GLOBAL_SITES = [
   { name:"Google",     url:"https://www.google.com" },
   { name:"Cloudflare", url:"https://1.1.1.1" },
   { name:"Wikipedia",  url:"https://www.wikipedia.org" },
@@ -87,10 +99,28 @@ const FILTER_CHECK = [
 ];
 
 const ISP_MAP = {
-  "ایرانسل":"44244","همراه اول":"197207","mci":"197207","irancell":"44244",
-  "مخابرات":"58224","tci":"58224","شاتل":"31549","shuttle":"31549",
-  "پارس آنلاین":"42337","parsonline":"42337","آسیاتک":"43754","asiatech":"43754",
-  "رایتل":"57218","rightel":"57218","پارس پک":"16322","parspack":"16322"
+  "44244":"ایرانسل",
+  "197207":"همراه اول",
+  "58224":"مخابرات (TCI)",
+  "31549":"شاتل",
+  "42337":"پارس آنلاین",
+  "43754":"آسیاتک",
+  "57218":"رایتل",
+  "16322":"پارس پک",
+  "44208":"پارس‌فون",
+  "58262":"IranServer",
+  "50810":"پیشگامان",
+  "205647":"مبین‌نت",
+  "207079":"پیشگامان",
+  "12880":"زیرساخت (DCI)",
+  "25184":"افرانت",
+  "6736":"DCI-2",
+  "39501":"پارس‌نت",
+  "56402":"های‌وب",
+  "208161":"ابر آروان",
+  "205674":"ماهان",
+  "206065":"فناوران",
+  "202468":"سرورهای ایرانی"
 };
 
 const BADGES = {
@@ -133,12 +163,12 @@ function makeBar(score, length = 10) {
 }
 
 function getStatusMood(blockPercent) {
-  if (blockPercent < 10) return { emoji:"🟢", label:"عالی",   color:"#10b981", grad:"#059669" };
-  if (blockPercent < 25) return { emoji:"🟢", label:"خوب",    color:"#22c55e", grad:"#16a34a" };
-  if (blockPercent < 40) return { emoji:"🟡", label:"متوسط",  color:"#eab308", grad:"#ca8a04" };
-  if (blockPercent < 55) return { emoji:"🟠", label:"ضعیف",   color:"#f97316", grad:"#ea580c" };
-  if (blockPercent < 70) return { emoji:"🔴", label:"بد",     color:"#ef4444", grad:"#dc2626" };
-  return                       { emoji:"🚨", label:"بحرانی",  color:"#dc2626", grad:"#991b1b" };
+  if (blockPercent < 10) return { emoji:"🟢", label:"عالی",   color:"#10b981" };
+  if (blockPercent < 25) return { emoji:"🟢", label:"خوب",    color:"#22c55e" };
+  if (blockPercent < 40) return { emoji:"🟡", label:"متوسط",  color:"#eab308" };
+  if (blockPercent < 55) return { emoji:"🟠", label:"ضعیف",   color:"#f97316" };
+  if (blockPercent < 70) return { emoji:"🔴", label:"بد",     color:"#ef4444" };
+  return                       { emoji:"🚨", label:"بحرانی",  color:"#dc2626" };
 }
 
 function getVipRank(pts) {
@@ -155,28 +185,45 @@ function getUserTier(userId) {
 }
 
 function asnName(asn) {
-  for (const [name, code] of Object.entries(ISP_MAP)) {
-    if (code === asn) {
-      if (name === "irancell")   return "ایرانسل";
-      if (name === "mci")        return "همراه اول";
-      if (name === "tci")        return "مخابرات";
-      if (name === "shuttle")    return "شاتل";
-      if (name === "parsonline") return "پارس آنلاین";
-      if (name === "asiatech")   return "آسیاتک";
-      if (name === "rightel")    return "رایتل";
-      if (name === "parspack")   return "پارس پک";
-      return name;
-    }
-  }
-  return "AS" + asn;
+  const sid = String(asn).replace("AS", "");
+  if (ISP_MAP[sid]) return ISP_MAP[sid];
+  return "AS" + sid;
 }
 
+// ✅ کش ASN با RIPE API
 const _asnMemCache = {};
 async function asnNameAuto(asn) {
-  if (_asnMemCache[asn]) return _asnMemCache[asn];
-  const name = asnName(asn);
-  _asnMemCache[asn] = name;
-  return name;
+  const sid = String(asn).replace("AS", "");
+  if (_asnMemCache[sid]) return _asnMemCache[sid];
+
+  // 1. تلاش از ISP_MAP
+  if (ISP_MAP[sid]) {
+    _asnMemCache[sid] = ISP_MAP[sid];
+    return ISP_MAP[sid];
+  }
+
+  // 2. تلاش از RIPE API
+  try {
+    const r = await fetch("https://stat.ripe.net/data/as-overview/data.json?resource=AS" + sid, {
+      headers: { "Accept": "application/json" }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.data && d.data.holder) {
+        const holder = d.data.holder
+          .replace(/^AS\d+\s*/i, "")
+          .replace(/,.*$/, "")
+          .substring(0, 30)
+          .trim();
+        _asnMemCache[sid] = holder;
+        return holder;
+      }
+    }
+  } catch(e) {}
+
+  const fallback = "AS" + sid;
+  _asnMemCache[sid] = fallback;
+  return fallback;
 }
 
 // ================== 📡 TELEGRAM ==================
@@ -219,7 +266,7 @@ async function answerCallback(TG, callbackId, text = "", showAlert = false) {
   } catch(e) {}
 }
 
-// ================== 💾 KV HELPERS ==================
+// ================== 💾 KV ==================
 async function trackUser(STATS, userId, userName) {
   if (!STATS) return;
   try {
@@ -367,9 +414,45 @@ function isOwner(userId) {
   return CACHED_OWNER_IDS.includes(sid) || OWNER_IDS_MANUAL.includes(sid);
 }
 
-// ================== 🌐 DATA FETCHERS ==================
+// ================== 🌐 PING & CHECK ==================
+async function pingSite(url, timeout = 3500) {
+  try {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), timeout);
+    const t0 = Date.now();
+    const r = await fetch(url, { method:"HEAD", signal:ctrl.signal, redirect:"follow" });
+    clearTimeout(id);
+    if (!r.ok && r.status >= 400) return null;
+    return Date.now() - t0;
+  } catch(e) { return null; }
+}
 
-// ✅ OONI — از ۲۴ ساعت اخیر
+async function checkAccessible(url, timeout = 3500) {
+  try {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), timeout);
+    const r = await fetch(url, { method:"HEAD", signal:ctrl.signal, redirect:"follow" });
+    clearTimeout(id);
+    return r.status < 500;
+  } catch(e) { return false; }
+}
+
+// ================== 🧪 TEST GROUP ==================
+async function testSiteGroup(sites, timeout = 3000) {
+  if (!sites || sites.length === 0) return { quality: 0, ok: 0, total: 0, avgPing: 0 };
+  let ok = 0, pingSum = 0;
+  const results = await Promise.all(sites.map(s => pingSite(s.url, timeout)));
+  for (const t of results) {
+    if (t !== null) { ok++; pingSum += t; }
+  }
+  return {
+    quality: Math.round((ok / sites.length) * 100),
+    ok, total: sites.length,
+    avgPing: ok > 0 ? Math.round(pingSum / ok) : 500
+  };
+}
+
+// ================== 🌐 OONI ==================
 async function fetchOONI7d() {
   const since = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
   const until = getToday();
@@ -423,43 +506,6 @@ function parseOONI(d) {
   return { hasData: total > 0, asnData, dayData, total, blocked, blockPercent, accessPercent: 100 - blockPercent };
 }
 
-// ✅ IODA — شاخص قطعی اینترنت (بدون نیاز به کلید)
-async function fetchIODAData() {
-  try {
-    const now = Math.floor(Date.now() / 1000);
-    const from = now - 86400;
-    const url = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from=" + from + "&until=" + now + "&entityType=country&limit=200";
-    const r = await fetch(url, { headers:{ "Accept":"application/json" } });
-    if (!r.ok) return null;
-    const json = await r.json();
-    const events = json.data || [];
-    const iranEvents = events.filter(e => e.location && String(e.location).includes("IR"));
-    if (iranEvents.length > 0) {
-      const maxScore = Math.max(...iranEvents.map(e => e.score || 0));
-      const severity = Math.min(100, Math.round((maxScore / 1000000) * 100));
-      return { hasData: true, quality: 100 - severity, events: iranEvents.length };
-    }
-    return { hasData: true, quality: 100, events: 0 };
-  } catch(e) { return null; }
-}
-
-// ✅ Voidly — تحلیل سانسور (endpoint رایگان)
-async function fetchVoidlyData() {
-  try {
-    const r = await fetch("https://api.voidly.ai/data/incidents?country=IR&limit=5", {
-      headers: { "Accept":"application/json" }
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    const incidents = data.incidents || [];
-    const active = incidents.filter(i => i.status === "active");
-    const critical = active.filter(i => i.severity === "critical").length;
-    const risk = active.length > 0 ? Math.min(100, 60 + (critical * 20)) : 10;
-    return { risk, incidents: active.length };
-  } catch(e) { return null; }
-}
-
-// ✅ RIPE — نمایانی شبکه
 async function fetchRIPE() {
   try {
     const r = await fetch("https://stat.ripe.net/data/country-resource-stats/data.json?resource=IR", { headers:{ "Accept":"application/json" } });
@@ -468,35 +514,12 @@ async function fetchRIPE() {
   } catch(e) { return null; }
 }
 
-// ✅ Ping یک سایت
-async function pingSite(url, timeout = 3500) {
-  try {
-    const ctrl = new AbortController();
-    const id = setTimeout(() => ctrl.abort(), timeout);
-    const t0 = Date.now();
-    const r = await fetch(url, { method:"HEAD", signal:ctrl.signal, redirect:"follow" });
-    clearTimeout(id);
-    if (!r.ok && r.status >= 400) return null;
-    return Date.now() - t0;
-  } catch(e) { return null; }
-}
-
-async function checkAccessible(url, timeout = 3500) {
-  try {
-    const ctrl = new AbortController();
-    const id = setTimeout(() => ctrl.abort(), timeout);
-    const r = await fetch(url, { method:"HEAD", signal:ctrl.signal, redirect:"follow" });
-    clearTimeout(id);
-    return r.status < 500;
-  } catch(e) { return false; }
-}
-
-// ================== 🧠 COMBINED DATA (با کش) ==================
+// ================== 🧠 COMBINED DATA (v15) ==================
 let _combinedCache = { data:null, ts:0 };
 
 async function getCombinedData(env) {
   const now = Date.now();
-  if (_combinedCache.data && (now - _combinedCache.ts) < 60000) {
+  if (_combinedCache.data && (now - _combinedCache.ts) < 45000) {
     return _combinedCache.data;
   }
   const result = await getCombinedDataRaw(env);
@@ -505,67 +528,69 @@ async function getCombinedData(env) {
 }
 
 async function getCombinedDataRaw(env) {
-  const [ooni, ioda, voidlyData] = await Promise.all([
+  // 🔥 همه تست‌ها به صورت موازی
+  const [ooni, foreignTest, globalTest, iranianTest] = await Promise.all([
     getOONIData().catch(() => null),
-    fetchIODAData().catch(() => null),
-    fetchVoidlyData().catch(() => null)
+    testSiteGroup(FOREIGN_FILTERED_SITES, 3000),
+    testSiteGroup(GLOBAL_SITES, 3000),
+    testSiteGroup(IRANIAN_SITES, 3000)
   ]);
 
-  const sources = { ooni:false, ioda:false, live:true, voidly:false };
-  const weights = { ooni:0, ioda:0, live:0, voidly:0 };
+  const sources = { ooni:false, foreign:true, global:true, iranian:true };
+  const weights = { ooni:0, foreign:0, global:0, iranian:0 };
 
   let ooniQuality = null;
   if (ooni && ooni.hasData) {
     ooniQuality = ooni.accessPercent;
     sources.ooni = true;
-    weights.ooni = 35;
+    weights.ooni = 40;
   }
 
-  let iodaQuality = null;
-  if (ioda && ioda.hasData) {
-    iodaQuality = ioda.quality;
-    sources.ioda = true;
-    weights.ioda = 25;
-  }
+  // Foreign filtered sites (Instagram, Twitter, etc)
+  const foreignQuality = foreignTest.quality;
+  weights.foreign = 25;
 
-  let liveOk = 0, liveTotal = 0, pingSum = 0;
-  const pings = await Promise.all(GLOBAL_SITES.slice(0, 5).map(s => pingSite(s.url)));
-  for (const p of pings) {
-    liveTotal++;
-    if (p) { liveOk++; pingSum += p; }
-  }
-  const liveQuality = liveTotal > 0 ? Math.round((liveOk / liveTotal) * 100) : 0;
-  const avgPing = liveOk > 0 ? Math.round(pingSum / liveOk) : 500;
-  weights.live = 25;
+  // Global sites (Google, Cloudflare)
+  const globalQuality = globalTest.quality;
+  weights.global = 20;
 
-  let voidlyRisk = null, voidlyIncidents = 0;
-  if (voidlyData && typeof voidlyData.risk === "number") {
-    sources.voidly = true;
-    weights.voidly = 15;
-    voidlyRisk = Math.min(100, Math.round(voidlyData.risk));
-    voidlyIncidents = voidlyData.incidents || 0;
-  }
+  // Iranian sites (شبکه داخلی)
+  const iranianQuality = iranianTest.quality;
+  weights.iranian = 15;
 
+  // نرمال‌سازی وزن‌ها
   const wSum = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
   for (const k in weights) weights[k] = Math.round((weights[k] / wSum) * 100);
 
+  // محاسبه کیفیت نهایی
   let qualitySum = 0, qualityWeight = 0;
   if (ooniQuality !== null) { qualitySum += ooniQuality * weights.ooni; qualityWeight += weights.ooni; }
-  if (iodaQuality !== null) { qualitySum += iodaQuality * weights.ioda; qualityWeight += weights.ioda; }
-  qualitySum += liveQuality * weights.live; qualityWeight += weights.live;
-  if (voidlyRisk !== null) { qualitySum += (100 - voidlyRisk) * weights.voidly; qualityWeight += weights.voidly; }
+  qualitySum += foreignQuality * weights.foreign; qualityWeight += weights.foreign;
+  qualitySum += globalQuality * weights.global; qualityWeight += weights.global;
+  qualitySum += iranianQuality * weights.iranian; qualityWeight += weights.iranian;
 
   const quality = qualityWeight > 0 ? Math.round(qualitySum / qualityWeight) : 0;
   const blockPercent = 100 - quality;
-  const trafficPercent = 60 + Math.round(Math.random() * 20);
+
+  // ترافیک (محاسبه ترکیبی از تأخیر)
+  const avgPing = globalTest.avgPing || 500;
+  const trafficPercent = Math.max(20, Math.min(95, Math.round(100 - (avgPing / 5))));
+
+  // نرخ موفقیت کل
+  const totalOk = foreignTest.ok + globalTest.ok + iranianTest.ok;
+  const totalTests = foreignTest.total + globalTest.total + iranianTest.total;
+  const successRate = totalTests > 0 ? Math.round((totalOk / totalTests) * 100) : 0;
+
   const activeSources = Object.keys(sources).filter(k => sources[k]);
   const totalMs = (ooni && ooni.total) ? ooni.total : 0;
 
   return {
     quality, blockPercent, accessPercent: quality,
-    ooniQuality, iodaQuality, liveQuality,
-    voidlyRisk, voidlyIncidents,
-    trafficPercent, avgPing, successRate: liveQuality,
+    ooniQuality, foreignQuality, globalQuality, iranianQuality,
+    foreignStats: { ok: foreignTest.ok, total: foreignTest.total },
+    globalStats: { ok: globalTest.ok, total: globalTest.total },
+    iranianStats: { ok: iranianTest.ok, total: iranianTest.total },
+    trafficPercent, avgPing, successRate,
     totalMs, sources, weights, activeSources
   };
 }
@@ -591,9 +616,9 @@ async function saveSnapshot(STATS, date, env) {
       blockPercent: combined.blockPercent,
       trafficPercent: combined.trafficPercent,
       ooniQuality: combined.ooniQuality,
-      iodaQuality: combined.iodaQuality,
-      liveQuality: combined.liveQuality,
-      voidlyRisk: combined.voidlyRisk,
+      foreignQuality: combined.foreignQuality,
+      globalQuality: combined.globalQuality,
+      iranianQuality: combined.iranianQuality,
       ts: Date.now()
     };
     const existingIdx = snaps.findIndex(s => s.label === label);
@@ -631,6 +656,19 @@ async function getDailySnapshot(STATS, date) {
 
 async function ensureTodaySnapshot(STATS, env) {
   try { await saveSnapshot(STATS, new Date(), env); } catch(e) {}
+}
+
+// 🔥 AUTO-SNAPSHOT: هر ۱۰ دقیقه یکبار روی دستور کاربر
+async function maybeAutoSnapshot(STATS, env) {
+  if (!STATS) return;
+  try {
+    const lastTsRaw = await STATS.get("last_snap_ts");
+    const lastTs = lastTsRaw ? parseInt(lastTsRaw) : 0;
+    const now = Date.now();
+    if (now - lastTs < SNAP_AUTO_INTERVAL) return;
+    await saveSnapshot(STATS, new Date(), env);
+    await STATS.put("last_snap_ts", String(now), { expirationTtl: 86400 });
+  } catch(e) {}
 }
 
 // ================== 🎨 CHART RENDERING ==================
@@ -737,8 +775,8 @@ async function getShareDeltas(STATS, currentShares) {
   } catch(e) { return {}; }
 }
 
-// ================== 🎨 VISUAL HELPERS ==================
-function makeShareBar(share, maxShare = 40, width = 10) {
+// ================== 🎨 VISUAL ==================
+function makeShareBar(share, maxShare = 50, width = 10) {
   const filled = Math.round((share / maxShare) * width);
   const f = Math.min(width, Math.max(0, filled));
   return "█".repeat(f) + "░".repeat(width - f);
@@ -773,7 +811,7 @@ function buildSharesBlock(shares, deltas) {
   return out;
 }
 
-// ================== 🎨 MAIN CHART (طراحی جدید v14) ==================
+// ================== 🎨 MAIN CHART (طراحی جدید v15) ==================
 async function makeTodayChart(STATS, env, combinedInput) {
   const combined = combinedInput || await getCombinedData(env);
   let snapshots = await getSnapshots(STATS, CHART_POINTS);
@@ -789,9 +827,9 @@ async function makeTodayChart(STATS, env, combinedInput) {
       blockPercent: combined.blockPercent,
       trafficPercent: combined.trafficPercent,
       ooniQuality: combined.ooniQuality,
-      iodaQuality: combined.iodaQuality,
-      liveQuality: combined.liveQuality,
-      voidlyRisk: combined.voidlyRisk,
+      foreignQuality: combined.foreignQuality,
+      globalQuality: combined.globalQuality,
+      iranianQuality: combined.iranianQuality,
       ts: Date.now()
     }];
   }
@@ -800,7 +838,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
   const deltas = await getShareDeltas(STATS, shares);
 
   const labels = [], healthData = [], disruptionData = [], trafficData = [],
-        ooniData = [], iodaData = [], liveData = [], voidlyData = [];
+        ooniData = [], foreignData = [], globalData = [], iranianData = [];
 
   for (const s of snapshots) {
     labels.push(s.label);
@@ -809,12 +847,12 @@ async function makeTodayChart(STATS, env, combinedInput) {
       disruptionData.push(s.blockPercent ?? (100 - s.quality));
       trafficData.push(s.trafficPercent ?? null);
       ooniData.push(s.ooniQuality ?? null);
-      iodaData.push(s.iodaQuality ?? null);
-      liveData.push(s.liveQuality ?? null);
-      voidlyData.push(s.voidlyRisk != null ? (100 - s.voidlyRisk) : null);
+      foreignData.push(s.foreignQuality ?? null);
+      globalData.push(s.globalQuality ?? null);
+      iranianData.push(s.iranianQuality ?? null);
     } else {
       healthData.push(null); disruptionData.push(null); trafficData.push(null);
-      ooniData.push(null); iodaData.push(null); liveData.push(null); voidlyData.push(null);
+      ooniData.push(null); foreignData.push(null); globalData.push(null); iranianData.push(null);
     }
   }
 
@@ -836,29 +874,35 @@ async function makeTodayChart(STATS, env, combinedInput) {
     data: {
       labels,
       datasets: [
-        { label:"شاخص پایداری", data:healthData, borderColor:qualityColor, backgroundColor:qualityColor + "20",
-          borderWidth:4, tension:0.4, fill:true, yAxisID:"y-left", pointRadius:4,
-          pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor, pointBorderWidth:2.5,
-          spanGaps:true, order:1 },
-        { label:"OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[5,3],
-          borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3,
-          pointBackgroundColor:"#06b6d4", spanGaps:true, order:2 },
-        { label:"IODA", data:iodaData, borderColor:"#f59e0b", borderDash:[2,2],
-          borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3,
-          pointBackgroundColor:"#f59e0b", spanGaps:true, order:3 },
-        { label:"Live Ping", data:liveData, borderColor:"#a855f7", borderDash:[4,2],
-          borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3,
-          pointBackgroundColor:"#a855f7", spanGaps:true, order:4 },
-        { label:"Voidly", data:voidlyData, borderColor:"#ec4899", borderDash:[1,2],
-          borderWidth:1.8, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2,
-          pointBackgroundColor:"#ec4899", spanGaps:true, order:5 },
-        { label:"روند", data:trendData, borderColor:"#94a3b8", borderDash:[2,4],
-          borderWidth:1.5, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:0,
+        { label:"◆ شاخص نهایی", data:healthData, borderColor:qualityColor,
+          backgroundColor:qualityColor + "25", borderWidth:4.5, tension:0.4,
+          fill:true, yAxisID:"y-left", pointRadius:5, pointHoverRadius:9,
+          pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor,
+          pointBorderWidth:3, spanGaps:true, order:1 },
+        { label:"◉ OONI", data:ooniData, borderColor:"#06b6d4",
+          borderDash:[6,3], borderWidth:2.2, tension:0.4, fill:false,
+          yAxisID:"y-left", pointRadius:3, pointBackgroundColor:"#06b6d4",
+          spanGaps:true, order:3 },
+        { label:"◈ سایت‌های فیلتر", data:foreignData, borderColor:"#ef4444",
+          borderDash:[4,2], borderWidth:2.2, tension:0.4, fill:false,
+          yAxisID:"y-left", pointRadius:3, pointBackgroundColor:"#ef4444",
+          spanGaps:true, order:4 },
+        { label:"◈ سایت‌های جهانی", data:globalData, borderColor:"#22c55e",
+          borderDash:[3,3], borderWidth:2, tension:0.4, fill:false,
+          yAxisID:"y-left", pointRadius:3, pointBackgroundColor:"#22c55e",
+          spanGaps:true, order:5 },
+        { label:"◈ سایت‌های ایرانی", data:iranianData, borderColor:"#a855f7",
+          borderDash:[2,3], borderWidth:2, tension:0.4, fill:false,
+          yAxisID:"y-left", pointRadius:3, pointBackgroundColor:"#a855f7",
           spanGaps:true, order:6 },
-        { label:"ترافیک", data:trafficData, borderColor:"#0ea5e9",
-          backgroundColor:"rgba(14,165,233,0.12)", borderWidth:2.5, tension:0.4, fill:true,
-          yAxisID:"y-right", pointRadius:4, pointBackgroundColor:"#ffffff",
-          pointBorderColor:"#0ea5e9", pointBorderWidth:2, spanGaps:true, order:0 }
+        { label:"○ روند", data:trendData, borderColor:"#94a3b8",
+          borderDash:[1,4], borderWidth:1.5, tension:0.4, fill:false,
+          yAxisID:"y-left", pointRadius:0, spanGaps:true, order:7 },
+        { label:"■ ترافیک", data:trafficData, borderColor:"#0ea5e9",
+          backgroundColor:"rgba(14,165,233,0.12)", borderWidth:3, tension:0.4,
+          fill:true, yAxisID:"y-right", pointRadius:4,
+          pointBackgroundColor:"#ffffff", pointBorderColor:"#0ea5e9",
+          pointBorderWidth:2.5, spanGaps:true, order:0 }
       ]
     },
     options: {
@@ -866,26 +910,22 @@ async function makeTodayChart(STATS, env, combinedInput) {
         fontColor:"#ffffff", padding:24, fontStyle:"bold" },
       subtitle: { display:true,
         text: mood.emoji + "  " + mood.label + "  •  شاخص: " + combined.quality + "%  •  " + startTime + " تا " + endTime,
-        fontSize:15, fontColor:qualityColor, padding:14 },
+        fontSize:15, fontColor:qualityColor, padding:14, fontStyle:"normal" },
       legend: { position:"bottom", labels:{ fontColor:"#cbd5e1", fontSize:11,
-        usePointStyle:true, padding:16, boxWidth:11, boxHeight:11 } },
-      layout: { padding:{ top:18, bottom:20, left:24, right:24 } },
+        usePointStyle:true, padding:14, boxWidth:11, boxHeight:11 } },
+      layout: { padding:{ top:18, bottom:20, left:26, right:26 } },
       scales: {
-        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55 },
-          gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
+        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55, minRotation:30 },
+          gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false, drawTicks:false } }],
         yAxes: [
           { id:"y-left", position:"left",
-            ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:11,
-              stepSize:25, callback:v => v+"%" },
-            gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false },
-            scaleLabel:{ display:true, labelString:"پایداری",
-              fontColor:qualityColor, fontSize:12, fontStyle:"bold" } },
+            ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:11, stepSize:25, callback:v => v+"%" },
+            gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false, drawTicks:false },
+            scaleLabel:{ display:true, labelString:"پایداری", fontColor:qualityColor, fontSize:12, fontStyle:"bold" } },
           { id:"y-right", position:"right",
-            ticks:{ min:0, max:100, fontColor:"#0ea5e9", fontSize:11,
-              stepSize:25, callback:v => v+"%" },
+            ticks:{ min:0, max:100, fontColor:"#0ea5e9", fontSize:11, stepSize:25, callback:v => v+"%" },
             gridLines:{ display:false },
-            scaleLabel:{ display:true, labelString:"ترافیک",
-              fontColor:"#0ea5e9", fontSize:12, fontStyle:"bold" } }
+            scaleLabel:{ display:true, labelString:"ترافیک", fontColor:"#0ea5e9", fontSize:12, fontStyle:"bold" } }
         ]
       },
       elements: { line:{ capBezierPoints:true } }
@@ -894,7 +934,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
 
   const img = await getChartImageDark(config, "#0a1128");
 
-  const sourceIcons = { ooni:"◉", ioda:"◈", live:"◈", voidly:"◎" };
+  const sourceIcons = { ooni:"◉", foreign:"◈", global:"◈", iranian:"◈" };
   const activeSources = combined.activeSources.map(s => sourceIcons[s] + s.toUpperCase()).join("  ·  ");
   const realCount = healthData.filter(v => v !== null).length;
 
@@ -907,10 +947,10 @@ async function makeTodayChart(STATS, env, combinedInput) {
     buildSharesBlock(shares, deltas) +
     "📊 <b>منابع داده</b>\n" +
     (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n" : "") +
-    (combined.iodaQuality !== null ? "◈ IODA: <code>" + combined.iodaQuality + "%</code>\n" : "") +
-    "◈ Live: <code>" + combined.liveQuality + "%</code>\n" +
-    (combined.voidlyRisk !== null ? "◎ Voidly: <code>" + (100 - combined.voidlyRisk) + "%</code>\n" : "") +
-    "\n⚙️ <b>مشخصات فنی</b>\n" +
+    "◈ سایت‌های فیلتر: <code>" + combined.foreignQuality + "%</code>  <i>(" + combined.foreignStats.ok + "/" + combined.foreignStats.total + ")</i>\n" +
+    "◈ سایت‌های جهانی: <code>" + combined.globalQuality + "%</code>  <i>(" + combined.globalStats.ok + "/" + combined.globalStats.total + ")</i>\n" +
+    "◈ سایت‌های ایرانی: <code>" + combined.iranianQuality + "%</code>  <i>(" + combined.iranianStats.ok + "/" + combined.iranianStats.total + ")</i>\n\n" +
+    "⚙️ <b>مشخصات فنی</b>\n" +
     "📶 پینگ: <code>" + combined.avgPing + "ms</code>  •  ✅ <code>" + combined.successRate + "%</code>\n" +
     "🌊 ترافیک: <code>" + combined.trafficPercent + "%</code>\n\n" +
     makeBar(combined.quality / 10) + "\n\n" +
@@ -919,12 +959,12 @@ async function makeTodayChart(STATS, env, combinedInput) {
     "📡 " + activeSources + "\n" +
     "🕒 " + getIranTimeFull() + "\n" +
     "━━━━━━━━━━━━━━━━━━━\n" +
-    "🛰 @Radarinternetiranbot";
+    "🛰 @Radarineternetiranbot";
 
   return { image: img, caption };
 }
 
-// ================== 📊 CHART: سهم اپراتورها ==================
+// ================== 📊 سهم اپراتورها ==================
 async function makeOperatorSharesChart(STATS, env) {
   const shares = await getHourlyOperatorShares(STATS, env, 8);
   if (!shares || shares.length === 0) return { image:null, caption:"❌ داده کافی نیست." };
@@ -940,30 +980,18 @@ async function makeOperatorSharesChart(STATS, env) {
 
   const img = await getChartImageDark({
     type: "horizontalBar",
-    data: {
-      labels,
-      datasets: [{
-        label: "سهم %",
-        data,
-        backgroundColor: colors,
-        borderColor: "#ffffff",
-        borderWidth: 1
-      }]
-    },
+    data: { labels, datasets: [{ label:"سهم %", data, backgroundColor:colors, borderColor:"#ffffff", borderWidth:1 }] },
     options: {
       title: { display:true, text:"📊 سهم پهنای باند اپراتورها",
         fontSize:22, fontColor:"#f8fafc", padding:22, fontStyle:"bold" },
       legend: { display:false },
       scales: {
-        xAxes: [{ ticks:{ beginAtZero:true, max:50, fontColor:"#cbd5e1",
-          fontSize:12, callback:v => v+"%" },
+        xAxes: [{ ticks:{ beginAtZero:true, max:50, fontColor:"#cbd5e1", fontSize:12, callback:v => v+"%" },
           gridLines:{ color:"rgba(100,116,139,0.15)" } }],
-        yAxes: [{ ticks:{ fontColor:"#f8fafc", fontSize:13 },
-          gridLines:{ display:false } }]
+        yAxes: [{ ticks:{ fontColor:"#f8fafc", fontSize:13 }, gridLines:{ display:false } }]
       }
     }
   }, "#0a1128");
-
   return { image: img, caption: "📊 <b>سهم پهنای باند اپراتورها</b>\n\n" + getDateBoth() };
 }
 
@@ -1095,28 +1123,18 @@ async function makeMapChart() {
   return { image:img, caption:"🗺 <b>نقشه حرارتی</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n🚫 مسدود: <code>" + p.blockPercent + "%</code>\n✅ آزاد: <code>" + p.accessPercent + "%</code>" };
 }
 
-// ============================================================
-// 🎉 سیستم اعلان آپدیت
-// ============================================================
+// ================== 🎉 UPDATE SYSTEM ==================
 function buildUpdateMessage(version) {
   const info = CHANGELOG[version];
-  if (!info) {
-    return "🎉 <b>ربات آپدیت شد!</b>\n\n📦 نسخه: <code>" + version + "</code>\n\n🔹 /help";
-  }
+  if (!info) return "🎉 <b>ربات آپدیت شد!</b>\n\n📦 نسخه: <code>" + version + "</code>";
   let out = "🎉 <b>ربات آپدیت شد!</b>\n\n";
   out += "╔══════════════════════╗\n";
   out += "   " + info.emoji + " <b>نسخه " + version + "</b>\n";
   out += "   <i>" + info.title + "</i>\n";
   out += "╚══════════════════════╝\n\n";
-  out += "📅 تاریخ انتشار: <code>" + info.date + "</code>\n\n";
-  out += "✨ <b>تغییرات این نسخه:</b>\n";
-  out += "━━━━━━━━━━━━━━━━━━━\n\n";
-  info.changes.forEach((c, i) => {
-    out += "<b>" + (i + 1) + ".</b> " + c.icon + " " + c.text + "\n\n";
-  });
-  out += "━━━━━━━━━━━━━━━━━━━\n";
-  out += "🎯 <b>پیشنهاد:</b> /help برای مشاهده همه امکانات\n\n";
-  out += "🛰 @Radarinternetiranbot";
+  out += "📅 <code>" + info.date + "</code>\n\n✨ <b>تغییرات:</b>\n━━━━━━━━━━━━━━━━━━━\n\n";
+  info.changes.forEach((c, i) => { out += "<b>" + (i + 1) + ".</b> " + c.icon + " " + c.text + "\n\n"; });
+  out += "━━━━━━━━━━━━━━━━━━━\n🎯 /help\n\n🛰 @Radarineternetiranbot";
   return out;
 }
 
@@ -1171,33 +1189,24 @@ async function postUpdateToChannel(STATS, TG) {
     caption += "╔══════════════════════╗\n";
     caption += "   " + info.emoji + " <b>نسخه " + CURRENT_VERSION + "</b>\n";
     caption += "╚══════════════════════╝\n\n";
-    caption += "<i>" + info.title + "</i>\n\n";
-    caption += "━━━━━━━━━━━━━━━━━━━\n\n";
+    caption += "<i>" + info.title + "</i>\n\n━━━━━━━━━━━━━━━━━━━\n\n";
     info.changes.forEach(c => { caption += c.icon + " " + c.text + "\n\n"; });
-    caption += "━━━━━━━━━━━━━━━━━━━\n\n";
-    caption += "🚀 <b>همین حالا امتحان کن:</b>\n";
-    caption += "<code>/today</code> — نمودار جدید\n";
-    caption += "<code>/shares</code> — سهم اپراتورها\n";
-    caption += "<code>/help</code> — راهنما\n\n";
-    caption += "🛰 @Radarinternetiranbot";
+    caption += "━━━━━━━━━━━━━━━━━━━\n\n🚀 <code>/today</code>  •  <code>/help</code>\n\n🛰 @Radarineternetiranbot";
     const chats = await getTrackedChats(STATS);
-    for (const ch of chats) {
-      try { await sendMessage(TG, ch, caption, { parse_mode:"HTML" }); } catch(e) {}
-    }
+    for (const ch of chats) { try { await sendMessage(TG, ch, caption, { parse_mode:"HTML" }); } catch(e) {} }
   } catch(e) {}
 }
 
 // ========== END OF PART 1 ==========// ============================================================
-// 🛰 RADAR INTERNET IRAN — v14.0.0
+// 🛰 RADAR INTERNET IRAN — v15.0.0
 // PART 2/2 : Handlers + Channel + API + Worker Export
 // ============================================================
 // ✅ ویژگی‌ها:
-//   • /status و /today سریع (بدون makeReport)
-//   • دستور جدید /shares (نمودار سهم اپراتورها)
-//   • دستور /sendchannel (ارسال دستی)
-//   • Endpoint جدید /shares و /test-channel
+//   • Auto-Snapshot روی هر دستور کاربر
+//   • /status و /today سریع
+//   • دستور جدید /shares
 //   • معافیت مالک از بررسی عضویت
-//   • ارسال خودکار به کانال‌ها و گروه
+//   • ارسال خودکار به کانال + گروه
 // ============================================================
 
 // ============================================================
@@ -1226,7 +1235,7 @@ async function makeReport(mode, env, combinedInput) {
     if (t) { irOk++; irList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
     else irList += "  ❌ " + s.name + "\n";
   }
-  for (const s of GLOBAL_SITES) {
+  for (const s of ALL_GLOBAL_SITES) {
     const t = await pingSite(s.url);
     if (t) { globalOk++; globalList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
     else globalList += "  ❌ " + s.name + "\n";
@@ -1240,10 +1249,10 @@ async function makeReport(mode, env, combinedInput) {
   out += "  " + makeBar(combined.quality / 10) + "\n\n";
 
   out += "┣━ 📡 <b>منابع داده</b>\n\n";
-  if (combined.sources.ooni)   out += "  ◉ <b>OONI (" + combined.weights.ooni + "٪):</b> <code>" + combined.ooniQuality + "%</code>\n";
-  if (combined.sources.ioda)   out += "  ◈ <b>IODA (" + combined.weights.ioda + "٪):</b> <code>" + combined.iodaQuality + "%</code>\n";
-  if (combined.sources.live)   out += "  ◈ <b>Live Ping (" + combined.weights.live + "٪):</b> <code>" + combined.liveQuality + "%</code>\n";
-  if (combined.sources.voidly) out += "  ◎ <b>Voidly (" + combined.weights.voidly + "٪):</b> <code>" + (100 - combined.voidlyRisk) + "%</code>\n";
+  if (combined.ooniQuality !== null) out += "  ◉ <b>OONI (" + combined.weights.ooni + "٪):</b> <code>" + combined.ooniQuality + "%</code>\n";
+  out += "  ◈ <b>سایت‌های فیلتر (" + combined.weights.foreign + "٪):</b> <code>" + combined.foreignQuality + "%</code>\n";
+  out += "  ◈ <b>سایت‌های جهانی (" + combined.weights.global + "٪):</b> <code>" + combined.globalQuality + "%</code>\n";
+  out += "  ◈ <b>سایت‌های ایرانی (" + combined.weights.iranian + "٪):</b> <code>" + combined.iranianQuality + "%</code>\n";
   out += "\n";
 
   out += "┣━ 🚦 <b>جزئیات فنی</b>\n\n";
@@ -1255,7 +1264,7 @@ async function makeReport(mode, env, combinedInput) {
 
   out += "┣━ 🌐 <b>دسترسی سایت‌ها</b>\n\n";
   out += "  🇮🇷 ایرانی (" + irOk + "/" + IR_SITES.length + ")\n" + irList + "\n";
-  out += "  🌍 خارجی (" + globalOk + "/" + GLOBAL_SITES.length + ")\n" + globalList + "\n";
+  out += "  🌍 خارجی (" + globalOk + "/" + ALL_GLOBAL_SITES.length + ")\n" + globalList + "\n";
 
   if (ops.length > 0) {
     out += "┣━ 📡 <b>ضعیف‌ترین اپراتورها</b>\n\n";
@@ -1284,8 +1293,8 @@ async function makeWorkReport(env) {
   return "⚡ <b>خلاصه وضعیت</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n" +
     "✅ پایداری: <code>" + combined.quality + "%</code>\n" +
     (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n" : "") +
-    (combined.iodaQuality !== null ? "◈ IODA: <code>" + combined.iodaQuality + "%</code>\n" : "") +
-    "◈ Live: <code>" + combined.liveQuality + "%</code>\n" +
+    "◈ فیلتر: <code>" + combined.foreignQuality + "%</code>\n" +
+    "◈ جهانی: <code>" + combined.globalQuality + "%</code>\n" +
     "📶 پینگ: <code>" + combined.avgPing + "ms</code>\n\n" +
     makeBar(combined.quality / 10) + "\n\n🕒 " + getIranTimeFull();
 }
@@ -1296,7 +1305,7 @@ async function makeScoreReport(env) {
   for (const s of IR_SITES) if (await pingSite(s.url)) irOk++;
   const irScore = (irOk / IR_SITES.length) * 100;
   let globalPing = 0, globalCount = 0;
-  for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalPing += t; globalCount++; } }
+  for (const s of ALL_GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalPing += t; globalCount++; } }
   const avgPing = globalCount > 0 ? globalPing / globalCount : 500;
   const pingScore = Math.max(0, 100 - (avgPing / 5));
   const score = Math.round(combined.quality * 0.5 + irScore * 0.25 + pingScore * 0.25);
@@ -1320,14 +1329,14 @@ async function makePingReport() {
     if (t) { irOk++; irList += "  🟢 " + s.name + "  <code>" + t + "ms</code>\n"; }
     else irList += "  🔴 " + s.name + "\n";
   }
-  for (const s of GLOBAL_SITES) {
+  for (const s of ALL_GLOBAL_SITES) {
     const t = await pingSite(s.url);
     if (t) { globalOk++; globalList += "  🟢 " + s.name + "  <code>" + t + "ms</code>\n"; }
     else globalList += "  🔴 " + s.name + "\n";
   }
   return "📡 <b>پینگ سرورها</b>\n\n━━━━━━━━━━━━━━━━━━━\n" +
     "🇮🇷 <b>ایرانی</b>  (" + irOk + "/" + IR_SITES.length + ")\n\n" + irList + "\n" +
-    "🌍 <b>جهانی</b>  (" + globalOk + "/" + GLOBAL_SITES.length + ")\n\n" + globalList +
+    "🌍 <b>جهانی</b>  (" + globalOk + "/" + ALL_GLOBAL_SITES.length + ")\n\n" + globalList +
     "━━━━━━━━━━━━━━━━━━━\n🕒 " + getIranTime();
 }
 
@@ -1371,11 +1380,7 @@ async function makeSitesReport() {
 async function makeCompareReport() {
   const p = await getOONIData();
   if (!p.hasData) {
-    return "⚠️ <b>داده OONI هنوز ثبت نشده</b>\n\n" +
-      "📅 تاریخ: <code>" + getToday() + "</code>\n" +
-      "🕒 زمان: <code>" + getIranTime() + "</code>\n\n" +
-      "💡 معمولاً اوایل روز داده کمتره.\n" +
-      "چند ساعت دیگه دوباره امتحان کن.";
+    return "⚠️ <b>داده OONI هنوز ثبت نشده</b>\n\n📅 <code>" + getToday() + "</code>\n🕒 <code>" + getIranTime() + "</code>\n\n💡 چند ساعت دیگه دوباره امتحان کن.";
   }
   let ops = [];
   for (const [asn, d] of Object.entries(p.asnData)) {
@@ -1405,7 +1410,9 @@ async function makeVsOperatorReport(op1, op2) {
   if (!p.hasData) return "⚠️ داده OONI موجود نیست.";
   function findASN(q) {
     const s = q.toLowerCase();
-    for (const [n, code] of Object.entries(ISP_MAP)) if (s.includes(n) || n.includes(s)) return code;
+    for (const [code, name] of Object.entries(ISP_MAP)) {
+      if (name.toLowerCase().includes(s) || s.includes(name.toLowerCase())) return code;
+    }
     return null;
   }
   const asn1 = findASN(op1), asn2 = findASN(op2);
@@ -1446,7 +1453,9 @@ async function makeTopReport() {
 async function makeISPReport(query) {
   const q = query.toLowerCase();
   let asn = null;
-  for (const [name, code] of Object.entries(ISP_MAP)) if (q.includes(name) || name.includes(q)) { asn = code; break; }
+  for (const [code, name] of Object.entries(ISP_MAP)) {
+    if (name.toLowerCase().includes(q) || q.includes(name.toLowerCase())) { asn = code; break; }
+  }
   if (!asn) return "❌ ISP پیدا نشد.";
   const p = await getOONIData();
   const d = p.asnData[asn];
@@ -1571,7 +1580,7 @@ async function makeYearAgoReport() {
 }
 
 // ============================================================
-// 📢 ارسال گزارش کامل به کانال‌ها
+// 📢 ارسال به کانال‌ها
 // ============================================================
 async function sendChannelReport(TG, STATS, env) {
   const report = await makeReport("full", env);
@@ -1579,8 +1588,7 @@ async function sendChannelReport(TG, STATS, env) {
   for (const ch of chats) {
     try {
       await fetch(TG + "/sendMessage", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method:"POST", headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ chat_id:ch, text:report, parse_mode:"HTML" })
       });
     } catch(e) {}
@@ -1588,7 +1596,7 @@ async function sendChannelReport(TG, STATS, env) {
 }
 
 // ============================================================
-// 📡 ارسال/آپدیت کانال + گروه (نمودار اصلی + سهم اپراتورها)
+// 📡 ارسال/آپدیت کانال + گروه
 // ============================================================
 async function sendOrUpdateChannelStatus(TG, STATS, env) {
   try {
@@ -1598,7 +1606,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
     const deltas = await getShareDeltas(STATS, shares);
 
     const labels = [], healthData = [], disruptionData = [], trafficData = [],
-          ooniData = [], iodaData = [], liveData = [], voidlyData = [];
+          ooniData = [], foreignData = [], globalData = [], iranianData = [];
 
     for (const s of snapshots) {
       labels.push(s.label);
@@ -1607,12 +1615,12 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
         disruptionData.push(s.blockPercent ?? (100 - s.quality));
         trafficData.push(s.trafficPercent ?? null);
         ooniData.push(s.ooniQuality ?? null);
-        iodaData.push(s.iodaQuality ?? null);
-        liveData.push(s.liveQuality ?? null);
-        voidlyData.push(s.voidlyRisk != null ? (100 - s.voidlyRisk) : null);
+        foreignData.push(s.foreignQuality ?? null);
+        globalData.push(s.globalQuality ?? null);
+        iranianData.push(s.iranianQuality ?? null);
       } else {
         healthData.push(null); disruptionData.push(null); trafficData.push(null);
-        ooniData.push(null); iodaData.push(null); liveData.push(null); voidlyData.push(null);
+        ooniData.push(null); foreignData.push(null); globalData.push(null); iranianData.push(null);
       }
     }
 
@@ -1634,40 +1642,34 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
       const config = {
         type: "line",
         data: { labels, datasets: [
-          { label:"◆ پایداری", data:healthData, borderColor:qualityColor, backgroundColor:qualityColor + "20",
-            borderWidth:4, tension:0.4, fill:true, yAxisID:"y-left", pointRadius:4,
+          { label:"◆ شاخص نهایی", data:healthData, borderColor:qualityColor, backgroundColor:qualityColor + "25",
+            borderWidth:4.5, tension:0.4, fill:true, yAxisID:"y-left", pointRadius:4,
             pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor, pointBorderWidth:2.5, spanGaps:true },
-          { label:"◉ OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[5,3],
-            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3, spanGaps:true },
-          { label:"◈ IODA", data:iodaData, borderColor:"#f59e0b", borderDash:[2,2],
-            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3, spanGaps:true },
-          { label:"◈ Live", data:liveData, borderColor:"#a855f7", borderDash:[4,2],
-            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:3, spanGaps:true },
-          { label:"◎ Voidly", data:voidlyData, borderColor:"#ec4899", borderDash:[1,2],
-            borderWidth:1.8, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
-          { label:"○ روند", data:trendData, borderColor:"#94a3b8", borderDash:[2,4],
+          { label:"◉ OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[6,3],
+            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
+          { label:"◈ فیلتر", data:foreignData, borderColor:"#ef4444", borderDash:[4,2],
+            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
+          { label:"◈ جهانی", data:globalData, borderColor:"#22c55e", borderDash:[3,3],
+            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
+          { label:"◈ ایرانی", data:iranianData, borderColor:"#a855f7", borderDash:[2,3],
+            borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
+          { label:"○ روند", data:trendData, borderColor:"#94a3b8", borderDash:[1,4],
             borderWidth:1.5, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true },
           { label:"■ ترافیک", data:trafficData, borderColor:"#0ea5e9", backgroundColor:"rgba(14,165,233,0.12)",
-            borderWidth:2.5, tension:0.4, fill:true, yAxisID:"y-right", pointRadius:4,
-            pointBackgroundColor:"#ffffff", pointBorderColor:"#0ea5e9", pointBorderWidth:2, spanGaps:true }
+            borderWidth:3, tension:0.4, fill:true, yAxisID:"y-right", pointRadius:4,
+            pointBackgroundColor:"#ffffff", pointBorderColor:"#0ea5e9", pointBorderWidth:2.5, spanGaps:true }
         ]},
         options: {
-          title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:26,
-            fontColor:"#ffffff", padding:22, fontStyle:"bold" },
-          subtitle: { display:true,
-            text: mood.emoji + "  " + mood.label + "  •  شاخص: " + combined.quality + "%  •  " + startTime + " تا " + endTime,
+          title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:26, fontColor:"#ffffff", padding:22, fontStyle:"bold" },
+          subtitle: { display:true, text: mood.emoji + "  " + mood.label + "  •  شاخص: " + combined.quality + "%  •  " + startTime + " تا " + endTime,
             fontSize:15, fontColor:qualityColor, padding:14 },
-          legend: { position:"bottom", labels:{ fontColor:"#cbd5e1", fontSize:11,
-            usePointStyle:true, padding:16, boxWidth:11, boxHeight:11 } },
+          legend: { position:"bottom", labels:{ fontColor:"#cbd5e1", fontSize:10, usePointStyle:true, padding:14, boxWidth:10 } },
           scales: {
-            xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55 },
-              gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
+            xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55 }, gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
             yAxes: [
-              { id:"y-left", position:"left",
-                ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:11, callback:v => v+"%" },
+              { id:"y-left", position:"left", ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:11, callback:v => v+"%" },
                 gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } },
-              { id:"y-right", position:"right",
-                ticks:{ min:0, max:100, fontColor:"#0ea5e9", fontSize:11, callback:v => v+"%" },
+              { id:"y-right", position:"right", ticks:{ min:0, max:100, fontColor:"#0ea5e9", fontSize:11, callback:v => v+"%" },
                 gridLines:{ display:false } }
             ]
           },
@@ -1686,14 +1688,11 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
           pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor, pointBorderWidth:3
         }]},
         options: {
-          title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:26,
-            fontColor:"#ffffff", padding:22, fontStyle:"bold" },
-          subtitle: { display:true, text:mood.emoji + "  " + mood.label + "  •  شاخص: " + combined.quality + "%",
-            fontSize:16, fontColor:qualityColor, padding:16 },
+          title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:26, fontColor:"#ffffff", padding:22, fontStyle:"bold" },
+          subtitle: { display:true, text:mood.emoji + "  " + mood.label + "  •  شاخص: " + combined.quality + "%", fontSize:16, fontColor:qualityColor, padding:16 },
           legend: { display:false },
           scales: {
-            yAxes: [{ ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:12, callback:v => v+"%" },
-              gridLines:{ color:"rgba(100,116,139,0.08)" } }],
+            yAxes: [{ ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:12, callback:v => v+"%" }, gridLines:{ color:"rgba(100,116,139,0.08)" } }],
             xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:12 }, gridLines:{ display:false } }]
           }
         }
@@ -1702,7 +1701,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
 
     const startTime = labels[0] || "—", endTime = labels[labels.length - 1] || "—";
     const realCount = healthData.filter(v => v !== null).length;
-    const sourceIcons = { ooni:"◉", ioda:"◈", live:"◈", voidly:"◎" };
+    const sourceIcons = { ooni:"◉", foreign:"◈", global:"◈", iranian:"◈" };
     const activeSources = combined.activeSources.map(s => sourceIcons[s] + s.toUpperCase()).join("  ·  ");
 
     const caption =
@@ -1715,9 +1714,9 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
       buildSharesBlock(shares, deltas) +
       "📊 <b>منابع</b>\n" +
       (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n" : "") +
-      (combined.iodaQuality !== null ? "◈ IODA: <code>" + combined.iodaQuality + "%</code>\n" : "") +
-      "◈ Live: <code>" + combined.liveQuality + "%</code>\n" +
-      (combined.voidlyRisk !== null ? "◎ Voidly: <code>" + (100 - combined.voidlyRisk) + "%</code>\n" : "") +
+      "◈ فیلتر: <code>" + combined.foreignQuality + "%</code>\n" +
+      "◈ جهانی: <code>" + combined.globalQuality + "%</code>\n" +
+      "◈ ایرانی: <code>" + combined.iranianQuality + "%</code>\n" +
       "\n📶 پینگ: <code>" + combined.avgPing + "ms</code>  ✅ " + combined.successRate + "%\n" +
       "🌊 ترافیک: <code>" + combined.trafficPercent + "%</code>\n\n" +
       makeBar(combined.quality / 10) + "\n\n" +
@@ -1726,7 +1725,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
       "📡 " + activeSources + "\n" +
       "🕒 " + getIranTimeFull() + "\n" +
       "━━━━━━━━━━━━━━━━━━━\n" +
-      "📚 /help  •  🛰 @Radarinternetiranbot";
+      "📚 /help  •  🛰 @Radarineternetiranbot";
 
     const chats = await getTrackedChats(STATS);
     console.log("Sending status to " + chats.length + " chats");
@@ -1736,8 +1735,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
         const lastMsgId = STATS ? await STATS.get("msg_id:" + ch) : null;
         if (lastMsgId) {
           await fetch(TG + "/deleteMessage", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            method:"POST", headers:{ "Content-Type":"application/json" },
             body: JSON.stringify({ chat_id:ch, message_id: parseInt(lastMsgId) })
           }).catch(() => {});
         }
@@ -1761,8 +1759,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
         }
         if (!success) {
           const r = await fetch(TG + "/sendMessage", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            method:"POST", headers:{ "Content-Type":"application/json" },
             body: JSON.stringify({ chat_id:ch, text:caption, parse_mode:"HTML" })
           });
           const d = await r.json();
@@ -1809,7 +1806,9 @@ async function handleSubscribe(STATS, userId, ispQuery, TG, chatId) {
   try {
     const q = ispQuery.toLowerCase();
     let asn = null, name = null;
-    for (const [n, code] of Object.entries(ISP_MAP)) if (q.includes(n) || n.includes(q)) { asn = code; name = n; break; }
+    for (const [code, n] of Object.entries(ISP_MAP)) {
+      if (n.toLowerCase().includes(q) || q.includes(n.toLowerCase())) { asn = code; name = n; break; }
+    }
     if (!asn) return await sendMessage(TG, chatId, "❌ ISP پیدا نشد.\n💡 <code>/subscribe ایرانسل</code>", { parse_mode:"HTML" });
     const key = "sub:" + userId;
     const raw = await STATS.get(key);
@@ -1817,7 +1816,7 @@ async function handleSubscribe(STATS, userId, ispQuery, TG, chatId) {
     if (subs.includes(asn)) return await sendMessage(TG, chatId, "ℹ️ قبلاً مشترک هستی.", { parse_mode:"HTML" });
     subs.push(asn);
     await STATS.put(key, JSON.stringify(subs));
-    await sendMessage(TG, chatId, "🔔 <b>اشتراک فعال!</b>\n\n📡 " + asnName(asn) + "\n\n🔕 لغو: <code>/unsubscribe " + asnName(asn) + "</code>", { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "🔔 <b>اشتراک فعال!</b>\n\n📡 " + name + "\n\n🔕 لغو: <code>/unsubscribe " + name + "</code>", { parse_mode:"HTML" });
   } catch(e) {}
 }
 
@@ -1825,7 +1824,9 @@ async function handleUnsubscribe(STATS, userId, ispQuery, TG, chatId) {
   try {
     const q = ispQuery.toLowerCase();
     let asn = null;
-    for (const [n, code] of Object.entries(ISP_MAP)) if (q.includes(n) || q.includes(code)) { asn = code; break; }
+    for (const [code, n] of Object.entries(ISP_MAP)) {
+      if (n.toLowerCase().includes(q) || q.includes(n.toLowerCase())) { asn = code; break; }
+    }
     if (!asn) return;
     const key = "sub:" + userId;
     const raw = await STATS.get(key);
@@ -1888,8 +1889,7 @@ async function postWeeklyLeaderboard(TG, STATS) {
         const r = await sendMessage(TG, ch, out, { parse_mode:"HTML" });
         if (r && r.ok && r.result) {
           await fetch(TG + "/pinChatMessage", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            method:"POST", headers:{ "Content-Type":"application/json" },
             body: JSON.stringify({ chat_id:ch, message_id:r.result.message_id, disable_notification:false })
           }).catch(() => {});
           if (ch === CH1) await STATS.put(WEEKLY_PIN_MSG_KEY, String(r.result.message_id));
@@ -1911,8 +1911,7 @@ async function unpinWeeklyLeaderboard(TG, STATS) {
       const chats = await getTrackedChats(STATS);
       for (const ch of chats) {
         await fetch(TG + "/unpinChatMessage", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
+          method:"POST", headers:{ "Content-Type":"application/json" },
           body: JSON.stringify({ chat_id:ch })
         }).catch(() => {});
       }
@@ -1962,8 +1961,7 @@ async function checkMember(TG, userId, channel) {
       const s = d.result.status;
       return s === "member" || s === "administrator" || s === "creator";
     }
-    console.log("checkMember fail for " + channel + ": " + (d.description || "?"));
-  } catch(e) { console.log("checkMember err: " + e.message); }
+  } catch(e) {}
   return false;
 }
 
@@ -2026,13 +2024,12 @@ async function handleUpdate(update, TG, STATS, env) {
         await answerCallback(TG, cq.id, "✅ خوش آمدید!", false);
         if (cq.message) {
           await fetch(TG + "/deleteMessage", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            method:"POST", headers:{ "Content-Type":"application/json" },
             body: JSON.stringify({ chat_id:chatId, message_id:cq.message.message_id })
           }).catch(() => {});
         }
         await trackUser(STATS, userId, userName);
-        await ensureTodaySnapshot(STATS, env);
+        await maybeAutoSnapshot(STATS, env);
         await checkVersion(STATS, userId, TG, chatId);
         await sendUserPanel(TG, chatId, userId, userName, STATS);
         return;
@@ -2053,13 +2050,12 @@ async function handleUpdate(update, TG, STATS, env) {
       await answerCallback(TG, cq.id, "✅ تایید شد!", false);
       if (cq.message) {
         await fetch(TG + "/deleteMessage", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
+          method:"POST", headers:{ "Content-Type":"application/json" },
           body: JSON.stringify({ chat_id:chatId, message_id:cq.message.message_id })
         }).catch(() => {});
       }
       await trackUser(STATS, userId, userName);
-      await ensureTodaySnapshot(STATS, env);
+      await maybeAutoSnapshot(STATS, env);
       await checkVersion(STATS, userId, TG, chatId);
       await sendUserPanel(TG, chatId, userId, userName, STATS);
       return;
@@ -2116,6 +2112,11 @@ async function handleUpdate(update, TG, STATS, env) {
   await trackUser(STATS, userId, userName);
   await checkVersion(STATS, userId, TG, chatId);
 
+  // 🔥 AUTO-SNAPSHOT: اگه ۱۰ دقیقه از آخری گذشته باشه، خودکار ثبت میکنه
+  if (text.startsWith("/")) {
+    await maybeAutoSnapshot(STATS, env);
+  }
+
   // Streak
   if (text === "/start" || text === "/status" || text === "/today" || text === "/spin") {
     const streak = await checkStreak(STATS, userId);
@@ -2154,9 +2155,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/reset-version" && isOwner(userId)) {
     await STATS.delete("v:" + userId);
-    await sendMessage(TG, chatId,
-      "🔄 <b>نسخه شما ریست شد!</b>\n\nحالا /start رو بزن → پیام آپدیت v" + CURRENT_VERSION + " باید بیاد ✅",
-      { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "🔄 <b>نسخه ریست شد!</b>\n\nحالا /start بزن → پیام آپدیت v" + CURRENT_VERSION + " باید بیاد ✅", { parse_mode:"HTML" });
   }
   else if (text === "/debugsnap" && isOwner(userId)) {
     const today = getToday();
@@ -2165,7 +2164,6 @@ async function handleUpdate(update, TG, STATS, env) {
     const sharesRaw = await STATS.get("opshare:latest");
     let out = "🔍 <b>Debug Snapshots</b>\n\n";
     out += "📅 امروز: <code>" + today + "</code>\n";
-    out += "🔑 کلید: <code>snap:" + today + "</code>\n";
     out += "📊 تعداد: <b>" + snaps.length + "</b>\n";
     out += "📈 آپدیت سهم: " + (sharesRaw ? "✅" : "❌") + "\n\n";
     if (snaps.length > 0) {
@@ -2182,29 +2180,24 @@ async function handleUpdate(update, TG, STATS, env) {
         const d = await r.json();
         if (d.ok && d.result) {
           lines.push("✅ <b>" + name + "</b>\n   📛 " + (d.result.title || "—") +
-            "\n   🔗 @" + (d.result.username || "—") +
-            "\n   📦 نوع: " + d.result.type);
+            "\n   🔗 @" + (d.result.username || "—") + "\n   📦 " + d.result.type);
         } else {
           lines.push("❌ <b>" + name + "</b>\n   🔗 <code>" + ch + "</code>\n   ⚠️ " + (d.description || "?"));
         }
-      } catch(e) {
-        lines.push("❌ <b>" + name + "</b>\n   " + e.message);
-      }
+      } catch(e) { lines.push("❌ <b>" + name + "</b>\n   " + e.message); }
     }
     await sendMessage(TG, chatId,
       "🧪 <b>تست گروه‌ها و کانال‌ها</b>\n\n" + lines.join("\n\n") +
-      "\n\n━━━━━━━━━━━━━━━━━━━\n🤖 ربات: <code>@" + BOT_USERNAME + "</code>\n" +
-      "📌 نسخه: <code>" + CURRENT_VERSION + "</code>",
+      "\n\n━━━━━━━━━━━━━━━━━━━\n🤖 <code>@" + BOT_USERNAME + "</code>\n📌 <code>" + CURRENT_VERSION + "</code>",
       { parse_mode:"HTML" });
   }
   else if (text === "/sendchannel" && isOwner(userId)) {
-    await sendMessage(TG, chatId, "📤 <i>در حال ارسال به کانال و گروه‌ها...</i>", { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "📤 <i>در حال ارسال...</i>", { parse_mode:"HTML" });
     try {
       await sendOrUpdateChannelStatus(TG, STATS, env);
       const chats = await getTrackedChats(STATS);
       await sendMessage(TG, chatId,
-        "✅ <b>ارسال انجام شد!</b>\n\n" +
-        "📡 تعداد مقصد: <b>" + chats.length + "</b>\n\n" +
+        "✅ <b>ارسال انجام شد!</b>\n\n📡 " + chats.length + " مقصد\n\n" +
         chats.map(c => " • <code>" + c + "</code>").join("\n"),
         { parse_mode:"HTML" });
     } catch(e) {
@@ -2213,7 +2206,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/shares") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📊 <i>در حال ساخت نمودار...</i>", { parse_mode:"HTML" });
+    await sendMessage(TG, chatId, "📊 <i>در حال ساخت...</i>", { parse_mode:"HTML" });
     try {
       const c = await makeOperatorSharesChart(STATS, env);
       if (c.image) await sendPhoto(TG, chatId, c.image, c.caption);
@@ -2292,8 +2285,8 @@ async function handleUpdate(update, TG, STATS, env) {
     m += buildSharesBlock(shares, deltas);
     m += "◆ شاخص: <code>" + combined.quality + "%</code>\n";
     if (combined.ooniQuality !== null) m += "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n";
-    if (combined.iodaQuality !== null) m += "◈ IODA: <code>" + combined.iodaQuality + "%</code>\n";
-    m += "◈ Live: <code>" + combined.liveQuality + "%</code>\n";
+    m += "◈ فیلتر: <code>" + combined.foreignQuality + "%</code>\n";
+    m += "◈ جهانی: <code>" + combined.globalQuality + "%</code>\n";
     m += "📶 پینگ: <code>" + combined.avgPing + "ms</code>\n\n" + makeBar(combined.quality / 10) + "\n\n🕒 " + getIranTimeFull();
     await sendMessage(TG, chatId, m, { parse_mode:"HTML" });
   }
@@ -2341,7 +2334,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/api") {
     const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api";
-    await sendMessage(TG, chatId, "🔌 <b>API v14.0.0</b>\n\n" +
+    await sendMessage(TG, chatId, "🔌 <b>API v15.0.0</b>\n\n" +
       "🔹 <code>" + base + "/status</code>\n" +
       "🔹 <code>" + base + "/operators</code>\n" +
       "🔹 <code>" + base + "/shares</code>\n" +
@@ -2387,7 +2380,7 @@ async function handleUpdate(update, TG, STATS, env) {
   else if (text === "/map") { await addPoints(STATS, userId, 1); const c = await makeMapChart(); if (c.image) await sendPhoto(TG, chatId, c.image, c.caption); else await sendMessage(TG, chatId, c.caption, { parse_mode:"HTML" }); }
   else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای v14.0.0</b>\n\n" +
+      "📚 <b>راهنمای v15.0.0</b>\n\n" +
       "📊 /status /work /score /vs\n" +
       "🆚 /compare /top /isp /world\n" +
       "📈 /today /history /trend /chart /pie /map /shares\n" +
@@ -2398,7 +2391,7 @@ async function handleUpdate(update, TG, STATS, env) {
       "<code>/test-groups</code> · <code>/debugsnap</code>\n" +
       "<code>/sendchannel</code> · <code>/preview-update</code>\n" +
       "<code>/reset-version</code>\n\n" +
-      "📡 @Radarinternetiranbot",
+      "📡 @Radarineternetiranbot",
       { parse_mode:"HTML" });
   }
 }
@@ -2414,9 +2407,9 @@ async function handleAPI(url, STATS, env) {
       return new Response(JSON.stringify({ ok:true, data:{
         quality_final: combined.quality,
         ooni_quality: combined.ooniQuality,
-        ioda_quality: combined.iodaQuality,
-        live_quality: combined.liveQuality,
-        voidly_risk: combined.voidlyRisk,
+        foreign_quality: combined.foreignQuality,
+        global_quality: combined.globalQuality,
+        iranian_quality: combined.iranianQuality,
         block_percent: combined.blockPercent,
         access_percent: combined.accessPercent,
         traffic_percent: combined.trafficPercent,
@@ -2453,9 +2446,9 @@ async function handleAPI(url, STATS, env) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok:true, name:"Radar API v14.0.0",
+        ok:true, name:"Radar API v15.0.0",
         endpoints:{ status:"/api/status", operators:"/api/operators", shares:"/api/shares", history:"/api/history" },
-        sources:["OONI","IODA","Live Ping","Voidly"], free:true
+        sources:["OONI","Foreign Sites","Global Sites","Iranian Sites"], free:true
       }, null, 2), { headers:cors });
     }
     return new Response(JSON.stringify({ ok:false, error:"Not found" }), { status:404, headers:cors });
@@ -2492,7 +2485,7 @@ async function makeAdminDashboard(STATS) {
 
   return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'>" +
     "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-    "<title>داشبورد v14.0.0</title><style>" +
+    "<title>داشبورد v15.0.0</title><style>" +
     "body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}" +
     "h1{color:#d4af37;text-align:center}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
@@ -2506,11 +2499,11 @@ async function makeAdminDashboard(STATS) {
     ".source{display:inline-block;background:#1e293b;padding:5px 10px;border-radius:5px;margin:5px;font-size:12px}" +
     ".btn{display:inline-block;padding:10px 20px;background:#d4af37;color:#0a1128;border-radius:8px;text-decoration:none;margin:5px;font-weight:bold}" +
     "</style></head><body>" +
-    "<h1>🔐 داشبورد v14.0.0</h1>" +
+    "<h1>🔐 داشبورد v15.0.0</h1>" +
     "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTimeFull() + "</div>" +
     "<div class='card'><div class='head'>🧠 منابع</div>" +
-    "<div class='source'>◉ OONI ۳۵٪</div><div class='source'>◈ IODA ۲۵٪</div>" +
-    "<div class='source'>◈ Live ۲۵٪</div><div class='source'>◎ Voidly ۱۵٪</div></div>" +
+    "<div class='source'>◉ OONI ۴۰٪</div><div class='source'>◈ فیلتر ۲۵٪</div>" +
+    "<div class='source'>◈ جهانی ۲۰٪</div><div class='source'>◈ ایرانی ۱۵٪</div></div>" +
     "<div class='card'><div class='head'>📊 آمار</div>" +
     "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>کاربر کل</div></div>" +
     "<div class='stat'><div class='stat-v'>" + dau.length + "</div><div class='stat-l'>فعال امروز</div></div>" +
@@ -2584,7 +2577,6 @@ export default {
       }, null, 2), { headers:{ "Content-Type":"application/json" } });
     }
 
-    // 🧪 تست یوزرنیم‌ها
     if (url.pathname === "/test-groups") {
       const results = { bot_username: BOT_USERNAME, version: CURRENT_VERSION, checks: {} };
       for (const [name, ch] of [["CH1", CH1], ["CH2", CH2], ["CH3", CH3]]) {
@@ -2607,7 +2599,6 @@ export default {
       });
     }
 
-    // 🧪 تست ارسال به کانال‌ها
     if (url.pathname === "/test-channel") {
       try {
         await sendOrUpdateChannelStatus(TG, STATS, env);
@@ -2623,22 +2614,16 @@ export default {
       }
     }
 
-    // 📊 نمودار سهم اپراتورها (PNG)
     if (url.pathname === "/shares") {
       try {
         const c = await makeOperatorSharesChart(STATS, env);
-        if (c.image) {
-          return new Response(c.image, {
-            headers: { "Content-Type": "image/png" }
-          });
-        }
+        if (c.image) return new Response(c.image, { headers: { "Content-Type": "image/png" } });
         return new Response("No data", { status: 404 });
       } catch(e) {
         return new Response("Error: " + e.message, { status: 500 });
       }
     }
 
-    // 🎉 Update system
     if (url.pathname === "/preview-update") {
       return new Response(buildUpdateMessage(CURRENT_VERSION), {
         headers:{ "Content-Type":"text/plain; charset=utf-8" }
