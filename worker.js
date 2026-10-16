@@ -1,42 +1,49 @@
 // ============================================================
-// 🛰 RADAR INTERNET IRAN — v16.0.0
-// PART 1/2 : Core + Data Sources + Charts
+// 🛰 RADAR INTERNET IRAN — v17.1.0
+// PART 1/2 : Core + Sources + Charts
 // ============================================================
-// ✅ ویژگی‌های v16.0.0:
-//   • منابع جدید: NetBlocks + IODA + ArvanCloud + IranCheck
-//   • OONI منبع اصلی (وزن 50%)
-//   • Auto-Snapshot هر 5 دقیقه
-//   • نام‌گذاری هوشمند ASN از RIPE
-//   • نمودار جدید با gradient
+// ✅ تغییرات v17.1.0:
+//   • حذف کانال رویال تراست از بررسی عضویت
+//   • حذف ارسال خودکار به رویال تراست
+//   • حذف از لینک‌های پایین پیام‌ها
 // ============================================================
 
-const CURRENT_VERSION = "16.0.0";
+const CURRENT_VERSION = "17.1.0";
 const CHART_POINTS = 96;
 const QUALITY_DROP_THRESHOLD = 15;
 const BOT_USERNAME = "Radarineternetiranbot";
 const ADMIN_PASS = "RadarAdmin@2025";
 const CH1 = "@radarinternetiran";
-const CH2 = "@royal_trust_ir_official";
 const CH3 = "@radarinternetirangruop";
+// ⚠️ CH2 (رویال تراست) حذف شد
 const OWNER_USERNAMES = ["royal_trust", "royal_trust_ir"];
 const OWNER_IDS_MANUAL = [];
 const OWNER_DISPLAY_NAME = "👑 مالک ربات";
 const WEEKLY_PIN_MSG_KEY = "weekly_pin_msg_id";
-const SNAP_AUTO_INTERVAL = 300000; // 5 دقیقه
+const SNAP_AUTO_INTERVAL = 300000;
 let TG_GLOBAL = null;
 let CACHED_OWNER_IDS = [];
 
 const CHANGELOG = {
-  "16.0.0": {
-    date: "۱۴۰۴/۰۷/۲۱",
-    emoji: "🎯",
-    title: "منابع جدید + دقت بالا",
+  "17.1.0": {
+    date: "۱۴۰۴/۰۷/۲۵",
+    emoji: "🧹",
+    title: "حذف کانال رویال تراست",
     changes: [
-      { icon:"🌐", text:"منابع جدید: <b>NetBlocks</b>، <b>IODA</b>، <b>ArvanCloud</b>، <b>IranCheck</b>" },
-      { icon:"🎯", text:"<b>OONI</b> منبع اصلی (وزن ۵۰٪)" },
-      { icon:"⚡", text:"Auto-Snapshot هر ۵ دقیقه" },
-      { icon:"🏷", text:"نام‌گذاری هوشمند اپراتورها از RIPE" },
-      { icon:"🎨", text:"طراحی جدید نمودار با gradient" }
+      { icon:"❌", text:"حذف <b>رویال تراست</b> از بررسی عضویت" },
+      { icon:"🗑", text:"حذف ارسال خودکار به کانال رویال" },
+      { icon:"✨", text:"روند عضویت اجباری ساده‌تر شد" }
+    ]
+  },
+  "17.0.0": {
+    date: "۱۴۰۴/۰۷/۲۵",
+    emoji: "🚀",
+    title: "نسخه پیشرفته با ۵ منبع داده",
+    changes: [
+      { icon:"🌐", text:"افزودن <b>Cloudflare Radar</b> و <b>Check-host.net</b>" },
+      { icon:"🎯", text:"وزن‌دهی هوشمند به ۵ منبع معتبر" },
+      { icon:"🎨", text:"طراحی جدید نمودار با gradient" },
+      { icon:"📊", text:"سه فرمت کپشن: کوتاه، متوسط، کامل" }
     ]
   }
 };
@@ -92,16 +99,18 @@ const FILTER_CHECK = [
   { name:"Signal",    url:"https://signal.org" }
 ];
 
-// ✅ نقشه کامل اپراتورهای ایران
 const ISP_MAP = {
   "44244":"ایرانسل","197207":"همراه اول","58224":"مخابرات (TCI)",
   "31549":"شاتل","42337":"پارس آنلاین","43754":"آسیاتک",
   "57218":"رایتل","16322":"پارس پک","44208":"پارس‌فون",
   "58262":"IranServer","50810":"پیشگامان","205647":"مبین‌نت",
-  "207079":"پیشگامان","12880":"زیرساخت (DCI)","25184":"افرانت",
+  "207079":"پیشگامان آوا","12880":"زیرساخت (DCI)","25184":"افرانت",
   "6736":"DCI-2","39501":"پارس‌نت","56402":"های‌وب",
   "208161":"ابر آروان","205674":"ماهان","206065":"فناوران",
-  "202468":"سرورهای ایرانی","39405":"آسیاتک","201150":"شبکهٔ ملی"
+  "202468":"سرورهای ایرانی","39405":"آسیاتک","201150":"شبکهٔ ملی",
+  "48214":"شبکهٔ ملی","61125":"کامکار","48434":"ایرانیکا",
+  "209374":"پیشگامان","202607":"زیتل","48551":"افرانت",
+  "51431":"امیرکبیر","208655":"مخابرات استان‌ها"
 };
 
 const BADGES = {
@@ -143,13 +152,18 @@ function makeBar(score, length = 10) {
   return "▓".repeat(filled) + "░".repeat(length - filled);
 }
 
+function makeMiniBar(score, length = 5) {
+  const filled = Math.max(0, Math.min(length, Math.round(score)));
+  return "●".repeat(filled) + "○".repeat(length - filled);
+}
+
 function getStatusMood(blockPercent) {
-  if (blockPercent < 10) return { emoji:"🟢", label:"عالی",   color:"#10b981" };
-  if (blockPercent < 25) return { emoji:"🟢", label:"خوب",    color:"#22c55e" };
-  if (blockPercent < 40) return { emoji:"🟡", label:"متوسط",  color:"#eab308" };
-  if (blockPercent < 55) return { emoji:"🟠", label:"ضعیف",   color:"#f97316" };
-  if (blockPercent < 70) return { emoji:"🔴", label:"بد",     color:"#ef4444" };
-  return                       { emoji:"🚨", label:"بحرانی",  color:"#dc2626" };
+  if (blockPercent < 10) return { emoji:"🟢", label:"عالی",   color:"#10b981", grad:"#059669" };
+  if (blockPercent < 25) return { emoji:"🟢", label:"خوب",    color:"#22c55e", grad:"#16a34a" };
+  if (blockPercent < 40) return { emoji:"🟡", label:"متوسط",  color:"#eab308", grad:"#ca8a04" };
+  if (blockPercent < 55) return { emoji:"🟠", label:"ضعیف",   color:"#f97316", grad:"#ea580c" };
+  if (blockPercent < 70) return { emoji:"🔴", label:"بد",     color:"#ef4444", grad:"#dc2626" };
+  return                       { emoji:"🚨", label:"بحرانی",  color:"#dc2626", grad:"#991b1b" };
 }
 
 function getVipRank(pts) {
@@ -200,8 +214,7 @@ async function sendMessage(TG, chatId, text, opts = {}) {
       delete body.inline_keyboard;
     }
     const r = await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
     return await r.json();
@@ -224,8 +237,7 @@ async function sendPhoto(TG, chatId, imageBytes, caption) {
 async function answerCallback(TG, callbackId, text = "", showAlert = false) {
   try {
     await fetch(TG + "/answerCallbackQuery", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
+      method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ callback_query_id: callbackId, text, show_alert: showAlert })
     });
   } catch(e) {}
@@ -280,13 +292,16 @@ async function trackChat(STATS, chatId) {
   } catch(e) {}
 }
 
+// ✅ اصلاح‌شده: فقط CH1 و CH3
 async function getTrackedChats(STATS) {
-  const defaults = [CH1, CH2, CH3];
+  const defaults = [CH1, CH3];
   if (!STATS) return defaults;
   try {
     const raw = await STATS.get("tracked_chats");
     const chats = raw ? JSON.parse(raw) : [];
-    return Array.from(new Set([...defaults, ...chats]));
+    // فیلتر: رویال تراست رو حذف کن اگه توی لیست قدیمی هست
+    const filtered = chats.filter(c => c !== "@royal_trust_ir_official");
+    return Array.from(new Set([...defaults, ...filtered]));
   } catch(e) { return defaults; }
 }
 
@@ -379,7 +394,7 @@ function isOwner(userId) {
   return CACHED_OWNER_IDS.includes(sid) || OWNER_IDS_MANUAL.includes(sid);
 }
 
-// ================== 🌐 PING ==================
+// ================== 🌐 PING & TEST ==================
 async function pingSite(url, timeout = 3500) {
   try {
     const ctrl = new AbortController();
@@ -470,75 +485,45 @@ function parseOONI(d) {
   return { hasData: total > 0, asnData, dayData, total, blocked, blockPercent, accessPercent: 100 - blockPercent };
 }
 
-// ================== 🌐 NetBlocks ==================
-async function fetchNetBlocksData() {
+async function fetchCloudflareIQI(env) {
+  if (!env || !env.RADAR_TOKEN) return null;
   try {
-    const r = await fetch("https://api.netblocks.org/v1/connectivity/IR", {
-      headers: { "Accept": "application/json" }
+    const r = await fetch("https://api.cloudflare.com/client/v4/radar/quality/iqi/summary?location=IR&dateRange=1d", {
+      headers: { "Authorization":"Bearer " + env.RADAR_TOKEN, "Accept":"application/json" }
     });
     if (!r.ok) return null;
-    const data = await r.json();
-    if (data && typeof data.connectivity_percent === 'number') {
-      return { quality: data.connectivity_percent, source: 'NetBlocks' };
+    const d = await r.json();
+    if (d && d.result && d.result.summary && typeof d.result.summary.iqi === "number") {
+      return { quality: Math.round(d.result.summary.iqi), source: "Cloudflare IQI" };
     }
     return null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// ================== 🌐 IODA ==================
-async function fetchIODAData() {
-  try {
-    const now = Math.floor(Date.now() / 1000);
-    const from = now - 86400;
-    const url = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from=" + from + "&until=" + now + "&entityType=country&limit=200";
-    const r = await fetch(url, { headers:{ "Accept":"application/json" } });
-    if (!r.ok) return null;
-    const json = await r.json();
-    const events = json.data || [];
-    const iranEvents = events.filter(e => e.location && String(e.location).includes("IR"));
-    if (iranEvents.length > 0) {
-      const maxScore = Math.max(...iranEvents.map(e => e.score || 0));
-      const severity = Math.min(100, Math.round((maxScore / 1000000) * 100));
-      return { hasData: true, quality: 100 - severity, events: iranEvents.length };
-    }
-    return { hasData: true, quality: 100, events: 0 };
   } catch(e) { return null; }
 }
 
-// ================== 🌐 ArvanCloud ==================
-async function fetchArvanCloudData() {
+async function fetchCheckHostData() {
   try {
-    const r = await fetch("https://radar.arvancloud.ir/api/v1/isp/status", {
-      headers: { "Accept": "application/json" }
-    });
+    const url = "https://check-host.net/check-http?host=https://www.google.com&node=ir1.node.check-host.net&node=ir2.node.check-host.net&node=ir3.node.check-host.net";
+    const r = await fetch(url, { headers:{ "Accept":"application/json" } });
     if (!r.ok) return null;
-    const data = await r.json();
-    if (data && typeof data.quality === "number") {
-      return { hasData: true, quality: data.quality };
+    const d = await r.json();
+    if (!d.ok || !d.request_id) return null;
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    const resultUrl = "https://check-host.net/check-result/" + d.request_id;
+    const r2 = await fetch(resultUrl, { headers:{ "Accept":"application/json" } });
+    if (!r2.ok) return null;
+    const result = await r2.json();
+    let totalNodes = 0, okNodes = 0;
+    for (const node in result) {
+      const nodeData = result[node];
+      if (Array.isArray(nodeData) && nodeData.length > 0) {
+        totalNodes++;
+        const first = nodeData[0];
+        if (first && typeof first === "object" && first.time) okNodes++;
+      }
     }
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// ================== 🌐 IranCheck ==================
-async function fetchIranCheckData() {
-  try {
-    const r = await fetch("https://check-host.net/check-http?host=https://www.google.com&node=ir1.node.check-host.net", {
-      headers: { "Accept": "application/json" }
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    if (data && data.ok === 1) {
-      return { hasData: true, quality: 100 };
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
+    if (totalNodes === 0) return null;
+    return { quality: Math.round((okNodes / totalNodes) * 100), ok: okNodes, total: totalNodes };
+  } catch(e) { return null; }
 }
 
 async function fetchRIPE() {
@@ -549,7 +534,7 @@ async function fetchRIPE() {
   } catch(e) { return null; }
 }
 
-// ================== 🧠 COMBINED DATA (v16) ==================
+// ================== 🧠 COMBINED DATA ==================
 let _combinedCache = { data:null, ts:0 };
 
 async function getCombinedData(env) {
@@ -563,100 +548,54 @@ async function getCombinedData(env) {
 }
 
 async function getCombinedDataRaw(env) {
-  // 🔥 تست موازی همه منابع
-  const [ooni, iranianTest, globalTest, netblocksData, iodaData, arvanData, irancheckData] = await Promise.all([
+  const [ooni, iranianTest, globalTest, cfIQI, checkHost] = await Promise.all([
     getOONIData().catch(() => null),
     testSiteGroup(IRANIAN_SITES, 3500),
     testSiteGroup(GLOBAL_SITES, 3500),
-    fetchNetBlocksData().catch(() => null),
-    fetchIODAData().catch(() => null),
-    fetchArvanCloudData().catch(() => null),
-    fetchIranCheckData().catch(() => null)
+    fetchCloudflareIQI(env).catch(() => null),
+    fetchCheckHostData().catch(() => null)
   ]);
 
-  const sources = { ooni:false, iranian:true, global:true, netblocks:false, ioda:false, arvan:false, irancheck:false };
-  const weights = { ooni:0, iranian:0, global:0, netblocks:0, ioda:0, arvan:0, irancheck:0 };
+  const sources = { ooni:false, iranian:true, global:true, cfIQI:false, checkHost:false };
+  const weights = { ooni:0, iranian:0, global:0, cfIQI:0, checkHost:0 };
 
-  // ✅ OONI منبع اصلی
   let ooniQuality = null;
   if (ooni && ooni.hasData && ooni.total >= 100) {
-    ooniQuality = ooni.accessPercent;
-    sources.ooni = true;
-    weights.ooni = 50;
+    ooniQuality = ooni.accessPercent; sources.ooni = true; weights.ooni = 45;
   } else if (ooni && ooni.hasData) {
-    ooniQuality = ooni.accessPercent;
-    sources.ooni = true;
-    weights.ooni = 30;
+    ooniQuality = ooni.accessPercent; sources.ooni = true; weights.ooni = 25;
   }
 
-  // سرورهای ایرانی
-  const iranianQuality = iranianTest.quality;
-  weights.iranian = 10;
-
-  // سرورهای جهانی
-  const globalQuality = globalTest.quality;
-  weights.global = 10;
-
-  // NetBlocks
-  let netblocksQuality = null;
-  if (netblocksData) {
-    netblocksQuality = netblocksData.quality;
-    sources.netblocks = true;
-    weights.netblocks = 15;
+  let cfQuality = null;
+  if (cfIQI && typeof cfIQI.quality === "number") {
+    cfQuality = cfIQI.quality; sources.cfIQI = true; weights.cfIQI = 15;
   }
 
-  // IODA
-  let iodaQuality = null;
-  if (iodaData && iodaData.hasData) {
-    iodaQuality = iodaData.quality;
-    sources.ioda = true;
-    weights.ioda = 10;
+  let chQuality = null;
+  if (checkHost && typeof checkHost.quality === "number") {
+    chQuality = checkHost.quality; sources.checkHost = true; weights.checkHost = 10;
   }
 
-  // ArvanCloud
-  let arvanQuality = null;
-  if (arvanData && arvanData.hasData) {
-    arvanQuality = arvanData.quality;
-    sources.arvan = true;
-    weights.arvan = 5;
-  }
+  const iranianQuality = iranianTest.quality; weights.iranian = 15;
+  const globalQuality = globalTest.quality; weights.global = 15;
 
-  // IranCheck
-  let irancheckQuality = null;
-  if (irancheckData && irancheckData.hasData) {
-    irancheckQuality = irancheckData.quality;
-    sources.irancheck = true;
-    weights.irancheck = 5;
-  }
-
-  // نرمال‌سازی وزن‌ها
   const wSum = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
   for (const k in weights) weights[k] = Math.round((weights[k] / wSum) * 100);
 
-  // محاسبه کیفیت نهایی
   let qualitySum = 0, qualityWeight = 0;
   if (ooniQuality !== null) { qualitySum += ooniQuality * weights.ooni; qualityWeight += weights.ooni; }
+  if (cfQuality !== null) { qualitySum += cfQuality * weights.cfIQI; qualityWeight += weights.cfIQI; }
+  if (chQuality !== null) { qualitySum += chQuality * weights.checkHost; qualityWeight += weights.checkHost; }
   qualitySum += iranianQuality * weights.iranian; qualityWeight += weights.iranian;
   qualitySum += globalQuality * weights.global; qualityWeight += weights.global;
-  if (netblocksQuality !== null) { qualitySum += netblocksQuality * weights.netblocks; qualityWeight += weights.netblocks; }
-  if (iodaQuality !== null) { qualitySum += iodaQuality * weights.ioda; qualityWeight += weights.ioda; }
-  if (arvanQuality !== null) { qualitySum += arvanQuality * weights.arvan; qualityWeight += weights.arvan; }
-  if (irancheckQuality !== null) { qualitySum += irancheckQuality * weights.irancheck; qualityWeight += weights.irancheck; }
 
   const quality = qualityWeight > 0 ? Math.round(qualitySum / qualityWeight) : 0;
   const blockPercent = 100 - quality;
-
-  // پینگ واقعی
-  const allPings = [];
-  if (globalTest.avgPing > 0) allPings.push(globalTest.avgPing);
-  const avgPing = allPings.length > 0 ? Math.round(allPings.reduce((a, b) => a + b, 0) / allPings.length) : 0;
-
-  // موفقیت
+  const avgPing = globalTest.avgPing || 0;
   const totalOk = iranianTest.ok + globalTest.ok;
   const totalTests = iranianTest.total + globalTest.total;
   const successRate = totalTests > 0 ? Math.round((totalOk / totalTests) * 100) : 0;
 
-  // ترافیک تخمینی
   let trafficPercent = 60;
   if (avgPing > 0 && avgPing < 100) trafficPercent = 90;
   else if (avgPing < 200) trafficPercent = 80;
@@ -669,9 +608,10 @@ async function getCombinedDataRaw(env) {
 
   return {
     quality, blockPercent, accessPercent: quality,
-    ooniQuality, iranianQuality, globalQuality, netblocksQuality, iodaQuality, arvanQuality, irancheckQuality,
+    ooniQuality, cfQuality, chQuality, iranianQuality, globalQuality,
     iranianStats: { ok: iranianTest.ok, total: iranianTest.total },
     globalStats: { ok: globalTest.ok, total: globalTest.total },
+    chStats: checkHost ? { ok: checkHost.ok, total: checkHost.total } : { ok:0, total:0 },
     trafficPercent, avgPing, successRate,
     totalMs, sources, weights, activeSources
   };
@@ -695,8 +635,8 @@ async function saveSnapshot(STATS, date, env) {
     const snap = {
       label, quality: combined.quality, blockPercent: combined.blockPercent,
       trafficPercent: combined.trafficPercent, ooniQuality: combined.ooniQuality,
+      cfQuality: combined.cfQuality, chQuality: combined.chQuality,
       iranianQuality: combined.iranianQuality, globalQuality: combined.globalQuality,
-      netblocksQuality: combined.netblocksQuality, iodaQuality: combined.iodaQuality,
       ts: Date.now()
     };
     const existingIdx = snaps.findIndex(s => s.label === label);
@@ -874,6 +814,16 @@ function deltaIcon(d) {
   return " ➖";
 }
 
+function getTrendIcon(current, previous) {
+  if (previous === null || previous === undefined) return "➖";
+  const diff = current - previous;
+  if (diff > 3) return "📈+" + diff;
+  if (diff > 0) return "↗+" + diff;
+  if (diff < -3) return "📉" + diff;
+  if (diff < 0) return "↘" + diff;
+  return "➖";
+}
+
 function buildSharesBlock(shares, deltas) {
   if (!shares || shares.length === 0) return "";
   let out = "📈 <b>سهم پهنای باند اپراتورها</b>\n";
@@ -901,8 +851,8 @@ async function makeTodayChart(STATS, env, combinedInput) {
     snapshots = [{
       label, quality: combined.quality, blockPercent: combined.blockPercent,
       trafficPercent: combined.trafficPercent, ooniQuality: combined.ooniQuality,
+      cfQuality: combined.cfQuality, chQuality: combined.chQuality,
       iranianQuality: combined.iranianQuality, globalQuality: combined.globalQuality,
-      netblocksQuality: combined.netblocksQuality, iodaQuality: combined.iodaQuality,
       ts: Date.now()
     }];
   }
@@ -911,7 +861,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
   const deltas = await getShareDeltas(STATS, shares);
 
   const labels = [], healthData = [], disruptionData = [], trafficData = [],
-        ooniData = [], iranianData = [], globalData = [], netblocksData = [], iodaData = [];
+        ooniData = [], cfData = [], chData = [], iranianData = [], globalData = [];
 
   for (const s of snapshots) {
     labels.push(s.label);
@@ -920,14 +870,14 @@ async function makeTodayChart(STATS, env, combinedInput) {
       disruptionData.push(s.blockPercent ?? (100 - s.quality));
       trafficData.push(s.trafficPercent ?? null);
       ooniData.push(s.ooniQuality ?? null);
+      cfData.push(s.cfQuality ?? null);
+      chData.push(s.chQuality ?? null);
       iranianData.push(s.iranianQuality ?? null);
       globalData.push(s.globalQuality ?? null);
-      netblocksData.push(s.netblocksQuality ?? null);
-      iodaData.push(s.iodaQuality ?? null);
     } else {
       healthData.push(null); disruptionData.push(null); trafficData.push(null);
-      ooniData.push(null); iranianData.push(null); globalData.push(null);
-      netblocksData.push(null); iodaData.push(null);
+      ooniData.push(null); cfData.push(null); chData.push(null);
+      iranianData.push(null); globalData.push(null);
     }
   }
 
@@ -957,10 +907,10 @@ async function makeTodayChart(STATS, env, combinedInput) {
         { label:"◉ OONI", data:ooniData, borderColor:"#06b6d4",
           borderDash:[6,3], borderWidth:2.5, tension:0.4, fill:false,
           yAxisID:"y-left", pointRadius:3, pointBackgroundColor:"#06b6d4", spanGaps:true, order:3 },
-        { label:"◈ NetBlocks", data:netblocksData, borderColor:"#f59e0b",
-          borderDash:[4,2], borderWidth:2, tension:0.4, fill:false,
+        { label:"◈ Cloudflare", data:cfData, borderColor:"#f59e0b",
+          borderDash:[4,3], borderWidth:2, tension:0.4, fill:false,
           yAxisID:"y-left", pointRadius:2, spanGaps:true, order:4 },
-        { label:"◈ IODA", data:iodaData, borderColor:"#ec4899",
+        { label:"◈ Check-host", data:chData, borderColor:"#ec4899",
           borderDash:[2,4], borderWidth:2, tension:0.4, fill:false,
           yAxisID:"y-left", pointRadius:2, spanGaps:true, order:5 },
         { label:"◈ سرورهای ایرانی", data:iranianData, borderColor:"#a855f7",
@@ -1008,41 +958,74 @@ async function makeTodayChart(STATS, env, combinedInput) {
 
   const img = await getChartImageDark(config, "#0a1128");
 
-  const sourceIcons = { ooni:"◉", netblocks:"◈", ioda:"◈", arvan:"◈", irancheck:"◈", iranian:"◈", global:"◈" };
+  const sourceIcons = { ooni:"◉", cfIQI:"◈", checkHost:"◈", iranian:"◈", global:"◈" };
   const activeSources = combined.activeSources.map(s => sourceIcons[s] + s.toUpperCase()).join("  ·  ");
   const realCount = healthData.filter(v => v !== null).length;
 
-  const caption =
-    "🛰 <b>رادار اینترنت ایران</b>\n" +
-    "<i>پایش زنده " + combined.activeSources.length + " منبعی</i>\n" +
-    "━━━━━━━━━━━━━━━━━━━\n\n" +
-    mood.emoji + " <b>" + mood.label + "</b>  •  شاخص: <b>" + combined.quality + "%</b>\n" +
-    "🕒 <code>" + startTime + " → " + endTime + "</code>\n\n" +
-    buildSharesBlock(shares, deltas) +
-    "📊 <b>منابع داده</b>\n" +
-    (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>  <i>(وزن " + combined.weights.ooni + "٪)</i>\n" : "") +
-    (combined.netblocksQuality !== null ? "◈ NetBlocks: <code>" + combined.netblocksQuality + "%</code>  <i>(وزن " + combined.weights.netblocks + "٪)</i>\n" : "") +
-    (combined.iodaQuality !== null ? "◈ IODA: <code>" + combined.iodaQuality + "%</code>  <i>(وزن " + combined.weights.ioda + "٪)</i>\n" : "") +
-    (combined.arvanQuality !== null ? "◈ ArvanCloud: <code>" + combined.arvanQuality + "%</code>  <i>(وزن " + combined.weights.arvan + "٪)</i>\n" : "") +
-    (combined.irancheckQuality !== null ? "◈ IranCheck: <code>" + combined.irancheckQuality + "%</code>  <i>(وزن " + combined.weights.irancheck + "٪)</i>\n" : "") +
-    "◈ سرورهای ایرانی: <code>" + combined.iranianQuality + "%</code>  <i>(" + combined.iranianStats.ok + "/" + combined.iranianStats.total + ")</i>\n" +
-    "◈ سرورهای جهانی: <code>" + combined.globalQuality + "%</code>  <i>(" + combined.globalStats.ok + "/" + combined.globalStats.total + ")</i>\n\n" +
-    "⚙️ <b>مشخصات فنی</b>\n" +
-    (combined.avgPing > 0 ? "📶 پینگ: <code>" + combined.avgPing + "ms</code>  " : "") +
-    "✅ موفقیت: <code>" + combined.successRate + "%</code>\n" +
-    "🌊 ترافیک: <code>" + combined.trafficPercent + "%</code>\n\n" +
-    makeBar(combined.quality / 10) + "\n\n" +
-    "━━━━━━━━━━━━━━━━━━━\n" +
-    "📊 نقاط: <b>" + realCount + "/" + CHART_POINTS + "</b>  <i>(هر ۱۵ دقیقه)</i>\n" +
-    "📡 " + activeSources + "\n" +
-    "🕒 " + getIranTimeFull() + "\n" +
-    "━━━━━━━━━━━━━━━━━━━\n" +
-    "🛰 @Radarineternetiranbot";
+  let trendText = "";
+  if (healthData.length >= 2) {
+    const last = healthData[healthData.length - 1];
+    const prev = healthData[healthData.length - 2];
+    trendText = " " + getTrendIcon(last, prev);
+  }
+
+  const caption = buildFullCaption(combined, shares, deltas, startTime, endTime, realCount, activeSources, trendText);
 
   return { image: img, caption };
 }
 
-// ================== 📊 سهم اپراتورها ==================
+// ================== 📝 CAPTION BUILDERS ==================
+function buildFullCaption(combined, shares, deltas, startTime, endTime, realCount, activeSources, trendText) {
+  const mood = getStatusMood(combined.blockPercent);
+  let out = "🛰 <b>رادار اینترنت ایران</b>\n";
+  out += "<i>پایش زنده " + combined.activeSources.length + " منبعی</i>\n";
+  out += "━━━━━━━━━━━━━━━━━━━\n\n";
+  out += mood.emoji + " <b>" + mood.label + "</b>  •  شاخص: <b>" + combined.quality + "%</b>" + trendText + "\n";
+  out += "🕒 <code>" + startTime + " → " + endTime + "</code>\n\n";
+  out += buildSharesBlock(shares, deltas);
+  out += "📊 <b>منابع داده</b>\n";
+  if (combined.ooniQuality !== null) out += "◉ OONI: <code>" + combined.ooniQuality + "%</code>  <i>(وزن " + combined.weights.ooni + "٪)</i>\n";
+  if (combined.cfQuality !== null) out += "◈ Cloudflare IQI: <code>" + combined.cfQuality + "%</code>  <i>(وزن " + combined.weights.cfIQI + "٪)</i>\n";
+  if (combined.chQuality !== null) out += "◈ Check-host: <code>" + combined.chQuality + "%</code>  <i>(وزن " + combined.weights.checkHost + "٪)</i>\n";
+  out += "◈ سرورهای ایرانی: <code>" + combined.iranianQuality + "%</code>  <i>(" + combined.iranianStats.ok + "/" + combined.iranianStats.total + ")</i>\n";
+  out += "◈ سرورهای جهانی: <code>" + combined.globalQuality + "%</code>  <i>(" + combined.globalStats.ok + "/" + combined.globalStats.total + ")</i>\n";
+  out += "\n⚙️ <b>مشخصات فنی</b>\n";
+  if (combined.avgPing > 0) out += "📶 پینگ: <code>" + combined.avgPing + "ms</code>  ";
+  out += "✅ موفقیت: <code>" + combined.successRate + "%</code>\n";
+  out += "🌊 ترافیک: <code>" + combined.trafficPercent + "%</code>\n\n";
+  out += makeBar(combined.quality / 10) + "\n\n";
+  out += "━━━━━━━━━━━━━━━━━━━\n";
+  out += "📊 نقاط: <b>" + realCount + "/" + CHART_POINTS + "</b>  <i>(هر ۱۵ دقیقه)</i>\n";
+  out += "📡 " + activeSources + "\n";
+  out += "🕒 " + getIranTimeFull() + "\n";
+  out += "━━━━━━━━━━━━━━━━━━━\n";
+  out += "🛰 @Radarineternetiranbot";
+  return out;
+}
+
+function buildMediumCaption(combined, shares, deltas) {
+  const mood = getStatusMood(combined.blockPercent);
+  let out = "🛰 <b>رادار اینترنت ایران</b>\n";
+  out += "━━━━━━━━━━━━━━━━━━━\n\n";
+  out += mood.emoji + " <b>" + mood.label + "</b>  •  <b>" + combined.quality + "%</b>\n\n";
+  out += buildSharesBlock(shares, deltas);
+  out += "📊 <b>منابع:</b>\n";
+  if (combined.ooniQuality !== null) out += "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n";
+  if (combined.cfQuality !== null) out += "◈ Cloudflare: <code>" + combined.cfQuality + "%</code>\n";
+  if (combined.chQuality !== null) out += "◈ Check-host: <code>" + combined.chQuality + "%</code>\n";
+  out += "\n" + makeBar(combined.quality / 10) + "\n\n";
+  out += "🕒 " + getIranTimeFull() + "\n";
+  out += "🛰 @Radarineternetiranbot";
+  return out;
+}
+
+function buildShortCaption(combined) {
+  const mood = getStatusMood(combined.blockPercent);
+  return "🛰 <b>رادار:</b> " + mood.emoji + " " + mood.label + " • <b>" + combined.quality + "%</b>\n" +
+    "🕒 " + getIranTimeFull();
+}
+
+// ================== 📊 OPERATOR SHARES CHART ==================
 async function makeOperatorSharesChart(STATS, env) {
   const shares = await getHourlyOperatorShares(STATS, env, 8);
   if (!shares || shares.length === 0) return { image:null, caption:"❌ داده کافی نیست." };
@@ -1276,8 +1259,13 @@ async function postUpdateToChannel(STATS, TG) {
 }
 
 // ========== END OF PART 1 ==========// ============================================================
-// 🛰 RADAR INTERNET IRAN — v16.0.0
+// 🛰 RADAR INTERNET IRAN — v17.1.0
 // PART 2/2 : Handlers + Channel + API + Worker Export
+// ============================================================
+// ✅ تغییرات v17.1.0:
+//   • حذف کانال رویال تراست از بررسی عضویت
+//   • بررسی فقط CH1 (رادار) و CH3 (گروه)
+//   • ارسال خودکار فقط به ۲ مقصد
 // ============================================================
 
 // ============================================================
@@ -1297,7 +1285,7 @@ async function makeReport(mode, env, combinedInput) {
   const mood = getStatusMood(combined.blockPercent);
 
   if (mode === "simple") {
-    return "📊 <b>وضعیت</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n✅ پایداری: <code>" + combined.quality + "%</code>\n" + makeBar(combined.quality / 10);
+    return buildShortCaption(combined);
   }
 
   let irOk = 0, globalOk = 0, irList = "", globalList = "";
@@ -1321,10 +1309,8 @@ async function makeReport(mode, env, combinedInput) {
 
   out += "┣━ 📡 <b>منابع داده</b>\n\n";
   if (combined.ooniQuality !== null) out += "  ◉ <b>OONI (" + combined.weights.ooni + "٪):</b> <code>" + combined.ooniQuality + "%</code>\n";
-  if (combined.netblocksQuality !== null) out += "  ◈ <b>NetBlocks (" + combined.weights.netblocks + "٪):</b> <code>" + combined.netblocksQuality + "%</code>\n";
-  if (combined.iodaQuality !== null) out += "  ◈ <b>IODA (" + combined.weights.ioda + "٪):</b> <code>" + combined.iodaQuality + "%</code>\n";
-  if (combined.arvanQuality !== null) out += "  ◈ <b>ArvanCloud (" + combined.weights.arvan + "٪):</b> <code>" + combined.arvanQuality + "%</code>\n";
-  if (combined.irancheckQuality !== null) out += "  ◈ <b>IranCheck (" + combined.weights.irancheck + "٪):</b> <code>" + combined.irancheckQuality + "%</code>\n";
+  if (combined.cfQuality !== null)   out += "  ◈ <b>Cloudflare IQI (" + combined.weights.cfIQI + "٪):</b> <code>" + combined.cfQuality + "%</code>\n";
+  if (combined.chQuality !== null)   out += "  ◈ <b>Check-host (" + combined.weights.checkHost + "٪):</b> <code>" + combined.chQuality + "%</code>\n";
   out += "  ◈ <b>سرورهای ایرانی (" + combined.weights.iranian + "٪):</b> <code>" + combined.iranianQuality + "%</code>\n";
   out += "  ◈ <b>سرورهای جهانی (" + combined.weights.global + "٪):</b> <code>" + combined.globalQuality + "%</code>\n";
   out += "\n";
@@ -1354,7 +1340,7 @@ async function makeReport(mode, env, combinedInput) {
   else out += "در دسترس نیست\n";
 
   out += "\n🕒 " + getIranTimeFull() + "  •  📅 " + getIranDate() + "\n\n" +
-    "🔗 @radarinternetiran\n👑 @royal_trust_ir_official\n💬 @radarinternetirangruop";
+    "🔗 @radarinternetiran\n💬 @radarinternetirangruop";
   return out;
 }
 
@@ -1367,7 +1353,8 @@ async function makeWorkReport(env) {
   return "⚡ <b>خلاصه وضعیت</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n" +
     "✅ پایداری: <code>" + combined.quality + "%</code>\n" +
     (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n" : "") +
-    (combined.netblocksQuality !== null ? "◈ NetBlocks: <code>" + combined.netblocksQuality + "%</code>\n" : "") +
+    (combined.cfQuality !== null ? "◈ Cloudflare: <code>" + combined.cfQuality + "%</code>\n" : "") +
+    (combined.chQuality !== null ? "◈ Check-host: <code>" + combined.chQuality + "%</code>\n" : "") +
     "◈ سرورهای جهانی: <code>" + combined.globalQuality + "%</code>\n" +
     "📶 پینگ: <code>" + combined.avgPing + "ms</code>\n\n" +
     makeBar(combined.quality / 10) + "\n\n🕒 " + getIranTimeFull();
@@ -1654,7 +1641,7 @@ async function makeYearAgoReport() {
 }
 
 // ============================================================
-// 📢 ارسال به کانال‌ها
+// 📢 ارسال به کانال‌ها (فقط CH1 و CH3)
 // ============================================================
 async function sendChannelReport(TG, STATS, env) {
   const report = await makeReport("full", env);
@@ -1670,7 +1657,7 @@ async function sendChannelReport(TG, STATS, env) {
 }
 
 // ============================================================
-// 📡 ارسال/آپدیت کانال + گروه
+// 📡 ارسال/آپدیت کانال + گروه (فقط CH1 و CH3)
 // ============================================================
 async function sendOrUpdateChannelStatus(TG, STATS, env) {
   try {
@@ -1680,7 +1667,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
     const deltas = await getShareDeltas(STATS, shares);
 
     const labels = [], healthData = [], disruptionData = [], trafficData = [],
-          ooniData = [], iranianData = [], globalData = [], netblocksData = [], iodaData = [];
+          ooniData = [], cfData = [], chData = [], iranianData = [], globalData = [];
 
     for (const s of snapshots) {
       labels.push(s.label);
@@ -1689,14 +1676,14 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
         disruptionData.push(s.blockPercent ?? (100 - s.quality));
         trafficData.push(s.trafficPercent ?? null);
         ooniData.push(s.ooniQuality ?? null);
+        cfData.push(s.cfQuality ?? null);
+        chData.push(s.chQuality ?? null);
         iranianData.push(s.iranianQuality ?? null);
         globalData.push(s.globalQuality ?? null);
-        netblocksData.push(s.netblocksQuality ?? null);
-        iodaData.push(s.iodaQuality ?? null);
       } else {
         healthData.push(null); disruptionData.push(null); trafficData.push(null);
-        ooniData.push(null); iranianData.push(null); globalData.push(null);
-        netblocksData.push(null); iodaData.push(null);
+        ooniData.push(null); cfData.push(null); chData.push(null);
+        iranianData.push(null); globalData.push(null);
       }
     }
 
@@ -1723,9 +1710,9 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
             pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor, pointBorderWidth:2.5, spanGaps:true },
           { label:"◉ OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[6,3],
             borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
-          { label:"◈ NetBlocks", data:netblocksData, borderColor:"#f59e0b", borderDash:[4,2],
+          { label:"◈ Cloudflare", data:cfData, borderColor:"#f59e0b", borderDash:[4,3],
             borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
-          { label:"◈ IODA", data:iodaData, borderColor:"#ec4899", borderDash:[2,4],
+          { label:"◈ Check-host", data:chData, borderColor:"#ec4899", borderDash:[2,4],
             borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
           { label:"◈ سرورهای ایرانی", data:iranianData, borderColor:"#a855f7", borderDash:[3,3],
             borderWidth:2, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:2, spanGaps:true },
@@ -1788,37 +1775,20 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
 
     const startTime = labels[0] || "—", endTime = labels[labels.length - 1] || "—";
     const realCount = healthData.filter(v => v !== null).length;
-    const sourceIcons = { ooni:"◉", netblocks:"◈", ioda:"◈", arvan:"◈", irancheck:"◈", iranian:"◈", global:"◈" };
+    const sourceIcons = { ooni:"◉", cfIQI:"◈", checkHost:"◈", iranian:"◈", global:"◈" };
     const activeSources = combined.activeSources.map(s => sourceIcons[s] + s.toUpperCase()).join("  ·  ");
 
-    const caption =
-      "🛰 <b>رادار اینترنت ایران</b>\n" +
-      "<i>پایش زنده " + combined.activeSources.length + " منبعی</i>\n" +
-      "━━━━━━━━━━━━━━━━━━━\n\n" +
-      mood.emoji + " <b>" + mood.label + "</b>\n" +
-      "◆ شاخص: <b>" + combined.quality + "%</b>\n" +
-      "🕒 <code>" + startTime + " → " + endTime + "</code>\n\n" +
-      buildSharesBlock(shares, deltas) +
-      "📊 <b>منابع</b>\n" +
-      (combined.ooniQuality !== null ? "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n" : "") +
-      (combined.netblocksQuality !== null ? "◈ NetBlocks: <code>" + combined.netblocksQuality + "%</code>\n" : "") +
-      (combined.iodaQuality !== null ? "◈ IODA: <code>" + combined.iodaQuality + "%</code>\n" : "") +
-      (combined.arvanQuality !== null ? "◈ ArvanCloud: <code>" + combined.arvanQuality + "%</code>\n" : "") +
-      (combined.irancheckQuality !== null ? "◈ IranCheck: <code>" + combined.irancheckQuality + "%</code>\n" : "") +
-      "◈ سرورهای ایرانی: <code>" + combined.iranianQuality + "%</code>\n" +
-      "◈ سرورهای جهانی: <code>" + combined.globalQuality + "%</code>\n" +
-      "\n📶 پینگ: <code>" + combined.avgPing + "ms</code>  ✅ " + combined.successRate + "%\n" +
-      "🌊 ترافیک: <code>" + combined.trafficPercent + "%</code>\n\n" +
-      makeBar(combined.quality / 10) + "\n\n" +
-      "━━━━━━━━━━━━━━━━━━━\n" +
-      "📊 " + realCount + "/" + CHART_POINTS + " نقطه  •  ⏱ ۱۵ دقیقه\n" +
-      "📡 " + activeSources + "\n" +
-      "🕒 " + getIranTimeFull() + "\n" +
-      "━━━━━━━━━━━━━━━━━━━\n" +
-      "📚 /help  •  🛰 @Radarineternetiranbot";
+    let trendText = "";
+    if (healthData.length >= 2) {
+      const last = healthData[healthData.length - 1];
+      const prev = healthData[healthData.length - 2];
+      trendText = " " + getTrendIcon(last, prev);
+    }
+
+    const caption = buildFullCaption(combined, shares, deltas, startTime, endTime, realCount, activeSources, trendText);
 
     const chats = await getTrackedChats(STATS);
-    console.log("Sending status to " + chats.length + " chats");
+    console.log("📡 Sending status to " + chats.length + " chats: " + JSON.stringify(chats));
 
     for (const ch of chats) {
       try {
@@ -1845,6 +1815,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
             console.log("✅ Sent to " + ch);
           } else {
             console.log("❌ Failed " + ch + ": " + JSON.stringify(d));
+            if (STATS) await STATS.delete("msg_id:" + ch);
           }
         }
         if (!success) {
@@ -2041,7 +2012,7 @@ async function handleSpin(STATS, userId, TG, chatId) {
 }
 
 // ============================================================
-// 🆔 بررسی عضویت
+// 🆔 بررسی عضویت (فقط CH1 و CH3)
 // ============================================================
 async function checkMember(TG, userId, channel) {
   try {
@@ -2055,15 +2026,15 @@ async function checkMember(TG, userId, channel) {
   return false;
 }
 
+// ✅ اصلاح‌شده: فقط ۲ کانال (رادار + گروه)
 async function sendJoinRequest(TG, chatId) {
   await sendMessage(TG, chatId,
     "🔒 <b>دسترسی محدود</b>\n\nابتدا در بخش‌های زیر عضو شوید:\n\n" +
     "━━━━━━━━━━━━━━━━━━━\n" +
-    "📡 <b>کانال رادار اینترنت</b>\n👑 <b>کانال رویال تراست</b>\n💬 <b>گروه رادار اینترنت</b>\n" +
+    "📡 <b>کانال رادار اینترنت</b>\n💬 <b>گروه رادار اینترنت</b>\n" +
     "━━━━━━━━━━━━━━━━━━━\n\n✅ پس از عضویت، روی دکمه زیر بزن:",
     { parse_mode:"HTML", inline_keyboard:[
       [{ text:"📡 کانال رادار", url:"https://t.me/radarinternetiran" }],
-      [{ text:"👑 کانال رویال", url:"https://t.me/royal_trust_ir_official" }],
       [{ text:"💬 گروه رادار", url:"https://t.me/radarinternetirangruop" }],
       [{ text:"✅ تایید عضویت", callback_data:"check_membership" }]
     ]});
@@ -2124,15 +2095,14 @@ async function handleUpdate(update, TG, STATS, env) {
         await sendUserPanel(TG, chatId, userId, userName, STATS);
         return;
       }
-      const [inCh1, inCh2, inCh3] = await Promise.all([
+      // ✅ فقط CH1 و CH3
+      const [inCh1, inCh3] = await Promise.all([
         checkMember(TG, userId, CH1),
-        checkMember(TG, userId, CH2),
         checkMember(TG, userId, CH3)
       ]);
-      if (!inCh1 || !inCh2 || !inCh3) {
+      if (!inCh1 || !inCh3) {
         const missing = [];
         if (!inCh1) missing.push("📡 کانال رادار");
-        if (!inCh2) missing.push("👑 کانال رویال");
         if (!inCh3) missing.push("💬 گروه رادار");
         await answerCallback(TG, cq.id, "❌ هنوز عضو نشدی!\n" + missing.join("\n"), true);
         return;
@@ -2188,15 +2158,14 @@ async function handleUpdate(update, TG, STATS, env) {
     return;
   }
 
-  // ---- Membership (معافیت مالک) ----
+  // ---- Membership (معافیت مالک، فقط ۲ کانال) ----
   const isOwnerUser = isOwner(userId);
   if (!isOwnerUser) {
-    const [inCh1, inCh2, inCh3] = await Promise.all([
+    const [inCh1, inCh3] = await Promise.all([
       checkMember(TG, userId, CH1),
-      checkMember(TG, userId, CH2),
       checkMember(TG, userId, CH3)
     ]);
-    if (!inCh1 || !inCh2 || !inCh3) { await sendJoinRequest(TG, chatId); return; }
+    if (!inCh1 || !inCh3) { await sendJoinRequest(TG, chatId); return; }
   }
 
   await trackUser(STATS, userId, userName);
@@ -2262,9 +2231,10 @@ async function handleUpdate(update, TG, STATS, env) {
     }
     await sendMessage(TG, chatId, out, { parse_mode:"HTML" });
   }
+  // ✅ اصلاح‌شده: فقط CH1 و CH3
   else if (text === "/test-groups" && isOwner(userId)) {
     const lines = [];
-    for (const [name, ch] of [["CH1 (کانال رادار)", CH1], ["CH2 (کانال رویال)", CH2], ["CH3 (گروه رادار)", CH3]]) {
+    for (const [name, ch] of [["CH1 (کانال رادار)", CH1], ["CH3 (گروه رادار)", CH3]]) {
       try {
         const r = await fetch(TG + "/getChat?chat_id=" + ch);
         const d = await r.json();
@@ -2375,7 +2345,8 @@ async function handleUpdate(update, TG, STATS, env) {
     m += buildSharesBlock(shares, deltas);
     m += "◆ شاخص: <code>" + combined.quality + "%</code>\n";
     if (combined.ooniQuality !== null) m += "◉ OONI: <code>" + combined.ooniQuality + "%</code>\n";
-    if (combined.netblocksQuality !== null) m += "◈ NetBlocks: <code>" + combined.netblocksQuality + "%</code>\n";
+    if (combined.cfQuality !== null) m += "◈ Cloudflare: <code>" + combined.cfQuality + "%</code>\n";
+    if (combined.chQuality !== null) m += "◈ Check-host: <code>" + combined.chQuality + "%</code>\n";
     m += "◈ سرورهای جهانی: <code>" + combined.globalQuality + "%</code>\n";
     m += "📶 پینگ: <code>" + combined.avgPing + "ms</code>\n\n" + makeBar(combined.quality / 10) + "\n\n🕒 " + getIranTimeFull();
     await sendMessage(TG, chatId, m, { parse_mode:"HTML" });
@@ -2424,7 +2395,7 @@ async function handleUpdate(update, TG, STATS, env) {
   }
   else if (text === "/api") {
     const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api";
-    await sendMessage(TG, chatId, "🔌 <b>API v16.0.0</b>\n\n" +
+    await sendMessage(TG, chatId, "🔌 <b>API v17.1.0</b>\n\n" +
       "🔹 <code>" + base + "/status</code>\n" +
       "🔹 <code>" + base + "/operators</code>\n" +
       "🔹 <code>" + base + "/shares</code>\n" +
@@ -2470,7 +2441,7 @@ async function handleUpdate(update, TG, STATS, env) {
   else if (text === "/map") { await addPoints(STATS, userId, 1); const c = await makeMapChart(); if (c.image) await sendPhoto(TG, chatId, c.image, c.caption); else await sendMessage(TG, chatId, c.caption, { parse_mode:"HTML" }); }
   else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "📚 <b>راهنمای v16.0.0</b>\n\n" +
+      "📚 <b>راهنمای v17.1.0</b>\n\n" +
       "📊 /status /work /score /vs\n" +
       "🆚 /compare /top /isp /world\n" +
       "📈 /today /history /trend /chart /pie /map /shares\n" +
@@ -2497,10 +2468,10 @@ async function handleAPI(url, STATS, env) {
       return new Response(JSON.stringify({ ok:true, data:{
         quality_final: combined.quality,
         ooni_quality: combined.ooniQuality,
-        netblocks_quality: combined.netblocksQuality,
-        ioda_quality: combined.iodaQuality,
-        arvan_quality: combined.arvanQuality,
-        irancheck_quality: combined.irancheckQuality,
+        cf_quality: combined.cfQuality,
+        ch_quality: combined.chQuality,
+        iranian_quality: combined.iranianQuality,
+        global_quality: combined.globalQuality,
         block_percent: combined.blockPercent,
         access_percent: combined.accessPercent,
         traffic_percent: combined.trafficPercent,
@@ -2537,9 +2508,9 @@ async function handleAPI(url, STATS, env) {
     }
     if (url.pathname === "/api" || url.pathname === "/api/") {
       return new Response(JSON.stringify({
-        ok:true, name:"Radar API v16.0.0",
+        ok:true, name:"Radar API v17.1.0",
         endpoints:{ status:"/api/status", operators:"/api/operators", shares:"/api/shares", history:"/api/history" },
-        sources:["OONI","NetBlocks","IODA","ArvanCloud","IranCheck","Live Sites"], free:true
+        sources:["OONI","Cloudflare IQI","Check-host","Iranian Sites","Global Sites"], free:true
       }, null, 2), { headers:cors });
     }
     return new Response(JSON.stringify({ ok:false, error:"Not found" }), { status:404, headers:cors });
@@ -2576,7 +2547,7 @@ async function makeAdminDashboard(STATS) {
 
   return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'>" +
     "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-    "<title>داشبورد v16.0.0</title><style>" +
+    "<title>داشبورد v17.1.0</title><style>" +
     "body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}" +
     "h1{color:#d4af37;text-align:center}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
@@ -2590,15 +2561,14 @@ async function makeAdminDashboard(STATS) {
     ".source{display:inline-block;background:#1e293b;padding:5px 10px;border-radius:5px;margin:5px;font-size:12px}" +
     ".btn{display:inline-block;padding:10px 20px;background:#d4af37;color:#0a1128;border-radius:8px;text-decoration:none;margin:5px;font-weight:bold}" +
     "</style></head><body>" +
-    "<h1>🔐 داشبورد v16.0.0</h1>" +
+    "<h1>🔐 داشبورد v17.1.0</h1>" +
     "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTimeFull() + "</div>" +
     "<div class='card'><div class='head'>🧠 منابع</div>" +
-    "<div class='source'>◉ OONI ۵۰٪</div>" +
-    "<div class='source'>◈ NetBlocks ۱۵٪</div>" +
-    "<div class='source'>◈ IODA ۱۰٪</div>" +
-    "<div class='source'>◈ ArvanCloud ۵٪</div>" +
-    "<div class='source'>◈ IranCheck ۵٪</div>" +
-    "<div class='source'>◈ Live Sites ۱۵٪</div></div>" +
+    "<div class='source'>◉ OONI ۴۵٪</div>" +
+    "<div class='source'>◈ Cloudflare ۱۵٪</div>" +
+    "<div class='source'>◈ Check-host ۱۰٪</div>" +
+    "<div class='source'>◈ سرورهای ایرانی ۱۵٪</div>" +
+    "<div class='source'>◈ سرورهای جهانی ۱۵٪</div></div>" +
     "<div class='card'><div class='head'>📊 آمار</div>" +
     "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>کاربر کل</div></div>" +
     "<div class='stat'><div class='stat-v'>" + dau.length + "</div><div class='stat-l'>فعال امروز</div></div>" +
@@ -2674,7 +2644,8 @@ export default {
 
     if (url.pathname === "/test-groups") {
       const results = { bot_username: BOT_USERNAME, version: CURRENT_VERSION, checks: {} };
-      for (const [name, ch] of [["CH1", CH1], ["CH2", CH2], ["CH3", CH3]]) {
+      // ✅ فقط CH1 و CH3
+      for (const [name, ch] of [["CH1", CH1], ["CH3", CH3]]) {
         try {
           const r = await fetch(TG + "/getChat?chat_id=" + ch);
           const d = await r.json();
