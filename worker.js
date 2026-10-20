@@ -1,10 +1,10 @@
 // ============================================================
-// 🛰 RADAR INTERNET IRAN — v18.0.0 (FULL)
-// PART 1/2 : Core + Data + Vibrant Charts
+// 🛰 RADAR INTERNET IRAN — v18.1.0
+// PART 1/2 : Core + Data + Realtime Charts
 // ============================================================
 
-const CURRENT_VERSION = "18.0.0";
-const CHART_POINTS = 96;
+const CURRENT_VERSION = "18.1.0";
+const CHART_POINTS = 1440; // 1440 دقیقه (یک شبانه‌روز)
 const QUALITY_DROP_THRESHOLD = 15;
 const BOT_USERNAME = "Radarineternetiranbot";
 const ADMIN_PASS = "RadarAdmin@2025";
@@ -14,19 +14,20 @@ const OWNER_USERNAMES = ["royal_trust", "royal_trust_ir"];
 const OWNER_IDS_MANUAL = [];
 const OWNER_DISPLAY_NAME = "👑 مالک ربات";
 const WEEKLY_PIN_MSG_KEY = "weekly_pin_msg_id";
-const SNAP_AUTO_INTERVAL = 300000;
+const SNAP_AUTO_INTERVAL = 60000; // 1 دقیقه
 let TG_GLOBAL = null;
 let CACHED_OWNER_IDS = [];
 
 const CHANGELOG = {
-  "18.0.0": {
+  "18.1.0": {
     date: "۱۴۰۴/۰۷/۲۵",
-    emoji: "🎨",
-    title: "نمودار نوسانی + منوی شیشه‌ای",
+    emoji: "⏱",
+    title: "پایش لحظه‌ای (هر ۱ دقیقه)",
     changes: [
-      { icon:"📈", text:"نمودار جدید با نوسانات <b>تمام منابع</b>" },
-      { icon:"🔘", text:"منوی شیشه‌ای (دکمه‌های تعاملی)" },
-      { icon:"🌐", text:"افزودن ویجت اختصاصی برای وبلاگ" }
+      { icon:"⚡", text:"ثبت آمار هر <b>۱ دقیقه</b> (به جای ۱۵ دقیقه)" },
+      { icon:"📉", text:"نمایش افت‌های ناگهانی اینترنت" },
+      { icon:"🛡", text:"بازگرداندن <b>پنل ادمین</b>" },
+      { icon:"🔄", text:"اتصال داده‌های دیروز و امروز (عدم صفر شدن در نیمه‌شب)" }
     ]
   }
 };
@@ -406,15 +407,16 @@ async function getCombinedDataRaw(env) {
   };
 }
 
-// ================== 📸 SNAPSHOTS ==================
+// ================== 📸 SNAPSHOTS (هر 1 دقیقه) ==================
 const SNAP_KEY_PREFIX = "snap:";
 
 async function saveSnapshot(STATS, date, env) {
   if (!STATS) return false;
   try {
     const combined = await getCombinedData(env);
-    const hour = getIranHour(); const minute = new Date().getMinutes(); const slot = Math.floor(minute / 15) * 15;
-    const label = String(hour).padStart(2, "0") + ":" + String(slot).padStart(2, "0");
+    const hour = getIranHour(); 
+    const minute = new Date().getMinutes();
+    const label = String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
     const today = getToday(); const key = SNAP_KEY_PREFIX + today; const raw = await STATS.get(key);
     let snaps = raw ? JSON.parse(raw) : [];
     const snap = {
@@ -424,15 +426,25 @@ async function saveSnapshot(STATS, date, env) {
     };
     const existingIdx = snaps.findIndex(s => s.label === label);
     if (existingIdx >= 0) snaps[existingIdx] = snap; else snaps.push(snap);
-    snaps.sort((a, b) => (a.label > b.label ? 1 : -1)); snaps = snaps.slice(-CHART_POINTS);
+    snaps.sort((a, b) => (a.ts > b.ts ? 1 : -1)); 
+    snaps = snaps.slice(-1440); // ذخیره تا 1440 نقطه (یک شبانه‌روز)
     await STATS.put(key, JSON.stringify(snaps), { expirationTtl:172800 });
     return true;
   } catch(e) { return false; }
 }
 
-async function getSnapshots(STATS, limit = CHART_POINTS) {
+async function getSnapshots(STATS, limit = 1440) {
   if (!STATS) return [];
-  try { const today = getToday(); const key = SNAP_KEY_PREFIX + today; const raw = await STATS.get(key); const snaps = raw ? JSON.parse(raw) : []; return snaps.slice(-limit); } catch(e) { return []; }
+  try { 
+    const today = getToday();
+    const yesterday = getYesterday();
+    const rawToday = await STATS.get(SNAP_KEY_PREFIX + today);
+    const rawYesterday = await STATS.get(SNAP_KEY_PREFIX + yesterday);
+    let snapsToday = rawToday ? JSON.parse(rawToday) : [];
+    let snapsYesterday = rawYesterday ? JSON.parse(rawYesterday) : [];
+    let allSnaps = [...snapsYesterday, ...snapsToday];
+    return allSnaps.slice(-limit); 
+  } catch(e) { return []; }
 }
 
 async function getDailySnapshot(STATS, date) {
@@ -465,14 +477,14 @@ async function renderChart(config, bgColor = "#0a1128") {
 async function getChartImageDark(config, bg = "#0a1128") { return await renderChart(config, bg); }
 async function getChartImage(config) { return await renderChart(config, "#ffffff"); }
 
-// ================== 🎯 MAIN CHART (نوسانی و جدید) ==================
+// ================== 🎯 MAIN CHART (نوسانی دقیق) ==================
 async function makeTodayChart(STATS, env, combinedInput) {
   const combined = combinedInput || await getCombinedData(env);
   let snapshots = await getSnapshots(STATS, CHART_POINTS);
 
   if (!snapshots || snapshots.length === 0) {
-    const now = new Date(); const hour = getIranHour(); const slot = Math.floor(now.getMinutes() / 15) * 15;
-    const label = String(hour).padStart(2, "0") + ":" + String(slot).padStart(2, "0");
+    const now = new Date(); const hour = getIranHour(); const minute = now.getMinutes();
+    const label = String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
     snapshots = [{ label, quality: combined.quality, blockPercent: combined.blockPercent, trafficPercent: combined.trafficPercent, ooniQuality: combined.ooniQuality, cfQuality: combined.cfQuality, chQuality: combined.chQuality, iranianQuality: combined.iranianQuality, globalQuality: combined.globalQuality, ts: Date.now() }];
   }
 
@@ -500,32 +512,31 @@ async function makeTodayChart(STATS, env, combinedInput) {
   const mood = getStatusMood(combined.blockPercent);
   const qualityColor = mood.color;
 
-  // 🎨 طراحی جدید: شاخص طلایی + خطوط نئونی منابع
   const config = {
     type: "line",
     data: {
       labels,
       datasets: [
         { label:"◆ شاخص نهایی", data:healthData, borderColor:"#d4af37", backgroundColor:"rgba(212,175,55,0.15)",
-          borderWidth:4, tension:0.3, fill:true, yAxisID:"y-left", pointRadius:5, pointHoverRadius:8,
-          pointBackgroundColor:"#ffffff", pointBorderColor:"#d4af37", pointBorderWidth:2.5, spanGaps:true, order:1 },
+          borderWidth:3, tension:0.1, fill:true, yAxisID:"y-left", pointRadius:0, pointHoverRadius:6,
+          pointBackgroundColor:"#ffffff", pointBorderColor:"#d4af37", pointBorderWidth:2, spanGaps:true, order:1 },
         
-        { label:"OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[3,3],
-          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:2 },
+        { label:"OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[2,2],
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:2 },
         { label:"Cloudflare", data:cfData, borderColor:"#f59e0b", borderDash:[2,2],
-          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:3 },
-        { label:"Check-host", data:chData, borderColor:"#ec4899", borderDash:[4,2],
-          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:4 },
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:3 },
+        { label:"Check-host", data:chData, borderColor:"#ec4899", borderDash:[3,2],
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:4 },
         { label:"سایت‌های ایرانی", data:iranianData, borderColor:"#a855f7", borderDash:[1,2],
-          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:5 },
-        { label:"سایت‌های جهانی", data:globalData, borderColor:"#22c55e", borderDash:[2,4],
-          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:6 },
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:5 },
+        { label:"سایت‌های جهانی", data:globalData, borderColor:"#22c55e", borderDash:[2,3],
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:6 },
         
-        { label:"نرخ اختلال", data:disruptionData, borderColor:"#ef4444", borderDash:[8,4],
-          borderWidth:2, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:7 },
+        { label:"نرخ اختلال", data:disruptionData, borderColor:"#ef4444", borderDash:[5,3],
+          borderWidth:1.5, tension:0.1, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:7 },
           
         { label:"ترافیک", data:trafficData, borderColor:"#0ea5e9", backgroundColor:"rgba(14,165,233,0.08)",
-          borderWidth:2.5, tension:0.3, fill:true, yAxisID:"y-right", pointRadius:0, spanGaps:true, order:8 }
+          borderWidth:2, tension:0.1, fill:true, yAxisID:"y-right", pointRadius:0, spanGaps:true, order:8 }
       ]
     },
     options: {
@@ -535,7 +546,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
       legend: { position:"bottom", labels:{ fontColor:"#94a3b8", fontSize:11, usePointStyle:true, padding:15, boxWidth:10 } },
       layout: { padding:{ top:15, bottom:15, left:25, right:25 } },
       scales: {
-        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55 }, gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
+        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55, autoSkip: true, maxTicksLimit: 24 }, gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
         yAxes: [
           { id:"y-left", position:"left", ticks:{ min:0, max:100, fontColor:"#94a3b8", fontSize:12, stepSize:20, callback:v => v+"%" },
             gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } },
@@ -543,7 +554,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
             gridLines:{ display:false } }
         ]
       },
-      elements: { line:{ capBezierPoints:true } }
+      elements: { line:{ capBezierPoints:false } } // خطوط شکسته برای نمایش افت ناگهانی
     }
   };
 
@@ -559,7 +570,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
     "🌊 <b>ترافیک:</b> <code>" + combined.trafficPercent + "%</code>\n\n" +
     makeBar(combined.quality / 10) + "\n\n" +
     "━━━━━━━━━━━━━━━━━━━\n" +
-    "📊 نقاط ثبت‌شده: <b>" + realCount + "/" + CHART_POINTS + "</b>  <i>(هر ۱۵ دقیقه)</i>\n" +
+    "📊 نقاط ثبت‌شده: <b>" + realCount + "/" + CHART_POINTS + "</b>  <i>(هر ۱ دقیقه)</i>\n" +
     "🕒 بروزرسانی: " + getIranTimeFull() + "\n" +
     "━━━━━━━━━━━━━━━━━━━\n" +
     "🛰 @Radarineternetiranbot";
@@ -567,7 +578,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
   return { image: img, caption };
 }
 
-// ================== 📊 OTHER CHARTS (سایر نمودارها) ==================
+// ================== 📊 OTHER CHARTS ==================
 async function makeOperatorSharesChart(STATS, env) {
   try {
     const p = await getOONIData(); if (!p.hasData) return { image:null, caption:"❌ داده کافی نیست." };
@@ -648,8 +659,8 @@ async function makeMapChart() {
 }
 
 // ========== END OF PART 1 ==========// ============================================================
-// 🛰 RADAR INTERNET IRAN — v18.0.0 (FULL)
-// PART 2/2 : Handlers + Inline Keyboards + Widget + Worker
+// 🛰 RADAR INTERNET IRAN — v18.1.0
+// PART 2/2 : Handlers + Inline Keyboards + Admin + Worker
 // ============================================================
 
 // ================== 📊 گزارش‌ها (Reports) ==================
@@ -700,8 +711,6 @@ async function makePingReport() {
 
 async function makeFilteringReport(env) {
   const combined = await getCombinedData(env); const p = await getOONIData(); const mood = getStatusMood(combined.blockPercent);
-  let ops = []; for (const [asn, d] of Object.entries(p.asnData)) { ops.push({ name: await asnNameAuto(asn), rate:Math.round((d.ok / d.total) * 100) }); }
-  ops.sort((a, b) => b.rate - a.rate);
   let out = "🚫 <b>وضعیت فیلترینگ</b>\n\n" + mood.emoji + " <b>" + mood.label + "</b>\n\n🎯 دسترسی آزاد: <code>" + combined.accessPercent + "%</code>\n🚫 اختلال: <code>" + combined.blockPercent + "%</code>\n\n" + makeBar(combined.accessPercent / 10);
   return out;
 }
@@ -826,7 +835,7 @@ async function sendOrUpdateChannelStatus(TG, STATS, env) {
   } catch(e) {}
 }
 
-async function checkAndAlertQuality(TG, STATS) { /* همان کد قبلی با تغییرات جزئی */ }
+async function checkAndAlertQuality(TG, STATS) { /* همان کد قبلی */ }
 async function checkISPSubscriptions(TG, STATS) { /* همان کد قبلی */ }
 async function handleSubscribe(STATS, userId, ispQuery, TG, chatId) { /* همان کد قبلی */ }
 async function handleUnsubscribe(STATS, userId, ispQuery, TG, chatId) { /* همان کد قبلی */ }
@@ -886,7 +895,7 @@ async function handleWidget(env) {
       document.getElementById('ooni').innerText = d.ooni_quality !== null ? d.ooni_quality + '%' : 'نامشخص'; document.getElementById('iranian').innerText = d.iranian_quality !== null ? d.iranian_quality + '%' : 'نامشخص';
       document.getElementById('global').innerText = d.global_quality !== null ? d.global_quality + '%' : 'نامشخص'; document.getElementById('ping').innerText = d.avg_ping_ms > 0 ? d.avg_ping_ms + 'ms' : 'نامشخص';
     } }).catch(e => { document.getElementById('loading').innerText = '⚠️ ارتباط با سرور برقرار نشد.'; }); }
-  updateWidget(); setInterval(updateWidget, 300000);
+  updateWidget(); setInterval(updateWidget, 60000); // هر 1 دقیقه آپدیت ویجت
   </script></body></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
@@ -926,7 +935,7 @@ async function sendStartPanel(TG, chatId, userId, userName, STATS) {
 async function sendHelpPanel(TG, chatId) {
   await sendMessage(TG, chatId,
     "📚 <b>راهنمای رادار اینترنت</b>\n\n" +
-    "این ربات با ادغام ۵ منبع معتبر (OONI، کلادفلر، چک‌هاست، سرورهای ایرانی و جهانی) شاخصی جامع ارائه می‌دهد.\n\n" +
+    "این ربات با ادغام ۵ منبع معتبر (OONI، کلادفلر، چک‌هاست، سرورهای ایرانی و جهانی) شاخصی جامع ارائه می‌دهد و آمار را به صورت لحظه‌ای (هر ۱ دقیقه) ثبت می‌کند.\n\n" +
     "🔹 <b>دستورات تایپی:</b>\n" +
     "<code>/start</code> - منوی شیشه‌ای\n" +
     "<code>/today</code> - نمودار ۲۴ ساعته\n" +
@@ -1096,7 +1105,7 @@ async function makeAdminDashboard(STATS) {
   let lbHtml = ""; lb.slice(0, 10).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i + 1); lbHtml += "<tr><td>" + medal + "</td><td><b>" + (u.n || u.id) + "</b></td><td>" + u.p + "</td></tr>"; });
   let ownerHtml = ""; for (const oid of owners) { const oPts = await STATS.get("points:" + oid) || "0"; const oName = await STATS.get("name:" + oid) || OWNER_DISPLAY_NAME; ownerHtml += "<tr><td>🛡</td><td><b>" + oName + "</b></td><td>" + oPts + "</td></tr>"; }
 
-  return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>داشبورد v18.0.0</title>" +
+  return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>داشبورد v18.1.0</title>" +
     "<style>body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}h1{color:#d4af37;text-align:center}" +
     ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
     ".stat{display:inline-block;margin:10px 20px;text-align:center}.stat-v{font-size:36px;color:#d4af37;font-weight:bold}" +
@@ -1104,7 +1113,7 @@ async function makeAdminDashboard(STATS) {
     "th{color:#d4af37}.date{color:#8899bb;text-align:center;margin-bottom:20px}a{color:#d4af37}" +
     ".head{color:#d4af37;border-bottom:2px solid #d4af37;padding-bottom:10px;margin-bottom:15px;display:inline-block}" +
     ".btn{display:inline-block;padding:10px 20px;background:#d4af37;color:#0a1128;border-radius:8px;text-decoration:none;margin:5px;font-weight:bold}</style></head><body>" +
-    "<h1>🔐 داشبورد مدیریت v18.0.0</h1>" +
+    "<h1>🔐 داشبورد مدیریت v18.1.0</h1>" +
     "<div class='date'>" + getIranDate() + "  •  " + getIranTimeFull() + "</div>" +
     "<div class='card'><div class='head'>📊 آمار</div>" +
     "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>کل کاربران</div></div>" +
@@ -1153,12 +1162,16 @@ export default {
     TG_GLOBAL = TG;
     if (STATS && CACHED_OWNER_IDS.length === 0) await loadOwnerIds(STATS);
 
-    if (event.cron === "0 * * * *") {
+    // ⚡ ثبت اسنپ‌شات هر ۱ دقیقه
+    if (event.cron === "* * * * *") {
       await saveSnapshot(STATS, new Date(), env);
-      await sendOrUpdateChannelStatus(TG, STATS, env);
+      return;
     }
-    if (event.cron === "*/15 * * * *") {
-      await saveSnapshot(STATS, new Date(), env);
+    
+    // 📤 ارسال به کانال هر ۱ ساعت
+    if (event.cron === "0 * * * *") {
+      await sendOrUpdateChannelStatus(TG, STATS, env);
+      return;
     }
   }
 };
