@@ -1,6 +1,6 @@
 // ============================================================
 // 🛰 RADAR INTERNET IRAN — v18.0.0 (FULL)
-// PART 1/2 : Core + Data + Unified Chart
+// PART 1/2 : Core + Data + Vibrant Charts
 // ============================================================
 
 const CURRENT_VERSION = "18.0.0";
@@ -21,11 +21,10 @@ let CACHED_OWNER_IDS = [];
 const CHANGELOG = {
   "18.0.0": {
     date: "۱۴۰۴/۰۷/۲۵",
-    emoji: "🎯",
-    title: "شاخص جامع و منوی شیشه‌ای",
+    emoji: "🎨",
+    title: "نمودار نوسانی + منوی شیشه‌ای",
     changes: [
-      { icon:"🧠", text:"تبدیل همه منابع به <b>یک شاخص جامع</b>" },
-      { icon:"📈", text:"طراحی نمودار جدید (سبک NetBlocks)" },
+      { icon:"📈", text:"نمودار جدید با نوسانات <b>تمام منابع</b>" },
       { icon:"🔘", text:"منوی شیشه‌ای (دکمه‌های تعاملی)" },
       { icon:"🌐", text:"افزودن ویجت اختصاصی برای وبلاگ" }
     ]
@@ -341,7 +340,7 @@ async function fetchCheckHostData() {
   } catch(e) { return null; }
 }
 
-// ================== 🧠 COMBINED DATA (Unified) ==================
+// ================== 🧠 COMBINED DATA ==================
 let _combinedCache = { data:null, ts:0 };
 
 async function getCombinedData(env) {
@@ -407,7 +406,7 @@ async function getCombinedDataRaw(env) {
   };
 }
 
-// ================== 📸 SNAPSHOTS & CHARTS ==================
+// ================== 📸 SNAPSHOTS ==================
 const SNAP_KEY_PREFIX = "snap:";
 
 async function saveSnapshot(STATS, date, env) {
@@ -418,7 +417,11 @@ async function saveSnapshot(STATS, date, env) {
     const label = String(hour).padStart(2, "0") + ":" + String(slot).padStart(2, "0");
     const today = getToday(); const key = SNAP_KEY_PREFIX + today; const raw = await STATS.get(key);
     let snaps = raw ? JSON.parse(raw) : [];
-    const snap = { label, quality: combined.quality, blockPercent: combined.blockPercent, trafficPercent: combined.trafficPercent, ts: Date.now() };
+    const snap = {
+      label, quality: combined.quality, blockPercent: combined.blockPercent, trafficPercent: combined.trafficPercent,
+      ooniQuality: combined.ooniQuality, cfQuality: combined.cfQuality, chQuality: combined.chQuality,
+      iranianQuality: combined.iranianQuality, globalQuality: combined.globalQuality, ts: Date.now()
+    };
     const existingIdx = snaps.findIndex(s => s.label === label);
     if (existingIdx >= 0) snaps[existingIdx] = snap; else snaps.push(snap);
     snaps.sort((a, b) => (a.label > b.label ? 1 : -1)); snaps = snaps.slice(-CHART_POINTS);
@@ -452,6 +455,7 @@ async function maybeAutoSnapshot(STATS, env) {
   } catch(e) {}
 }
 
+// ================== 🎨 CHART RENDERING ==================
 async function renderChart(config, bgColor = "#0a1128") {
   const payload = { ...config }; delete payload._bg; const encoded = encodeURIComponent(JSON.stringify(payload));
   const url = "https://quickchart.io/chart?c=" + encoded + "&w=1000&h=580&bkg=" + encodeURIComponent(bgColor) + "&devicePixelRatio=2&format=png&v=2.9.4";
@@ -461,7 +465,7 @@ async function renderChart(config, bgColor = "#0a1128") {
 async function getChartImageDark(config, bg = "#0a1128") { return await renderChart(config, bg); }
 async function getChartImage(config) { return await renderChart(config, "#ffffff"); }
 
-// ================== 🎯 MAIN CHART (Unified) ==================
+// ================== 🎯 MAIN CHART (نوسانی و جدید) ==================
 async function makeTodayChart(STATS, env, combinedInput) {
   const combined = combinedInput || await getCombinedData(env);
   let snapshots = await getSnapshots(STATS, CHART_POINTS);
@@ -469,46 +473,75 @@ async function makeTodayChart(STATS, env, combinedInput) {
   if (!snapshots || snapshots.length === 0) {
     const now = new Date(); const hour = getIranHour(); const slot = Math.floor(now.getMinutes() / 15) * 15;
     const label = String(hour).padStart(2, "0") + ":" + String(slot).padStart(2, "0");
-    snapshots = [{ label, quality: combined.quality, blockPercent: combined.blockPercent, trafficPercent: combined.trafficPercent, ts: Date.now() }];
+    snapshots = [{ label, quality: combined.quality, blockPercent: combined.blockPercent, trafficPercent: combined.trafficPercent, ooniQuality: combined.ooniQuality, cfQuality: combined.cfQuality, chQuality: combined.chQuality, iranianQuality: combined.iranianQuality, globalQuality: combined.globalQuality, ts: Date.now() }];
   }
 
-  const labels = [], healthData = [], disruptionData = [];
+  const labels = [], healthData = [], disruptionData = [], trafficData = [],
+        ooniData = [], cfData = [], chData = [], iranianData = [], globalData = [];
 
   for (const s of snapshots) {
     labels.push(s.label);
     if (s.quality !== null && s.quality !== undefined) {
       healthData.push(s.quality);
       disruptionData.push(s.blockPercent ?? (100 - s.quality));
-    } else { healthData.push(null); disruptionData.push(null); }
+      trafficData.push(s.trafficPercent ?? null);
+      ooniData.push(s.ooniQuality ?? null);
+      cfData.push(s.cfQuality ?? null);
+      chData.push(s.chQuality ?? null);
+      iranianData.push(s.iranianQuality ?? null);
+      globalData.push(s.globalQuality ?? null);
+    } else {
+      healthData.push(null); disruptionData.push(null); trafficData.push(null);
+      ooniData.push(null); cfData.push(null); chData.push(null); iranianData.push(null); globalData.push(null);
+    }
   }
 
   const startTime = labels[0] || "—"; const endTime = labels[labels.length - 1] || "—";
   const mood = getStatusMood(combined.blockPercent);
   const qualityColor = mood.color;
 
+  // 🎨 طراحی جدید: شاخص طلایی + خطوط نئونی منابع
   const config = {
     type: "line",
     data: {
       labels,
       datasets: [
-        { label:"شاخص جامع پایداری", data:healthData, borderColor:qualityColor, backgroundColor:qualityColor + "30",
-          borderWidth:5, tension:0.4, fill:true, yAxisID:"y-left", pointRadius:6, pointHoverRadius:10,
-          pointBackgroundColor:"#ffffff", pointBorderColor:qualityColor, pointBorderWidth:3, spanGaps:true },
-        { label:"نرخ اختلال", data:disruptionData, borderColor:"#ef4444", borderDash:[5,5],
-          borderWidth:2.5, tension:0.4, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true }
+        { label:"◆ شاخص نهایی", data:healthData, borderColor:"#d4af37", backgroundColor:"rgba(212,175,55,0.15)",
+          borderWidth:4, tension:0.3, fill:true, yAxisID:"y-left", pointRadius:5, pointHoverRadius:8,
+          pointBackgroundColor:"#ffffff", pointBorderColor:"#d4af37", pointBorderWidth:2.5, spanGaps:true, order:1 },
+        
+        { label:"OONI", data:ooniData, borderColor:"#06b6d4", borderDash:[3,3],
+          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:2 },
+        { label:"Cloudflare", data:cfData, borderColor:"#f59e0b", borderDash:[2,2],
+          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:3 },
+        { label:"Check-host", data:chData, borderColor:"#ec4899", borderDash:[4,2],
+          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:4 },
+        { label:"سایت‌های ایرانی", data:iranianData, borderColor:"#a855f7", borderDash:[1,2],
+          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:5 },
+        { label:"سایت‌های جهانی", data:globalData, borderColor:"#22c55e", borderDash:[2,4],
+          borderWidth:1.5, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:6 },
+        
+        { label:"نرخ اختلال", data:disruptionData, borderColor:"#ef4444", borderDash:[8,4],
+          borderWidth:2, tension:0.3, fill:false, yAxisID:"y-left", pointRadius:0, spanGaps:true, order:7 },
+          
+        { label:"ترافیک", data:trafficData, borderColor:"#0ea5e9", backgroundColor:"rgba(14,165,233,0.08)",
+          borderWidth:2.5, tension:0.3, fill:true, yAxisID:"y-right", pointRadius:0, spanGaps:true, order:8 }
       ]
     },
     options: {
-      title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:28, fontColor:"#ffffff", padding:24, fontStyle:"bold" },
+      title: { display:true, text:"🛰  رادار اینترنت ایران", fontSize:26, fontColor:"#ffffff", padding:24, fontStyle:"bold" },
       subtitle: { display:true, text: mood.emoji + "  " + mood.label + "  •  شاخص کلی: " + combined.quality + "%",
-        fontSize:18, fontColor:qualityColor, padding:14 },
-      legend: { position:"bottom", labels:{ fontColor:"#cbd5e1", fontSize:14, usePointStyle:true, padding:20 } },
-      layout: { padding:{ top:20, bottom:20, left:30, right:30 } },
+        fontSize:16, fontColor:qualityColor, padding:14 },
+      legend: { position:"bottom", labels:{ fontColor:"#94a3b8", fontSize:11, usePointStyle:true, padding:15, boxWidth:10 } },
+      layout: { padding:{ top:15, bottom:15, left:25, right:25 } },
       scales: {
-        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:11, maxRotation:55 }, gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
-        yAxes: [{ id:"y-left", position:"left", ticks:{ min:0, max:100, fontColor:qualityColor, fontSize:14, stepSize:25, callback:v => v+"%" },
-            gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false },
-            scaleLabel:{ display:true, labelString:"درصد", fontColor:qualityColor, fontSize:14, fontStyle:"bold" } }]
+        xAxes: [{ ticks:{ fontColor:"#64748b", fontSize:10, maxRotation:55 }, gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } }],
+        yAxes: [
+          { id:"y-left", position:"left", ticks:{ min:0, max:100, fontColor:"#94a3b8", fontSize:12, stepSize:20, callback:v => v+"%" },
+            gridLines:{ color:"rgba(100,116,139,0.08)", drawBorder:false } },
+          { id:"y-right", position:"right", ticks:{ min:0, max:100, fontColor:"#0ea5e9", fontSize:12, stepSize:20, callback:v => v+"%" },
+            gridLines:{ display:false } }
+        ]
       },
       elements: { line:{ capBezierPoints:true } }
     }
@@ -534,7 +567,7 @@ async function makeTodayChart(STATS, env, combinedInput) {
   return { image: img, caption };
 }
 
-// ================== 📊 OTHER CHARTS ==================
+// ================== 📊 OTHER CHARTS (سایر نمودارها) ==================
 async function makeOperatorSharesChart(STATS, env) {
   try {
     const p = await getOONIData(); if (!p.hasData) return { image:null, caption:"❌ داده کافی نیست." };
@@ -619,7 +652,7 @@ async function makeMapChart() {
 // PART 2/2 : Handlers + Inline Keyboards + Widget + Worker
 // ============================================================
 
-// ================== 📊 گزارش‌ها ==================
+// ================== 📊 گزارش‌ها (Reports) ==================
 async function makeReport(mode, env, combinedInput) {
   const combined = combinedInput || await getCombinedData(env);
   const p = await getOONIData();
@@ -830,7 +863,7 @@ async function sendJoinRequest(TG, chatId) {
   await sendMessage(TG, chatId, "🔒 <b>دسترسی محدود</b>\n\nابتدا عضو شوید:", { parse_mode:"HTML", inline_keyboard:[ [{ text:"📡 کانال", url:"https://t.me/radarinternetiran" }], [{ text:"💬 گروه", url:"https://t.me/radarinternetirangruop" }], [{ text:"✅ تایید", callback_data:"check_membership" }] ]});
 }
 
-// ================== 🧩 WIDGET (IFRAME) ==================
+// ================== 🧩 WIDGET (IFRAME برای وبلاگ) ==================
 async function handleWidget(env) {
   const html = `<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>
   body { margin: 0; padding: 0; background: transparent; font-family: Tahoma, Arial, sans-serif; overflow: hidden; }
