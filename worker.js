@@ -2,12 +2,9 @@
  * ═══════════════════════════════════════════════════════════════
  *   ربات رادار اینترنت ایران — نسخه نهایی ۴.۰
  * ═══════════════════════════════════════════════════════════════
- *   آمار و رتبه‌بندی | عضویت اجباری | پنل مدیریت کامل
- *   پیام رسمی مسدودی | سیستم دعوت و پاداش روزانه
- *   نمودار یک ساعته | بررسی سانسور | قطعی‌ها
- *   رابط برنامه‌نویسی عمومی | هشدار خودکار | ضد اسپم
- * ═══════════════════════════════════════════════════════════════
  */
+
+import { env } from "cloudflare:workers";
 
 // ═══════════════════════════════════════════════════════════════
 //   تنظیمات
@@ -155,7 +152,7 @@ async function getCached(k) {
 const setCache = (k, d, ttl) => db.setCache(k, JSON.stringify(d), ttl);
 
 // ═══════════════════════════════════════════════════════════════
-//   دریافت داده از کلادفلر رادار
+//   کلادفلر رادار
 // ═══════════════════════════════════════════════════════════════
 const METRICS = {
     latency:     { name: "تاخیر (ms)",          color: "#36a2eb" },
@@ -308,7 +305,7 @@ async function buildHeatmap() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   پیام رسمی مسدودی و رفع مسدودی
+//   پیام رسمی
 // ═══════════════════════════════════════════════════════════════
 const BAN_MESSAGE = (reason, date, uid) =>
     `🚫 اطلاعیه رسمی مدیریت\n\n` +
@@ -424,7 +421,7 @@ const backMain = () => ({ inline_keyboard: [[{ text: "🔙 منوی اصلی", c
 const backAdmin = () => ({ inline_keyboard: [[{ text: "🔙 پنل ادمین", callback_data: "admin_panel" }]] });
 
 // ═══════════════════════════════════════════════════════════════
-//   بررسی عضویت اجباری
+//   عضویت اجباری
 // ═══════════════════════════════════════════════════════════════
 async function checkForceJoin(uid) {
     const f = await db.setting("force_join");
@@ -440,14 +437,14 @@ async function checkForceJoin(uid) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   نقطه ورود اصلی
+//   نقطه ورود
 // ═══════════════════════════════════════════════════════════════
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
 
         if (url.pathname.startsWith("/api/")) {
-            return handlePublicAPI(request, env);
+            return handlePublicAPI(request);
         }
 
         if (url.pathname === "/webhook" && request.method === "POST") {
@@ -457,7 +454,7 @@ export default {
             let update;
             try { update = await request.json(); }
             catch { return new Response("درخواست نامعتبر", { status: 400 }); }
-            ctx.waitUntil(processUpdate(update, env));
+            ctx.waitUntil(processUpdate(update));
             return new Response("تایید", { status: 200 });
         }
 
@@ -487,10 +484,10 @@ export default {
 
     async scheduled(event, env, ctx) {
         if (event.cron === "0 * * * *") {
-            ctx.waitUntil(sendHourlyChartToChannel(env));
+            ctx.waitUntil(sendHourlyChartToChannel());
         }
         if (event.cron === "*/15 * * * *") {
-            ctx.waitUntil(checkAndAlert(env));
+            ctx.waitUntil(runAlertCheck());
         }
     }
 };
@@ -498,19 +495,19 @@ export default {
 // ═══════════════════════════════════════════════════════════════
 //   پردازش آپدیت
 // ═══════════════════════════════════════════════════════════════
-async function processUpdate(update, env) {
+async function processUpdate(update) {
     try {
         if (update.message) {
             const msg = update.message;
-            if (await handleStatefulMessage(msg, env)) return;
+            if (await handleStatefulMessage(msg)) return;
             if (msg.text?.startsWith("/start")) {
-                await handleStart(msg, env);
+                await handleStart(msg);
             } else if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
-                await handleGroupMessage(msg, env);
+                await handleGroupMessage(msg);
             }
         }
         if (update.callback_query) {
-            await handleCallback(update.callback_query, env);
+            await handleCallback(update.callback_query);
         }
     } catch (e) {
         console.error("خطای پردازش آپدیت:", e.message, e.stack);
@@ -518,9 +515,9 @@ async function processUpdate(update, env) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   هندلر شروع
+//   شروع
 // ═══════════════════════════════════════════════════════════════
-async function handleStart(msg, env) {
+async function handleStart(msg) {
     const uid = msg.from_user.id;
     const name = msg.from_user.first_name || "کاربر";
     const uname = msg.from_user.username || "";
@@ -554,7 +551,7 @@ async function handleStart(msg, env) {
 // ═══════════════════════════════════════════════════════════════
 //   پیام گروه
 // ═══════════════════════════════════════════════════════════════
-async function handleGroupMessage(msg, env) {
+async function handleGroupMessage(msg) {
     if (!msg.from || msg.from.is_bot) return;
     const uid = msg.from.id;
     const u = await db.user(uid);
@@ -565,9 +562,9 @@ async function handleGroupMessage(msg, env) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   هندلر دکمه‌ها
+//   دکمه‌ها
 // ═══════════════════════════════════════════════════════════════
-async function handleCallback(call, env) {
+async function handleCallback(call) {
     const uid = call.from_user.id;
     const data = call.data;
     const cid = call.message.chat.id;
@@ -588,7 +585,7 @@ async function handleCallback(call, env) {
         if (await checkForceJoin(uid)) {
             await answerCallback(call.id, "✅ تایید شد!", true);
             await tgApi("deleteMessage", { chat_id: cid, message_id: mid });
-            await handleStart(call.message, env);
+            await handleStart(call.message);
         } else {
             await answerCallback(call.id, "❌ هنوز عضو نشده‌اید!", true);
         }
@@ -760,7 +757,6 @@ async function handleCallback(call, env) {
         return;
     }
 
-    // بخش ادمین
     if (!ADMIN_IDS.includes(uid)) {
         await answerCallback(call.id, "⛔️ دسترسی ندارید.", true);
         return;
@@ -934,9 +930,9 @@ async function handleDailyBonus(uid, callbackId) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   پردازش پیام‌های حالت‌دار (پنل ادمین + بررسی سانسور)
+//   پردازش پیام حالت‌دار
 // ═══════════════════════════════════════════════════════════════
-async function handleStatefulMessage(msg, env) {
+async function handleStatefulMessage(msg) {
     const uid = msg.from_user.id;
     const text = (msg.text || "").trim();
     const chatId = msg.chat.id;
@@ -1042,7 +1038,6 @@ async function handleStatefulMessage(msg, env) {
         await env.DB.prepare("UPDATE users SET is_banned = 1, ban_reason = ? WHERE user_id = ?")
             .bind("تخلف از قوانین ربات", tid).run();
 
-        // ارسال پیام رسمی به کاربر مسدود شده
         await sendMessage(tid, BAN_MESSAGE(
             "تخلف از قوانین ربات",
             new Date().toLocaleString('fa-IR'),
@@ -1059,7 +1054,6 @@ async function handleStatefulMessage(msg, env) {
         if (isNaN(tid)) { await sendMessage(chatId, "❌ آیدی نامعتبر."); return true; }
         await env.DB.prepare("UPDATE users SET is_banned = 0, ban_reason = '' WHERE user_id = ?").bind(tid).run();
 
-        // ارسال پیام بازگشت به کاربر
         await sendMessage(tid, UNBAN_MESSAGE).catch(() => {});
 
         await sendMessage(chatId, `✅ کاربر ${tid} رفع مسدودی شد و پیام بازگشت برایش ارسال گردید.`, backAdmin());
@@ -1142,7 +1136,7 @@ async function handleStatefulMessage(msg, env) {
 // ═══════════════════════════════════════════════════════════════
 //   رابط برنامه‌نویسی عمومی
 // ═══════════════════════════════════════════════════════════════
-async function handlePublicAPI(req, env) {
+async function handlePublicAPI(req) {
     const url = new URL(req.url);
     const path = url.pathname;
     const headers = {
@@ -1263,9 +1257,9 @@ async function handlePublicAPI(req, env) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   ارسال نمودار ساعتی به کانال
+//   ارسال نمودار ساعتی
 // ═══════════════════════════════════════════════════════════════
-async function sendHourlyChartToChannel(env) {
+async function sendHourlyChartToChannel() {
     if ((await db.setting("auto_chart_enabled")) !== "1") return;
 
     const iqi = await fetchRadar("latency", "1h");
@@ -1283,7 +1277,7 @@ async function sendHourlyChartToChannel(env) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//   بررسی و ارسال هشدار
+//   هشدار
 // ═══════════════════════════════════════════════════════════════
 async function runAlertCheck(force = false) {
     if (!force && (await db.setting("auto_alert_enabled")) !== "1") return false;
