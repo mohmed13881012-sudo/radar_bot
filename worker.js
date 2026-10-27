@@ -1,82 +1,45 @@
 /**
- * ربات رادار اینترنت ایران - نسخه 3.0 (جامع حرفه‌ای)
- * Cloudflare Workers + D1
- * منابع: Cloudflare Radar, OONI, IODA
- * 
- * قابلیت‌ها:
- * - آمار کاربران، امتیاز، رتبه، دعوت، Streak روزانه
- * - رتبه‌بندی زنده + مقایسه کاربران
- * - پنل ادمین کامل (بلاک، آنبلاک، پیام، اکسپورت، ادیت امتیاز)
- * - عضویت اجباری کانال+گروه
- * - نمودار ۲۴ ساعته (latency, bandwidth, jitter, packet_loss)
- * - نقشه حرارتی استان‌ها
- * - بررسی سانسور با OONI
- * - بررسی قطعی با IODA
- * - API عمومی کامل + CORS
- * - Cron: ارسال نمودار ساعتی + هشدار افت کیفیت
- * - Rate Limiting + امنیت
- * - کش هوشمند
+ * ═══════════════════════════════════════════════════════════════
+ *   ربات رادار اینترنت ایران — نسخه نهایی ۴.۰
+ * ═══════════════════════════════════════════════════════════════
+ *   آمار و رتبه‌بندی | عضویت اجباری | پنل مدیریت کامل
+ *   پیام رسمی مسدودی | سیستم دعوت و پاداش روزانه
+ *   نمودار یک ساعته | بررسی سانسور | قطعی‌ها
+ *   رابط برنامه‌نویسی عمومی | هشدار خودکار | ضد اسپم
+ * ═══════════════════════════════════════════════════════════════
  */
 
-// ==========================================
-// 🔐 تنظیمات
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   تنظیمات
+// ═══════════════════════════════════════════════════════════════
 const TOKEN = env.BOT_TOKEN;
 const CHANNEL_ID = env.CHANNEL_ID || "@radarinternetiran";
 const GROUP_ID = env.GROUP_ID || "@radarinternetirangruop";
-const ADMIN_IDS = (env.ADMIN_IDS || "").split(",").map(id => parseInt(id.trim())).filter(Boolean);
+const SUPPORT_ADMIN = "@Adddddddm";
+const ADMIN_IDS = (env.ADMIN_IDS || "").split(",").map(x => parseInt(x.trim())).filter(Boolean);
+const WEBHOOK_SECRET = env.WEBHOOK_SECRET || "radar-secret";
+const CF_TOKEN = env.CLOUDFLARE_API_TOKEN;
+
 const POINTS_PER_MESSAGE = parseInt(env.POINTS_PER_MESSAGE || "1");
 const POINTS_PER_INVITE = parseInt(env.POINTS_PER_INVITE || "10");
 const DAILY_BONUS = parseInt(env.DAILY_BONUS || "5");
-const WEBHOOK_SECRET = env.WEBHOOK_SECRET || "radar-secret";
-const CLOUDFLARE_API_TOKEN = env.CLOUDFLARE_API_TOKEN;
-const RATE_LIMIT_WINDOW = 60; // ثانیه
-const RATE_LIMIT_MAX = 30;    // حداکثر درخواست در پنجره
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW = 60;
+const ALERT_THRESHOLD = 150;
 
-// ==========================================
-// 🛠️ ابزارهای پایه
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   ابزارهای پایه
+// ═══════════════════════════════════════════════════════════════
 const now = () => Math.floor(Date.now() / 1000);
-const nowMs = () => Date.now();
+const faNum = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+const faTime = ts => {
+    try { return new Date(ts * 1000).toLocaleString("fa-IR", { timeZone: "Asia/Tehran" }); }
+    catch { return String(ts); }
+};
 
-function faNum(n) {
-    return String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
-}
-
-function faTime(ts) {
-    try {
-        return new Date(ts * 1000).toLocaleString("fa-IR", { timeZone: "Asia/Tehran" });
-    } catch { return String(ts); }
-}
-
-// ==========================================
-// 🛡️ Rate Limiter (بر اساس حافظه D1)
-// ==========================================
-async function checkRateLimit(uid) {
-    const key = `rate_${uid}`;
-    const row = await env.DB.prepare(
-        "SELECT data, expires_at FROM api_cache WHERE cache_key = ?"
-    ).bind(key).first();
-
-    if (!row || row.expires_at < now()) {
-        await env.DB.prepare(
-            "INSERT OR REPLACE INTO api_cache (cache_key, data, expires_at) VALUES (?, ?, ?)"
-        ).bind(key, "1", now() + RATE_LIMIT_WINDOW).run();
-        return true;
-    }
-
-    const count = parseInt(row.data) || 0;
-    if (count >= RATE_LIMIT_MAX) return false;
-
-    await env.DB.prepare(
-        "UPDATE api_cache SET data = ? WHERE cache_key = ?"
-    ).bind(String(count + 1), key).run();
-    return true;
-}
-
-// ==========================================
-// 📡 Telegram API
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   توابع تلگرام
+// ═══════════════════════════════════════════════════════════════
 async function tgApi(method, params = {}) {
     try {
         const res = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
@@ -86,13 +49,13 @@ async function tgApi(method, params = {}) {
         });
         return await res.json();
     } catch (e) {
-        console.error(`TG ${method}:`, e.message);
+        console.error(`خطای تلگرام (${method}):`, e.message);
         return { ok: false };
     }
 }
 
 const sendMessage = (chatId, text, rm = null) =>
-    tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", ...(rm && { reply_markup: rm }) });
+    tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, ...(rm && { reply_markup: rm }) });
 
 const editMessage = (chatId, msgId, text, rm = null) =>
     tgApi("editMessageText", { chat_id: chatId, message_id: msgId, text, parse_mode: "HTML", ...(rm && { reply_markup: rm }) });
@@ -106,9 +69,9 @@ const sendPhoto = (chatId, url, caption = "") =>
 const sendDocument = (chatId, url, caption = "") =>
     tgApi("sendDocument", { chat_id: chatId, document: url, caption, parse_mode: "HTML" });
 
-// ==========================================
-// 🗄️ لایه دیتابیس
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   لایه دیتابیس
+// ═══════════════════════════════════════════════════════════════
 const db = {
     user: (uid) => env.DB.prepare("SELECT * FROM users WHERE user_id = ?").bind(uid).first(),
     setting: (k) => env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind(k).first().then(r => r?.value),
@@ -128,7 +91,7 @@ async function addOrUpdateUser(uid, name, uname) {
     const u = await db.user(uid);
     if (!u) {
         await env.DB.prepare(
-            "INSERT INTO users (user_id, first_name, username, join_date, last_daily) VALUES (?,?,?,?,0)"
+            "INSERT INTO users (user_id,first_name,username,join_date) VALUES (?,?,?,?)"
         ).bind(uid, name, uname, now()).run();
         return true;
     }
@@ -162,9 +125,26 @@ async function getTopUsers(limit = 10) {
     return r.results || [];
 }
 
-// ==========================================
-// 💾 کش‌های API
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   ضد اسپم
+// ═══════════════════════════════════════════════════════════════
+async function checkRateLimit(uid) {
+    const key = `rate_${uid}`;
+    const row = await db.cache(key);
+    if (!row || row.expires_at < now()) {
+        await db.setCache(key, "1", RATE_LIMIT_WINDOW);
+        return true;
+    }
+    const count = parseInt(row.data) || 0;
+    if (count >= RATE_LIMIT_MAX) return false;
+    await env.DB.prepare("UPDATE api_cache SET data = ? WHERE cache_key = ?")
+        .bind(String(count + 1), key).run();
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   حافظه نهان
+// ═══════════════════════════════════════════════════════════════
 async function getCached(k) {
     const r = await db.cache(k);
     if (r && r.expires_at > now()) {
@@ -172,43 +152,46 @@ async function getCached(k) {
     }
     return null;
 }
-
 const setCache = (k, d, ttl) => db.setCache(k, JSON.stringify(d), ttl);
 
-// ==========================================
-// 📊 Cloudflare Radar
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   دریافت داده از کلادفلر رادار
+// ═══════════════════════════════════════════════════════════════
+const METRICS = {
+    latency:     { name: "تاخیر (ms)",          color: "#36a2eb" },
+    bandwidth:   { name: "پهنای باند (Mbps)",   color: "#4bc0c0" },
+    jitter:      { name: "جیتر (ms)",            color: "#ff9f40" },
+    packet_loss: { name: "افت بسته (درصد)",     color: "#ff6384" }
+};
+
 async function fetchRadar(metric, range = "24h") {
-    if (!CLOUDFLARE_API_TOKEN) return null;
+    if (!CF_TOKEN) return null;
     const ck = `cf_${metric}_${range}`;
     const cached = await getCached(ck);
     if (cached) return cached;
 
     try {
         const url = `https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=${range}&metric=${metric}&aggInterval=1h`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } });
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${CF_TOKEN}` } });
         const data = await res.json();
-        if (!data.success) {
-            console.error("Radar error:", data.errors);
-            return null;
-        }
+        if (!data.success) return null;
         await setCache(ck, data.result, 1800);
         return data.result;
     } catch (e) {
-        console.error("Radar fetch:", e.message);
+        console.error("خطای رادار:", e.message);
         return null;
     }
 }
 
 async function radarSummary(metric) {
-    if (!CLOUDFLARE_API_TOKEN) return null;
+    if (!CF_TOKEN) return null;
     const ck = `cf_sum_${metric}`;
     const cached = await getCached(ck);
     if (cached) return cached;
 
     try {
         const url = `https://api.cloudflare.com/client/v4/radar/quality/iqi/summary?location=IR&metric=${metric}`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } });
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${CF_TOKEN}` } });
         const data = await res.json();
         if (!data.success) return null;
         await setCache(ck, data.result, 900);
@@ -216,9 +199,9 @@ async function radarSummary(metric) {
     } catch { return null; }
 }
 
-// ==========================================
-// 🔍 OONI
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   بررسی سانسور
+// ═══════════════════════════════════════════════════════════════
 async function checkOONI(domain, days = 7) {
     const ck = `ooni_${domain}_${days}`;
     const cached = await getCached(ck);
@@ -230,24 +213,21 @@ async function checkOONI(domain, days = 7) {
         const res = await fetch("https://api.ooni.io/api/v1/aggregation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                since, until, domain, probe_cc: "IR",
-                axis_x: "measurement_start_day"
-            })
+            body: JSON.stringify({ since, until, domain, probe_cc: "IR", axis_x: "measurement_start_day" })
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`خطای ${res.status}`);
         const data = await res.json();
         await setCache(ck, data, 3600);
         return data;
     } catch (e) {
-        console.error("OONI:", e.message);
+        console.error("خطای OONI:", e.message);
         return null;
     }
 }
 
-// ==========================================
-// 🚨 IODA
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   تشخیص قطعی
+// ═══════════════════════════════════════════════════════════════
 async function checkIODA() {
     const ck = "ioda_IR";
     const cached = await getCached(ck);
@@ -255,38 +235,33 @@ async function checkIODA() {
 
     try {
         const from = now() - 24 * 3600;
-        const until = now();
-        const url = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from=${from}&until=${until}&entityType=country&limit=20`;
-        const res = await fetch(url, {
-            headers: { Accept: "application/json", "User-Agent": "RadarBot/3.0" }
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const url = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from=${from}&until=${now()}&entityType=country&limit=20`;
+        const res = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "RadarBot/4.0" } });
+        if (!res.ok) throw new Error(`خطای ${res.status}`);
         const json = await res.json();
         const events = (json.data || []).filter(e => (e.location || "").includes("country/IR"));
         await setCache(ck, events, 900);
         return events;
     } catch (e) {
-        console.error("IODA:", e.message);
+        console.error("خطای IODA:", e.message);
         return null;
     }
 }
 
-// ==========================================
-// 📈 نمودارها
-// ==========================================
-function labelsFrom(ts) {
-    return ts.map(t => {
-        const d = new Date(t * 1000);
-        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    });
-}
+// ═══════════════════════════════════════════════════════════════
+//   نمودار
+// ═══════════════════════════════════════════════════════════════
+const labelsFrom = ts => ts.map(t => {
+    const d = new Date(t * 1000);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+});
 
 function chartUrl(labels, datasets, title) {
     const config = {
         type: 'line',
         data: { labels, datasets },
         options: {
-            title: { display: true, text: title },
+            title: { display: true, text: title, font: { size: 16 } },
             legend: { display: datasets.length > 1 },
             scales: { y: { beginAtZero: false } }
         }
@@ -294,59 +269,79 @@ function chartUrl(labels, datasets, title) {
     return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(config))}&w=900&h=450&format=png&backgroundColor=white`;
 }
 
-function buildDataset(label, values, color) {
-    return {
-        label, data: values,
-        borderColor: color,
-        backgroundColor: color + "33",
-        fill: true, tension: 0.3, pointRadius: 2
-    };
-}
+const buildDataset = (label, values, color) => ({
+    label, data: values, borderColor: color, backgroundColor: color + "33",
+    fill: true, tension: 0.3, pointRadius: 2
+});
 
-const METRICS = {
-    latency:    { name: "تاخیر (ms)",                color: "#36a2eb" },
-    bandwidth:  { name: "پهنای باند (Mbps)",         color: "#4bc0c0" },
-    jitter:     { name: "جیتر (ms)",                  color: "#ff9f40" },
-    packet_loss:{ name: "از دست رفتن بسته (%)",       color: "#ff6384" }
-};
-
-// ==========================================
-// 🗺️ نقشه استان‌ها
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   نقشه استان‌ها
+// ═══════════════════════════════════════════════════════════════
 const PROVINCES = [
-    "تهران","البرز","اصفهان","فارس","خراسان رضوی","خوزستان","سیستان و بلوچستان",
-    "کردستان","آذربایجان شرقی","آذربایجان غربی","گیلان","مازندران","کرمان",
-    "خوزستان","لرستان","همدان","کرمانشاه","مرکزی","قزوین","قم","سمنان",
-    "گلستان","اردبیل","بوشهر","چهارمحال و بختیاری","خراسان شمالی",
-    "خراسان جنوبی","زنجان","یزد","هرمزگان","ایلام","کهگیلویه و بویراحمد"
+    "تهران", "البرز", "اصفهان", "فارس", "خراسان رضوی", "خوزستان",
+    "سیستان و بلوچستان", "کردستان", "آذربایجان شرقی", "آذربایجان غربی",
+    "گیلان", "مازندران", "کرمان", "لرستان", "همدان", "کرمانشاه",
+    "مرکزی", "قزوین", "قم", "سمنان", "گلستان", "اردبیل", "بوشهر",
+    "چهارمحال و بختیاری", "خراسان شمالی", "خراسان جنوبی", "زنجان",
+    "یزد", "هرمزگان", "ایلام", "کهگیلویه و بویراحمد"
 ];
 
 async function buildHeatmap() {
-    // داده نمونه - در آینده با API استانی جایگزین کن
-    const baseQuality = 0.6;
     const data = PROVINCES.map((p, i) => ({
         name: p,
-        q: Math.max(0.2, Math.min(0.95, baseQuality + Math.sin(i) * 0.25))
-    }));
+        q: Math.max(0.2, Math.min(0.95, 0.6 + Math.sin(i * 1.3) * 0.3))
+    })).sort((a, b) => b.q - a.q);
 
-    let text = "🗺️ <b>نقشه حرارتی کیفیت اینترنت استان‌ها</b>\n";
+    let text = "🗺️ نقشه حرارتی کیفیت اینترنت استان‌ها\n";
     text += "🟢 خوب | 🟠 متوسط | 🔴 ضعیف\n";
     text += "━━━━━━━━━━━━━━━━\n\n";
 
-    data.sort((a, b) => b.q - a.q).forEach(p => {
+    data.forEach(p => {
         const e = p.q > 0.7 ? "🟢" : p.q > 0.4 ? "🟠" : "🔴";
         const filled = Math.round(p.q * 10);
         const bar = "█".repeat(filled) + "░".repeat(10 - filled);
-        text += `${e} <b>${p.name}</b>: ${bar} ${(p.q * 100).toFixed(0)}%\n`;
+        text += `${e} ${p.name}: ${bar} ${(p.q * 100).toFixed(0)}%\n`;
     });
 
-    text += "\n<i>⚠️ داده‌های نمونه (قابل ارتقا با API استانی)</i>";
+    text += "\n⚠️ داده‌های نمونه (قابل ارتقا)";
     return text;
 }
 
-// ==========================================
-// 🎛️ کیبوردها
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   پیام رسمی مسدودی و رفع مسدودی
+// ═══════════════════════════════════════════════════════════════
+const BAN_MESSAGE = (reason, date, uid) =>
+    `🚫 اطلاعیه رسمی مدیریت\n\n` +
+    `کاربر گرامی،\n\n` +
+    `دسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `📌 وضعیت: مسدود\n` +
+    `⚠️ دلیل: ${reason || "تخلف از قوانین ربات"}\n` +
+    `📅 تاریخ: ${date}\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `📞 برای اعتراض و پیگیری:\n\n` +
+    `با ادمین پشتیبانی در ارتباط باشید:\n\n` +
+    `${SUPPORT_ADMIN}\n\n` +
+    `آیدی عددی خود را نیز ارسال کنید:\n\n` +
+    `${uid}\n\n` +
+    `⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `🙏 با تشکر\n` +
+    `🛡️ تیم مدیریت رادار اینترنت ایران`;
+
+const UNBAN_MESSAGE =
+    `✅ بازگشت دسترسی\n\n` +
+    `کاربر گرامی،\n\n` +
+    `پس از بررسی درخواست شما، محدودیت حساب شما برداشته شد و دسترسی شما به ربات رادار اینترنت ایران مجدداً فعال گردید.\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `🎉 اکنون می‌توانید از تمام امکانات ربات استفاده کنید.\n` +
+    `🙏 از صبر و همکاری شما سپاسگزاریم.\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `🛡️ تیم مدیریت رادار اینترنت ایران`;
+
+// ═══════════════════════════════════════════════════════════════
+//   کیبوردها
+// ═══════════════════════════════════════════════════════════════
 function mainKeyboard(uid) {
     const rows = [
         [
@@ -358,7 +353,7 @@ function mainKeyboard(uid) {
             { text: "🗺️ نقشه استان‌ها", callback_data: "heatmap" }
         ],
         [
-            { text: "🚨 وضعیت قطعی (IODA)", callback_data: "ioda" },
+            { text: "🚨 قطعی‌های اخیر", callback_data: "ioda" },
             { text: "🔍 بررسی سانسور", callback_data: "ooni_start" }
         ],
         [
@@ -376,67 +371,61 @@ function mainKeyboard(uid) {
     return { inline_keyboard: rows };
 }
 
-function forceJoinKb() {
-    return {
-        inline_keyboard: [
-            [{ text: "📢 کانال", url: `https://t.me/${CHANNEL_ID.replace('@', '')}` }],
-            [{ text: "👥 گروه", url: `https://t.me/${GROUP_ID.replace('@', '')}` }],
-            [{ text: "✅ عضو شدم، بررسی کن", callback_data: "check_join" }]
-        ]
-    };
-}
+const forceJoinKb = () => ({
+    inline_keyboard: [
+        [{ text: "📢 عضویت در کانال", url: `https://t.me/${CHANNEL_ID.replace('@', '')}` }],
+        [{ text: "👥 عضویت در گروه", url: `https://t.me/${GROUP_ID.replace('@', '')}` }],
+        [{ text: "✅ عضو شدم، بررسی کن", callback_data: "check_join" }]
+    ]
+});
 
-function qualityKb() {
-    return {
-        inline_keyboard: [
-            [{ text: "⏱️ تاخیر", callback_data: "chart_latency" }],
-            [{ text: "🚀 پهنای باند", callback_data: "chart_bandwidth" }],
-            [{ text: "📶 جیتر", callback_data: "chart_jitter" }],
-            [{ text: "📉 Packet Loss", callback_data: "chart_packet_loss" }],
-            [{ text: "📊 همه با هم", callback_data: "chart_all" }],
-            [{ text: "🔙 بازگشت", callback_data: "main_menu" }]
-        ]
-    };
-}
+const qualityKb = () => ({
+    inline_keyboard: [
+        [{ text: "⏱️ تاخیر یک ساعته", callback_data: "chart_latency" }],
+        [{ text: "🚀 پهنای باند یک ساعته", callback_data: "chart_bandwidth" }],
+        [{ text: "📶 جیتر یک ساعته", callback_data: "chart_jitter" }],
+        [{ text: "📉 افت بسته یک ساعته", callback_data: "chart_packet_loss" }],
+        [{ text: "📊 مقایسه تاخیر و جیتر", callback_data: "chart_all" }],
+        [{ text: "🔙 بازگشت", callback_data: "main_menu" }]
+    ]
+});
 
-function adminKb() {
-    return {
-        inline_keyboard: [
-            [
-                { text: "👤 لیست کاربران", callback_data: "adm_users" },
-                { text: "🔍 جستجو", callback_data: "adm_search" }
-            ],
-            [
-                { text: "🚫 بلاک", callback_data: "adm_ban" },
-                { text: "✅ آنبلاک", callback_data: "adm_unban" }
-            ],
-            [
-                { text: "➕ ادیت امتیاز", callback_data: "adm_edit_points" },
-                { text: "📨 پیام همگانی", callback_data: "adm_broadcast" }
-            ],
-            [
-                { text: "✉️ پیام به کاربر", callback_data: "adm_dm" },
-                { text: "📥 اکسپورت CSV", callback_data: "adm_export" }
-            ],
-            [
-                { text: "🔓 عضو اجباری", callback_data: "adm_toggle_force" },
-                { text: "📊 آمار کلی", callback_data: "adm_stats" }
-            ],
-            [
-                { text: "📈 نمودار دستی", callback_data: "adm_chart" },
-                { text: "🚨 هشدار دستی", callback_data: "adm_alert" }
-            ],
-            [{ text: "🔙 بازگشت", callback_data: "main_menu" }]
-        ]
-    };
-}
+const adminKb = () => ({
+    inline_keyboard: [
+        [
+            { text: "👤 لیست کاربران", callback_data: "adm_users" },
+            { text: "🔍 جستجو", callback_data: "adm_search" }
+        ],
+        [
+            { text: "🚫 مسدود کردن", callback_data: "adm_ban" },
+            { text: "✅ رفع مسدودی", callback_data: "adm_unban" }
+        ],
+        [
+            { text: "➕ ادیت امتیاز", callback_data: "adm_edit_points" },
+            { text: "📨 پیام همگانی", callback_data: "adm_broadcast" }
+        ],
+        [
+            { text: "✉️ پیام به کاربر", callback_data: "adm_dm" },
+            { text: "📥 خروجی CSV", callback_data: "adm_export" }
+        ],
+        [
+            { text: "🔓 عضو اجباری", callback_data: "adm_toggle_force" },
+            { text: "📊 آمار کلی", callback_data: "adm_stats" }
+        ],
+        [
+            { text: "📈 نمودار دستی", callback_data: "adm_chart" },
+            { text: "🚨 تست هشدار", callback_data: "adm_alert" }
+        ],
+        [{ text: "🔙 بازگشت", callback_data: "main_menu" }]
+    ]
+});
 
 const backMain = () => ({ inline_keyboard: [[{ text: "🔙 منوی اصلی", callback_data: "main_menu" }]] });
 const backAdmin = () => ({ inline_keyboard: [[{ text: "🔙 پنل ادمین", callback_data: "admin_panel" }]] });
 
-// ==========================================
-// 🔓 عضویت اجباری
-// ==========================================
+// ═══════════════════════════════════════════════════════════════
+//   بررسی عضویت اجباری
+// ═══════════════════════════════════════════════════════════════
 async function checkForceJoin(uid) {
     const f = await db.setting("force_join");
     if (f !== "1") return true;
@@ -450,203 +439,229 @@ async function checkForceJoin(uid) {
     } catch { return false; }
 }
 
-// ==========================================
-// 🚀 /start
-// ==========================================
-async function handleStart(msg) {
+// ═══════════════════════════════════════════════════════════════
+//   نقطه ورود اصلی
+// ═══════════════════════════════════════════════════════════════
+export default {
+    async fetch(request, env, ctx) {
+        const url = new URL(request.url);
+
+        if (url.pathname.startsWith("/api/")) {
+            return handlePublicAPI(request, env);
+        }
+
+        if (url.pathname === "/webhook" && request.method === "POST") {
+            if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== WEBHOOK_SECRET) {
+                return new Response("دسترسی غیرمجاز", { status: 403 });
+            }
+            let update;
+            try { update = await request.json(); }
+            catch { return new Response("درخواست نامعتبر", { status: 400 }); }
+            ctx.waitUntil(processUpdate(update, env));
+            return new Response("تایید", { status: 200 });
+        }
+
+        if (url.pathname === "/setWebhook") {
+            const webhookUrl = `${url.protocol}//${url.host}/webhook`;
+            const r = await tgApi("setWebhook", {
+                url: webhookUrl,
+                secret_token: WEBHOOK_SECRET,
+                allowed_updates: ["message", "callback_query"],
+                drop_pending_updates: true
+            });
+            return new Response(JSON.stringify(r, null, 2), { headers: { "Content-Type": "application/json" } });
+        }
+
+        if (url.pathname === "/deleteWebhook") {
+            const r = await tgApi("deleteWebhook", { drop_pending_updates: true });
+            return new Response(JSON.stringify(r, null, 2), { headers: { "Content-Type": "application/json" } });
+        }
+
+        if (url.pathname === "/getMe") {
+            const r = await tgApi("getMe");
+            return new Response(JSON.stringify(r, null, 2), { headers: { "Content-Type": "application/json" } });
+        }
+
+        return new Response("🤖 ربات رادار اینترنت ایران فعال است.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    },
+
+    async scheduled(event, env, ctx) {
+        if (event.cron === "0 * * * *") {
+            ctx.waitUntil(sendHourlyChartToChannel(env));
+        }
+        if (event.cron === "*/15 * * * *") {
+            ctx.waitUntil(checkAndAlert(env));
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//   پردازش آپدیت
+// ═══════════════════════════════════════════════════════════════
+async function processUpdate(update, env) {
+    try {
+        if (update.message) {
+            const msg = update.message;
+            if (await handleStatefulMessage(msg, env)) return;
+            if (msg.text?.startsWith("/start")) {
+                await handleStart(msg, env);
+            } else if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
+                await handleGroupMessage(msg, env);
+            }
+        }
+        if (update.callback_query) {
+            await handleCallback(update.callback_query, env);
+        }
+    } catch (e) {
+        console.error("خطای پردازش آپدیت:", e.message, e.stack);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   هندلر شروع
+// ═══════════════════════════════════════════════════════════════
+async function handleStart(msg, env) {
     const uid = msg.from_user.id;
     const name = msg.from_user.first_name || "کاربر";
     const uname = msg.from_user.username || "";
 
     if (await isBanned(uid)) {
-        await sendMessage(msg.chat.id, "⛔️ شما از ربات بلاک شده‌اید.");
+        const u = await db.user(uid);
+        await sendMessage(msg.chat.id, BAN_MESSAGE(u?.ban_reason, new Date().toLocaleString('fa-IR'), uid));
         return;
     }
 
     const isNew = await addOrUpdateUser(uid, name, uname);
 
-    // ثبت دعوت
     if (isNew && msg.text?.startsWith("/start invite_")) {
         const inviter = parseInt(msg.text.replace("/start invite_", ""));
         if (!isNaN(inviter) && inviter !== uid) {
-            await env.DB.prepare(
-                "UPDATE users SET invited_by = ? WHERE user_id = ? AND invited_by IS NULL"
-            ).bind(inviter, uid).run();
+            await env.DB.prepare("UPDATE users SET invited_by = ? WHERE user_id = ? AND invited_by IS NULL").bind(inviter, uid).run();
             await addPoints(inviter, POINTS_PER_INVITE);
-            await env.DB.prepare(
-                "UPDATE users SET invite_count = invite_count + 1 WHERE user_id = ?"
-            ).bind(inviter).run();
-            await sendMessage(inviter,
-                `🎉 یک کاربر جدید با لینک شما عضو شد!\n⭐️ ${POINTS_PER_INVITE} امتیاز دریافت کردید.`
-            ).catch(() => {});
+            await env.DB.prepare("UPDATE users SET invite_count = invite_count + 1 WHERE user_id = ?").bind(inviter).run();
+            await sendMessage(inviter, `🎉 یک کاربر جدید با لینک شما عضو شد!\n⭐️ ${faNum(POINTS_PER_INVITE)} امتیاز گرفتید.`).catch(() => {});
         }
     }
 
     if (!(await checkForceJoin(uid))) {
-        await sendMessage(msg.chat.id,
-            "⚠️ <b>برای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:</b>\n\nسپس روی دکمه بررسی بزنید.",
-            forceJoinKb());
+        await sendMessage(msg.chat.id, "⚠️ برای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:\n\nسپس روی دکمه بررسی بزنید.", forceJoinKb());
         return;
     }
 
-    await sendMessage(msg.chat.id,
-        `سلام <b>${name}</b> عزیز! 👋\n` +
-        `به <b>ربات رادار اینترنت ایران</b> خوش آمدی.\n\n` +
-        `از منوی زیر انتخاب کن:`,
-        mainKeyboard(uid));
+    await sendMessage(msg.chat.id, `سلام ${name} عزیز! 👋\nبه ربات رادار اینترنت ایران خوش آمدی.\n\nاز منوی زیر انتخاب کن:`, mainKeyboard(uid));
 }
 
-// ==========================================
-// 🎁 پاداش روزانه
-// ==========================================
-async function handleDailyBonus(uid, chatId, callbackId) {
+// ═══════════════════════════════════════════════════════════════
+//   پیام گروه
+// ═══════════════════════════════════════════════════════════════
+async function handleGroupMessage(msg, env) {
+    if (!msg.from || msg.from.is_bot) return;
+    const uid = msg.from.id;
     const u = await db.user(uid);
     if (!u) {
-        await answerCallback(callbackId, "اطلاعات یافت نشد.");
-        return;
+        await addOrUpdateUser(uid, msg.from.first_name || "", msg.from.username || "");
     }
-
-    const lastDaily = u.last_daily || 0;
-    const diff = now() - lastDaily;
-
-    if (diff < 86400) {
-        const remaining = 86400 - diff;
-        const hours = Math.floor(remaining / 3600);
-        const mins = Math.floor((remaining % 3600) / 60);
-        await answerCallback(callbackId,
-            `⏳ هنوز آماده نیست!\n⏰ زمان باقی‌مانده: ${hours} ساعت و ${mins} دقیقه`,
-            true);
-        return;
-    }
-
-    // بررسی Streak (اگر کمتر از ۴۸ ساعت گذشته، Streak حفظ می‌شود)
-    let newStreak = 1;
-    if (u.streak && diff < 172800) {
-        newStreak = (u.streak || 0) + 1;
-    }
-
-    const bonus = DAILY_BONUS + Math.min(newStreak * 2, 20);
-
-    await env.DB.prepare(
-        "UPDATE users SET points = points + ?, last_daily = ?, streak = ? WHERE user_id = ?"
-    ).bind(bonus, now(), newStreak, uid).run();
-
-    await answerCallback(callbackId,
-        `🎁 پاداش روزانه دریافت شد!\n+${bonus} امتیاز\n🔥 Streak: ${newStreak} روز`,
-        true);
+    await addPoints(uid, POINTS_PER_MESSAGE, true);
 }
 
-// ==========================================
-// 📞 Callback اصلی
-// ==========================================
-async function handleCallback(call) {
+// ═══════════════════════════════════════════════════════════════
+//   هندلر دکمه‌ها
+// ═══════════════════════════════════════════════════════════════
+async function handleCallback(call, env) {
     const uid = call.from_user.id;
     const data = call.data;
     const cid = call.message.chat.id;
     const mid = call.message.message_id;
 
     if (await isBanned(uid)) {
-        await answerCallback(call.id, "⛔️ بلاک هستید.", true);
+        const u = await db.user(uid);
+        await answerCallback(call.id, "شما مسدود شده‌اید. برای پیگیری با پشتیبانی تماس بگیرید.", true);
         return;
     }
 
-    // Rate limit
     if (!(await checkRateLimit(uid))) {
-        await answerCallback(call.id, "⚠️ خیلی سریع! لطفاً کمی صبر کنید.", true);
+        await answerCallback(call.id, "⚠️ خیلی سریع! کمی صبر کنید.", true);
         return;
     }
 
-    // ===== عضویت =====
     if (data === "check_join") {
         if (await checkForceJoin(uid)) {
-            await answerCallback(call.id, "✅ تأیید شد!", true);
+            await answerCallback(call.id, "✅ تایید شد!", true);
             await tgApi("deleteMessage", { chat_id: cid, message_id: mid });
-            await handleStart(call.message);
+            await handleStart(call.message, env);
         } else {
             await answerCallback(call.id, "❌ هنوز عضو نشده‌اید!", true);
         }
         return;
     }
 
-    // ===== منو =====
     if (data === "main_menu") {
-        await editMessage(cid, mid, "🏠 <b>منوی اصلی</b>", mainKeyboard(uid));
+        await editMessage(cid, mid, "🏠 منوی اصلی", mainKeyboard(uid));
         return;
     }
 
-    // ===== آمار =====
     if (data === "my_stats") {
         const u = await db.user(uid);
         if (!u) { await answerCallback(call.id, "یافت نشد."); return; }
-
         const rank = await getRank(uid);
         const me = await tgApi("getMe");
         const botUname = me.result?.username || "bot";
         const inviteLink = `https://t.me/${botUname}?start=invite_${uid}`;
-
         const text =
-            `📊 <b>آمار شما:</b>\n` +
+            `📊 آمار شما:\n` +
             `━━━━━━━━━━━━━━━━\n\n` +
-            `👤 نام: <b>${u.first_name}</b>\n` +
-            `🆔 آیدی: <code>${uid}</code>\n` +
-            `⭐️ امتیاز: <b>${u.points}</b>\n` +
-            `💬 پیام‌ها: <b>${u.message_count}</b>\n` +
-            `👥 دعوت‌ها: <b>${u.invite_count}</b>\n` +
-            `🔥 Streak: <b>${u.streak || 0}</b> روز\n` +
-            `🏅 رتبه: <b>${rank}</b>\n\n` +
-            `🔗 <b>لینک دعوت شما:</b>\n` +
-            `<code>${inviteLink}</code>`;
-
+            `👤 نام: ${u.first_name}\n` +
+            `🆔 آیدی: ${uid}\n` +
+            `⭐️ امتیاز: ${faNum(u.points)}\n` +
+            `💬 پیام‌ها: ${faNum(u.message_count)}\n` +
+            `👥 دعوت‌ها: ${faNum(u.invite_count)}\n` +
+            `🔥 روزهای پیوسته: ${faNum(u.streak || 0)}\n` +
+            `🏅 رتبه: ${faNum(rank)}\n\n` +
+            `🔗 لینک دعوت شما:\n` +
+            `${inviteLink}`;
         await editMessage(cid, mid, text, backMain());
         return;
     }
 
-    // ===== رتبه‌بندی =====
     if (data === "leaderboard") {
         const top = await getTopUsers(10);
         if (!top.length) { await answerCallback(call.id, "هنوز کاربری نیست."); return; }
-        let text = "🏆 <b>۱۰ کاربر برتر:</b>\n━━━━━━━━━━━━━━━━\n\n";
+        let text = "🏆 ده کاربر برتر:\n━━━━━━━━━━━━━━━━\n\n";
         top.forEach((u, i) => {
             const m = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${faNum(i + 1)}.`;
-            text += `${m} <b>${u.first_name}</b> — ${faNum(u.points)} امتیاز\n`;
+            text += `${m} ${u.first_name} — ${faNum(u.points)} امتیاز\n`;
         });
         await editMessage(cid, mid, text, backMain());
         return;
     }
 
-    // ===== لینک دعوت =====
     if (data === "my_invite") {
         const me = await tgApi("getMe");
         const botUname = me.result?.username || "bot";
         const link = `https://t.me/${botUname}?start=invite_${uid}`;
         const u = await db.user(uid);
         await editMessage(cid, mid,
-            `👥 <b>سیستم دعوت</b>\n━━━━━━━━━━━━━━━━\n\n` +
-            `با اشتراک لینک زیر، هر کاربر جدیدی که عضو شود <b>${faNum(POINTS_PER_INVITE)} امتیاز</b> می‌گیرید:\n\n` +
-            `<code>${link}</code>\n\n` +
-            `📊 تعداد دعوت‌های موفق شما: <b>${faNum(u?.invite_count || 0)}</b>`,
+            `👥 سیستم دعوت\n━━━━━━━━━━━━━━━━\n\n` +
+            `با اشتراک لینک زیر، هر کاربر جدیدی که عضو شود ${faNum(POINTS_PER_INVITE)} امتیاز می‌گیرید:\n\n` +
+            `${link}\n\n` +
+            `📊 تعداد دعوت‌های موفق شما: ${faNum(u?.invite_count || 0)}`,
             backMain());
         return;
     }
 
-    // ===== پاداش روزانه =====
     if (data === "daily_bonus") {
-        await handleDailyBonus(uid, cid, call.id);
+        await handleDailyBonus(uid, call.id);
         return;
     }
 
-    // ===== منوی کیفیت =====
     if (data === "quality_menu") {
-        await editMessage(cid, mid,
-            "📈 <b>کیفیت اینترنت ایران</b>\nیک متریک انتخاب کنید:",
-            qualityKb());
+        await editMessage(cid, mid, "📈 کیفیت اینترنت ایران\nیک بازه زمانی انتخاب کنید:", qualityKb());
         return;
     }
 
-    // ===== نمودار تک‌متریک =====
     if (data.startsWith("chart_") && data !== "chart_all") {
         const metric = data.replace("chart_", "");
-        await answerCallback(call.id, "⏳ در حال ساخت...");
+        await answerCallback(call.id, "⏳ در حال ساخت نمودار...");
 
         const iqi = await fetchRadar(metric, "24h");
         if (!iqi?.timestamps) {
@@ -657,14 +672,12 @@ async function handleCallback(call) {
         const labels = labelsFrom(iqi.timestamps);
         const values = iqi.values || [];
         const m = METRICS[metric] || { name: metric, color: "#36a2eb" };
-        const url = chartUrl(labels, [buildDataset(m.name, values, m.color)], `رادار اینترنت - ${m.name}`);
+        const url = chartUrl(labels, [buildDataset(m.name, values, m.color)], `رادار اینترنت — ${m.name}`);
 
-        await sendPhoto(cid, url,
-            `📊 نمودار ۲۴ ساعته ${m.name}\n📡 Cloudflare Radar\n⏰ ${faTime(now())}`);
+        await sendPhoto(cid, url, `📊 نمودار ${m.name}\n📡 منبع: کلادفلر رادار\n⏰ ${faTime(now())}`);
         return;
     }
 
-    // ===== نمودار همه با هم =====
     if (data === "chart_all") {
         await answerCallback(call.id, "⏳ ساخت نمودار ترکیبی...");
         const metrics = ["latency", "jitter"];
@@ -681,12 +694,11 @@ async function handleCallback(call) {
             return buildDataset(METRICS[key].name, r?.values || [], METRICS[key].color);
         });
 
-        const url = chartUrl(labels, datasets, "رادار - مقایسه");
+        const url = chartUrl(labels, datasets, "رادار — مقایسه");
         await sendPhoto(cid, url, `📊 مقایسه تاخیر و جیتر\n⏰ ${faTime(now())}`);
         return;
     }
 
-    // ===== نقشه =====
     if (data === "heatmap") {
         await answerCallback(call.id, "⏳ ساخت نقشه...");
         const text = await buildHeatmap();
@@ -694,21 +706,20 @@ async function handleCallback(call) {
         return;
     }
 
-    // ===== IODA =====
     if (data === "ioda") {
-        await answerCallback(call.id, "⏳ بررسی IODA...");
+        await answerCallback(call.id, "⏳ بررسی قطعی‌ها...");
         const events = await checkIODA();
         if (!events) {
-            await sendMessage(cid, "❌ خطا در دریافت داده IODA.");
+            await sendMessage(cid, "❌ خطا در دریافت داده.");
             return;
         }
-        let text = "🚨 <b>وضعیت قطعی‌های ۲۴ ساعت اخیر (IODA)</b>\n━━━━━━━━━━━━━━━━\n\n";
+        let text = "🚨 وضعیت قطعی‌های ۲۴ ساعت اخیر\n━━━━━━━━━━━━━━━━\n\n";
         if (events.length === 0) {
             text += "✅ هیچ قطعی بزرگی گزارش نشده.";
         } else {
             events.slice(0, 10).forEach(e => {
-                text += `⚠️ نوع: ${e.type || "?"}\n`;
-                text += `📊 سطح: ${e.score?.toFixed(2) || "?"}\n`;
+                text += `⚠️ نوع: ${e.type || "نامشخص"}\n`;
+                text += `📊 سطح: ${e.score?.toFixed(2) || "نامشخص"}\n`;
                 text += `⏰ شروع: ${faTime(e.start)}\n\n`;
             });
         }
@@ -716,52 +727,47 @@ async function handleCallback(call) {
         return;
     }
 
-    // ===== OONI =====
     if (data === "ooni_start") {
         await db.setAdminState(uid, "await_ooni");
-        await sendMessage(cid, "🔍域名 مورد نظر را ارسال کنید (مثلاً <code>twitter.com</code>):");
+        await sendMessage(cid, "🔍 دامنه مورد نظر را ارسال کنید (مثلاً twitter.com):");
         return;
     }
 
-    // ===== راهنما =====
     if (data === "help") {
         const text =
-            `📖 <b>راهنما</b>\n━━━━━━━━━━━━━━━━\n\n` +
-            `🔹 <b>آمار من:</b> امتیاز، پیام، دعوت، رتبه، Streak\n` +
-            `🔹 <b>رتبه‌بندی:</b> ۱۰ کاربر برتر\n` +
-            `🔹 <b>کیفیت اینترنت:</b> نمودار ۲۴ ساعته\n` +
-            `🔹 <b>نقشه استان‌ها:</b> وضعیت استان‌ها\n` +
-            `🔹 <b>IODA:</b> قطعی‌های اخیر\n` +
-            `🔹 <b>OONI:</b> بررسی سانسور域名\n` +
-            `🔹 <b>پاداش روزانه:</b> ${faNum(DAILY_BONUS)}+ امتیاز (به‌علاوه پاداش Streak)\n\n` +
+            `📖 راهنما\n━━━━━━━━━━━━━━━━\n\n` +
+            `🔹 آمار من: امتیاز، پیام، دعوت، رتبه\n` +
+            `🔹 رتبه‌بندی: ده کاربر برتر\n` +
+            `🔹 کیفیت اینترنت: نمودار یک ساعته\n` +
+            `🔹 نقشه استان‌ها: وضعیت استان‌ها\n` +
+            `🔹 قطعی‌های اخیر: قطعی‌های بزرگ\n` +
+            `🔹 بررسی سانسور: بررسی دسترسی دامنه\n` +
+            `🔹 پاداش روزانه: ${faNum(DAILY_BONUS)} امتیاز (به‌علاوه پاداش روزهای پیوسته)\n\n` +
             `⭐️ هر پیام در گروه: ${faNum(POINTS_PER_MESSAGE)} امتیاز\n` +
             `👥 هر دعوت: ${faNum(POINTS_PER_INVITE)} امتیاز`;
         await editMessage(cid, mid, text, backMain());
         return;
     }
 
-    // ===== درباره =====
     if (data === "about") {
         await editMessage(cid, mid,
-            "ℹ️ <b>درباره ربات</b>\n━━━━━━━━━━━━━━━━\n\n" +
+            "ℹ️ درباره ربات\n━━━━━━━━━━━━━━━━\n\n" +
             "🔭 رادار اینترنت ایران\n" +
-            "📡 منابع: Cloudflare Radar, OONI, IODA\n" +
-            "⚙️ بستر: Cloudflare Workers\n" +
-            "🔐 امنیت: Rate-Limited, Secret-Based",
+            "📡 منابع: کلادفلر رادار، OONI، IODA\n" +
+            "⚙️ بستر: کلادفلر ورکرز\n" +
+            "🔐 امنیت: ضد اسپم، توکن محرمانه",
             backMain());
         return;
     }
 
-    // ==========================================
-    // ⚙️ پنل ادمین
-    // ==========================================
+    // بخش ادمین
     if (!ADMIN_IDS.includes(uid)) {
         await answerCallback(call.id, "⛔️ دسترسی ندارید.", true);
         return;
     }
 
     if (data === "admin_panel") {
-        await editMessage(cid, mid, "⚙️ <b>پنل مدیریت</b>\nیک گزینه انتخاب کنید:", adminKb());
+        await editMessage(cid, mid, "⚙️ پنل مدیریت\nیک گزینه انتخاب کنید:", adminKb());
         return;
     }
 
@@ -771,10 +777,10 @@ async function handleCallback(call) {
         ).all();
         const users = r.results || [];
         let text = users.length === 0 ? "هیچ کاربری نیست." :
-            `👤 <b>۳۰ کاربر اخیر:</b>\n━━━━━━━━━━━━━━━━\n\n`;
+            `👤 سی کاربر اخیر:\n━━━━━━━━━━━━━━━━\n\n`;
         users.forEach(u => {
             const s = u.is_banned ? "🚫" : "✅";
-            text += `${s} <b>${u.first_name}</b> | <code>${u.user_id}</code> | ${faNum(u.points)} ⭐️\n`;
+            text += `${s} ${u.first_name} | ${u.user_id} | ${faNum(u.points)} امتیاز\n`;
         });
         await editMessage(cid, mid, text, adminKb());
         return;
@@ -789,33 +795,33 @@ async function handleCallback(call) {
             env.DB.prepare("SELECT SUM(points) as s FROM users").first()
         ]);
         const text =
-            `📊 <b>آمار کلی:</b>\n━━━━━━━━━━━━━━━━\n\n` +
-            `👥 کاربران: <b>${faNum(tu?.c || 0)}</b>\n` +
-            `🚫 بلاک: <b>${faNum(bu?.c || 0)}</b>\n` +
-            `💬 پیام‌ها: <b>${faNum(tm?.s || 0)}</b>\n` +
-            `👥 دعوت‌ها: <b>${faNum(ti?.s || 0)}</b>\n` +
-            `⭐️ مجموع امتیاز: <b>${faNum(tp?.s || 0)}</b>`;
+            `📊 آمار کلی:\n━━━━━━━━━━━━━━━━\n\n` +
+            `👥 کاربران: ${faNum(tu?.c || 0)}\n` +
+            `🚫 مسدود: ${faNum(bu?.c || 0)}\n` +
+            `💬 پیام‌ها: ${faNum(tm?.s || 0)}\n` +
+            `👥 دعوت‌ها: ${faNum(ti?.s || 0)}\n` +
+            `⭐️ مجموع امتیاز: ${faNum(tp?.s || 0)}`;
         await editMessage(cid, mid, text, adminKb());
         return;
     }
 
     if (data === "adm_chart") {
         await answerCallback(call.id, "⏳ ساخت...");
-        const iqi = await fetchRadar("latency", "24h");
+        const iqi = await fetchRadar("latency", "1h");
         if (!iqi?.timestamps) { await sendMessage(cid, "❌ خطا."); return; }
         const url = chartUrl(
             labelsFrom(iqi.timestamps),
             [buildDataset("تاخیر", iqi.values || [], "#36a2eb")],
             "نمودار دستی"
         );
-        await sendPhoto(cid, url, `📊 نمودار دستی - ${faTime(now())}`);
+        await sendPhoto(cid, url, `📊 نمودار دستی — ${faTime(now())}`);
         return;
     }
 
     if (data === "adm_alert") {
         await answerCallback(call.id, "⏳ بررسی و ارسال هشدار...");
         const sent = await runAlertCheck(true);
-        await sendMessage(cid, sent ? "✅ هشدار ارسال شد." : "ℹ️ وضعیت نرمال است، هشداری ارسال نشد.");
+        await sendMessage(cid, sent ? "✅ هشدار ارسال شد." : "ℹ️ وضعیت نرمال است.");
         return;
     }
 
@@ -827,13 +833,13 @@ async function handleCallback(call) {
 
     if (data === "adm_ban") {
         await db.setAdminState(uid, "await_ban");
-        await sendMessage(cid, "🚫 آیدی برای بلاک:");
+        await sendMessage(cid, "🚫 آیدی برای مسدودسازی:");
         return;
     }
 
     if (data === "adm_unban") {
         await db.setAdminState(uid, "await_unban");
-        await sendMessage(cid, "✅ آیدی برای آنبلاک:");
+        await sendMessage(cid, "✅ آیدی برای رفع مسدودی:");
         return;
     }
 
@@ -865,16 +871,15 @@ async function handleCallback(call) {
         users.forEach(u => {
             csv += `${u.user_id},"${u.first_name || ''}","${u.username || ''}",${u.points},${u.message_count},${u.invite_count},${u.is_banned},${u.join_date}\n`;
         });
-        // آپلود به catbox (ساده‌ترین راه بدون فایل‌استوریج)
         try {
             const formData = new FormData();
             formData.append("reqtype", "fileupload");
             formData.append("fileToUpload", new Blob([csv], { type: "text/csv" }), "users.csv");
             const upRes = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: formData });
             const fileUrl = await upRes.text();
-            await sendDocument(cid, fileUrl, `📥 اکسپورت ${users.length} کاربر`);
+            await sendDocument(cid, fileUrl, `📥 خروجی ${users.length} کاربر`);
         } catch (e) {
-            await sendMessage(cid, `❌ خطا در اکسپورت: ${e.message}`);
+            await sendMessage(cid, `❌ خطا: ${e.message}`);
         }
         return;
     }
@@ -885,15 +890,53 @@ async function handleCallback(call) {
         await db.setSetting("force_join", nv);
         await answerCallback(call.id,
             `عضویت اجباری: ${nv === "1" ? "فعال ✅" : "غیرفعال ❌"}`, true);
-        await editMessage(cid, mid, "⚙️ <b>پنل مدیریت</b>", adminKb());
+        await editMessage(cid, mid, "⚙️ پنل مدیریت", adminKb());
         return;
     }
 }
 
-// ==========================================
-// 📨 پردازش پیام‌های Stateful
-// ==========================================
-async function handleStateful(msg) {
+// ═══════════════════════════════════════════════════════════════
+//   پاداش روزانه
+// ═══════════════════════════════════════════════════════════════
+async function handleDailyBonus(uid, callbackId) {
+    const u = await db.user(uid);
+    if (!u) {
+        await answerCallback(callbackId, "اطلاعات یافت نشد.");
+        return;
+    }
+
+    const lastDaily = u.last_daily || 0;
+    const diff = now() - lastDaily;
+
+    if (diff < 86400) {
+        const remaining = 86400 - diff;
+        const hours = Math.floor(remaining / 3600);
+        const mins = Math.floor((remaining % 3600) / 60);
+        await answerCallback(callbackId,
+            `⏳ هنوز آماده نیست!\nزمان باقی‌مانده: ${hours} ساعت و ${mins} دقیقه`, true);
+        return;
+    }
+
+    let newStreak = 1;
+    if (u.streak && diff < 172800) {
+        newStreak = (u.streak || 0) + 1;
+    }
+
+    const bonus = DAILY_BONUS + Math.min(newStreak * 2, 20);
+
+    await env.DB.prepare(
+        "UPDATE users SET points = points + ?, last_daily = ?, streak = ? WHERE user_id = ?"
+    ).bind(bonus, now(), newStreak, uid).run();
+
+    await answerCallback(callbackId,
+        `🎁 پاداش روزانه دریافت شد!\n+${faNum(bonus)} امتیاز\n🔥 روزهای پیوسته: ${faNum(newStreak)}`,
+        true);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   پردازش پیام‌های حالت‌دار (پنل ادمین + بررسی سانسور)
+// ═══════════════════════════════════════════════════════════════
+async function handleStatefulMessage(msg, env) {
     const uid = msg.from_user.id;
     const text = (msg.text || "").trim();
     const chatId = msg.chat.id;
@@ -902,20 +945,19 @@ async function handleStateful(msg) {
     const state = await db.adminState(uid);
     if (!state) return false;
 
-    // ---- OONI (برای همه) ----
     if (state.action === "await_ooni") {
         await db.clearAdminState(uid);
         const domain = text.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
 
         if (!domain.match(/^[a-z0-9.-]+\.[a-z]{2,}$/)) {
-            await sendMessage(chatId, "❌域名 نامعتبر.");
+            await sendMessage(chatId, "❌ دامنه نامعتبر.");
             return true;
         }
 
-        await sendMessage(chatId, `⏳ بررسی <code>${domain}</code>...`);
+        await sendMessage(chatId, `⏳ بررسی ${domain}...`);
         const result = await checkOONI(domain);
         if (!result?.result) {
-            await sendMessage(chatId, "❌ خطا در دریافت داده OONI.");
+            await sendMessage(chatId, "❌ خطا در دریافت داده.");
             return true;
         }
 
@@ -934,27 +976,25 @@ async function handleStateful(msg) {
             ok += (mc - ac);
         });
 
-        let verdict = "❓ نامشخص";
+        let verdict = "نامشخص";
         if (total > 0) {
             const ratio = anomaly / total;
             if (ratio > 0.5) verdict = "🚫 احتمالاً مسدود";
-            else if (ratio > 0.2) verdict = "⚠️ نیمه‌مسدود/ناپایدار";
+            else if (ratio > 0.2) verdict = "⚠️ نیمه‌مسدود";
             else verdict = "✅ در دسترس";
         }
 
         await sendMessage(chatId,
-            `🔍 <b>نتیجه OONI برای ${domain}</b>\n━━━━━━━━━━━━━━━━\n\n` +
-            `📊 کل: <b>${faNum(total)}</b>\n` +
-            `✅ نرمال: <b>${faNum(ok)}</b>\n` +
-            `⚠️ مشکوک: <b>${faNum(anomaly)}</b>\n\n` +
-            `🎯 نتیجه: <b>${verdict}</b>`);
+            `🔍 نتیجه بررسی برای ${domain}\n━━━━━━━━━━━━━━━━\n\n` +
+            `📊 کل: ${faNum(total)}\n` +
+            `✅ نرمال: ${faNum(ok)}\n` +
+            `⚠️ مشکوک: ${faNum(anomaly)}\n\n` +
+            `🎯 نتیجه: ${verdict}`);
         return true;
     }
 
-    // ---- از این‌جا فقط ادمین ----
     if (!ADMIN_IDS.includes(uid)) return false;
 
-    // ---- جستجو ----
     if (state.action === "await_search") {
         await db.clearAdminState(uid);
         const tid = parseInt(text);
@@ -970,29 +1010,28 @@ async function handleStateful(msg) {
         const invitees = inv.results || [];
         let inviteesList = "";
         if (invitees.length) {
-            inviteesList = "\n\n<b>دعوت‌شدگان اخیر:</b>\n";
-            invitees.forEach((inv, i) => {
-                inviteesList += `${i + 1}. <b>${inv.first_name}</b> | <code>${inv.user_id}</code>\n`;
+            inviteesList = "\n\nدعوت‌شدگان اخیر:\n";
+            invitees.forEach((invitee, i) => {
+                inviteesList += `${i + 1}. ${invitee.first_name} | ${invitee.user_id}\n`;
             });
         }
         await sendMessage(chatId,
-            `👤 <b>اطلاعات کاربر</b>\n━━━━━━━━━━━━━━━━\n\n` +
-            `👤 نام: <b>${u.first_name}</b>\n` +
+            `👤 اطلاعات کاربر\n━━━━━━━━━━━━━━━━\n\n` +
+            `👤 نام: ${u.first_name}\n` +
             `🔗 یوزرنیم: ${u.username ? "@" + u.username : "ندارد"}\n` +
-            `🆔 آیدی: <code>${u.user_id}</code>\n` +
+            `🆔 آیدی: ${u.user_id}\n` +
             `⭐️ امتیاز: ${faNum(u.points)}\n` +
             `💬 پیام: ${faNum(u.message_count)}\n` +
             `👥 دعوت: ${faNum(u.invite_count)}\n` +
-            `🔥 Streak: ${faNum(u.streak || 0)}\n` +
+            `🔥 روزهای پیوسته: ${faNum(u.streak || 0)}\n` +
             `🏅 رتبه: ${faNum(rank)}\n` +
             `📅 عضویت: ${faTime(u.join_date)}\n` +
-            `📌 وضعیت: ${u.is_banned ? "🚫 بلاک" : "✅ فعال"}` +
+            `📌 وضعیت: ${u.is_banned ? "مسدود" : "فعال"}` +
             inviteesList,
             backAdmin());
         return true;
     }
 
-    // ---- بلاک ----
     if (state.action === "await_ban") {
         await db.clearAdminState(uid);
         const tid = parseInt(text);
@@ -1000,22 +1039,33 @@ async function handleStateful(msg) {
             await sendMessage(chatId, "❌ آیدی نامعتبر یا ادمین است.");
             return true;
         }
-        await env.DB.prepare("UPDATE users SET is_banned = 1 WHERE user_id = ?").bind(tid).run();
-        await sendMessage(chatId, `✅ کاربر <code>${tid}</code> بلاک شد.`, backAdmin());
+        await env.DB.prepare("UPDATE users SET is_banned = 1, ban_reason = ? WHERE user_id = ?")
+            .bind("تخلف از قوانین ربات", tid).run();
+
+        // ارسال پیام رسمی به کاربر مسدود شده
+        await sendMessage(tid, BAN_MESSAGE(
+            "تخلف از قوانین ربات",
+            new Date().toLocaleString('fa-IR'),
+            tid
+        )).catch(() => {});
+
+        await sendMessage(chatId, `✅ کاربر ${tid} مسدود شد و اطلاعیه رسمی برایش ارسال گردید.`, backAdmin());
         return true;
     }
 
-    // ---- آنبلاک ----
     if (state.action === "await_unban") {
         await db.clearAdminState(uid);
         const tid = parseInt(text);
         if (isNaN(tid)) { await sendMessage(chatId, "❌ آیدی نامعتبر."); return true; }
-        await env.DB.prepare("UPDATE users SET is_banned = 0 WHERE user_id = ?").bind(tid).run();
-        await sendMessage(chatId, `✅ کاربر <code>${tid}</code> آنبلاک شد.`, backAdmin());
+        await env.DB.prepare("UPDATE users SET is_banned = 0, ban_reason = '' WHERE user_id = ?").bind(tid).run();
+
+        // ارسال پیام بازگشت به کاربر
+        await sendMessage(tid, UNBAN_MESSAGE).catch(() => {});
+
+        await sendMessage(chatId, `✅ کاربر ${tid} رفع مسدودی شد و پیام بازگشت برایش ارسال گردید.`, backAdmin());
         return true;
     }
 
-    // ---- ادیت امتیاز (دو مرحله) ----
     if (state.action === "await_edit_uid") {
         const tid = parseInt(text);
         if (isNaN(tid)) { await db.clearAdminState(uid); await sendMessage(chatId, "❌ آیدی نامعتبر."); return true; }
@@ -1023,8 +1073,8 @@ async function handleStateful(msg) {
         if (!u) { await db.clearAdminState(uid); await sendMessage(chatId, "❌ کاربر یافت نشد."); return true; }
         await db.setAdminState(uid, "await_edit_amount", String(tid));
         await sendMessage(chatId,
-            `👤 کاربر: <b>${u.first_name}</b>\n⭐️ امتیاز فعلی: <b>${faNum(u.points)}</b>\n\n` +
-            `مقدار تغییر را ارسال کنید (مثلاً <code>50</code> برای +50 یا <code>-20</code> برای -20):`);
+            `👤 کاربر: ${u.first_name}\n⭐️ امتیاز فعلی: ${faNum(u.points)}\n\n` +
+            `مقدار تغییر را ارسال کنید (مثلاً 50 برای +50 یا 20- برای -20):`);
         return true;
     }
 
@@ -1040,52 +1090,48 @@ async function handleStateful(msg) {
             .bind(amount, tid).run();
         const u = await db.user(tid);
         await sendMessage(chatId,
-            `✅ امتیاز <b>${u.first_name}</b> تغییر کرد.\n⭐️ امتیاز جدید: <b>${faNum(u.points)}</b>`,
+            `✅ امتیاز ${u.first_name} تغییر کرد.\n⭐️ امتیاز جدید: ${faNum(u.points)}`,
             backAdmin());
-        // اطلاع به کاربر
         await sendMessage(tid,
-            `🎁 امتیاز شما توسط ادمین تغییر کرد: <b>${amount >= 0 ? "+" : ""}${faNum(amount)}</b> امتیاز`
+            `🎁 امتیاز شما توسط ادمین تغییر کرد: ${amount >= 0 ? "+" : ""}${faNum(amount)} امتیاز`
         ).catch(() => {});
         return true;
     }
 
-    // ---- پیام همگانی ----
     if (state.action === "await_broadcast") {
         await db.clearAdminState(uid);
         const r = await env.DB.prepare("SELECT user_id FROM users WHERE is_banned = 0").all();
         const users = r.results || [];
         let ok = 0, fail = 0;
-        const status = await sendMessage(chatId, `📨 در حال ارسال به ${users.length} کاربر...`);
 
         for (let i = 0; i < users.length; i++) {
             const res = await sendMessage(users[i].user_id, text);
             if (res.ok) ok++; else fail++;
-            if (i % 25 === 0) await new Promise(r => setTimeout(r, 500)); // ضد اسپم
+            if (i % 25 === 0) await new Promise(r => setTimeout(r, 500));
         }
 
         await sendMessage(chatId,
-            `📨 <b>نتیجه ارسال:</b>\n✅ موفق: ${faNum(ok)}\n❌ ناموفق: ${faNum(fail)}`,
+            `📨 نتیجه ارسال:\n✅ موفق: ${faNum(ok)}\n❌ ناموفق: ${faNum(fail)}`,
             backAdmin());
         return true;
     }
 
-    // ---- پیام به یک کاربر ----
     if (state.action === "await_dm_uid") {
         const tid = parseInt(text);
         if (isNaN(tid)) { await db.clearAdminState(uid); await sendMessage(chatId, "❌ آیدی نامعتبر."); return true; }
         const u = await db.user(tid);
         if (!u) { await db.clearAdminState(uid); await sendMessage(chatId, "❌ کاربر یافت نشد."); return true; }
         await db.setAdminState(uid, "await_dm_text", String(tid));
-        await sendMessage(chatId, `✉️ متن پیام برای <b>${u.first_name}</b>:`);
+        await sendMessage(chatId, `✉️ متن پیام برای ${u.first_name}:`);
         return true;
     }
 
     if (state.action === "await_dm_text") {
         await db.clearAdminState(uid);
         const tid = parseInt(state.data);
-        const res = await sendMessage(tid, `📨 <b>پیام از ادمین:</b>\n\n${text}`);
+        const res = await sendMessage(tid, `📨 پیام از ادمین:\n\n${text}`);
         await sendMessage(chatId,
-            res.ok ? `✅ پیام ارسال شد به <code>${tid}</code>` : `❌ خطا در ارسال.`,
+            res.ok ? `✅ پیام ارسال شد به ${tid}` : `❌ خطا در ارسال.`,
             backAdmin());
         return true;
     }
@@ -1093,23 +1139,10 @@ async function handleStateful(msg) {
     return false;
 }
 
-// ==========================================
-// 💬 پیام‌های گروه
-// ==========================================
-async function handleGroupMessage(msg) {
-    if (!msg.from || msg.from.is_bot) return;
-    const uid = msg.from.id;
-    const u = await db.user(uid);
-    if (!u) {
-        await addOrUpdateUser(uid, msg.from.first_name || "", msg.from.username || "");
-    }
-    await addPoints(uid, POINTS_PER_MESSAGE, true);
-}
-
-// ==========================================
-// 🌐 API عمومی
-// ==========================================
-async function handleAPI(req) {
+// ═══════════════════════════════════════════════════════════════
+//   رابط برنامه‌نویسی عمومی
+// ═══════════════════════════════════════════════════════════════
+async function handlePublicAPI(req, env) {
     const url = new URL(req.url);
     const path = url.pathname;
     const headers = {
@@ -1134,12 +1167,10 @@ async function handleAPI(req) {
     );
 
     try {
-        // Health
         if (path === "/api/health") {
-            return respond({ status: "ok", time: now(), version: "3.0.0" }, 200, 5);
+            return respond({ status: "ok", time: now(), version: "4.0.0" }, 200, 5);
         }
 
-        // آمار کلی
         if (path === "/api/stats") {
             const [tu, tm, ti, tp, top] = await Promise.all([
                 env.DB.prepare("SELECT COUNT(*) as c FROM users").first(),
@@ -1157,7 +1188,6 @@ async function handleAPI(req) {
             }, 200, 60);
         }
 
-        // کاربر
         const userMatch = path.match(/^\/api\/user\/(\d+)$/);
         if (userMatch) {
             const uid = parseInt(userMatch[1]);
@@ -1178,23 +1208,20 @@ async function handleAPI(req) {
             }, 200, 120);
         }
 
-        // رتبه‌بندی
         if (path === "/api/leaderboard") {
             const limit = parseInt(url.searchParams.get("limit") || "10");
             const top = await getTopUsers(Math.min(limit, 100));
             return respond(top, 200, 60);
         }
 
-        // کیفیت (تمام متریک‌ها)
         if (path === "/api/quality") {
             const metric = url.searchParams.get("metric") || "latency";
-            const range = url.searchParams.get("range") || "24h";
+            const range = url.searchParams.get("range") || "1h";
             if (!METRICS[metric]) return respond({ error: "invalid_metric", valid: Object.keys(METRICS) }, 400);
             const data = await fetchRadar(metric, range);
             return respond(data || { error: "unavailable" }, data ? 200 : 503, 300);
         }
 
-        // همه متریک‌ها
         if (path === "/api/quality/all") {
             const results = {};
             await Promise.all(Object.keys(METRICS).map(async m => {
@@ -1203,209 +1230,86 @@ async function handleAPI(req) {
             return respond({ metrics: results, time: now() }, 200, 300);
         }
 
-        // OONI
         const ooniMatch = path.match(/^\/api\/ooni\/([a-z0-9.-]+\.[a-z]{2,})$/);
         if (ooniMatch) {
             const data = await checkOONI(ooniMatch[1]);
             return respond(data || { error: "unavailable" }, data ? 200 : 503, 600);
         }
 
-        // IODA
         if (path === "/api/ioda") {
             const events = await checkIODA();
             return respond({ outages: events || [], time: now() }, 200, 300);
         }
 
-        // نقشه استان‌ها (متن)
         if (path === "/api/provinces") {
             return respond({
-                note: "داده‌های نمونه - قابل ارتقا با API استانی",
+                note: "داده‌های نمونه",
                 provinces: PROVINCES.map((p, i) => ({
                     name: p,
-                    quality: Math.max(0.2, Math.min(0.95, 0.6 + Math.sin(i) * 0.25))
+                    quality: Math.max(0.2, Math.min(0.95, 0.6 + Math.sin(i * 1.3) * 0.3))
                 }))
             }, 200, 600);
         }
 
         return respond({ error: "not_found", endpoints: [
-            "/api/health",
-            "/api/stats",
-            "/api/user/{id}",
-            "/api/leaderboard?limit=10",
-            "/api/quality?metric=latency&range=24h",
-            "/api/quality/all",
-            "/api/ooni/{domain}",
-            "/api/ioda",
-            "/api/provinces"
+            "/api/health", "/api/stats", "/api/user/{id}",
+            "/api/leaderboard", "/api/quality", "/api/quality/all",
+            "/api/ooni/{domain}", "/api/ioda", "/api/provinces"
         ] }, 404);
     } catch (e) {
-        console.error("API error:", e);
+        console.error("خطای رابط برنامه‌نویسی:", e);
         return respond({ error: "internal_error", message: e.message }, 500);
     }
 }
 
-// ==========================================
-// ⏰ Cron
-// ==========================================
-async function sendHourlyChart() {
+// ═══════════════════════════════════════════════════════════════
+//   ارسال نمودار ساعتی به کانال
+// ═══════════════════════════════════════════════════════════════
+async function sendHourlyChartToChannel(env) {
     if ((await db.setting("auto_chart_enabled")) !== "1") return;
 
-    const iqi = await fetchRadar("latency", "24h");
+    const iqi = await fetchRadar("latency", "1h");
     if (!iqi?.timestamps) return;
 
     const url = chartUrl(
         labelsFrom(iqi.timestamps),
-        [buildDataset("تاخیر (ms)", iqi.values || [], "#36a2eb")],
-        "نمودار ۲۴ ساعته - تاخیر"
+        [buildDataset("تاخیر (میلی‌ثانیه)", iqi.values || [], "#36a2eb")],
+        "نمودار یک ساعته — تاخیر"
     );
 
     await sendPhoto(CHANNEL_ID, url,
-        `📊 نمودار ۲۴ ساعته تاخیر اینترنت ایران\n` +
-        `⏰ ${faTime(now())}\n📡 Cloudflare Radar`);
+        `📊 نمودار یک ساعته تاخیر اینترنت ایران\n` +
+        `⏰ ${faTime(now())}\n📡 منبع: کلادفلر رادار`);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//   بررسی و ارسال هشدار
+// ═══════════════════════════════════════════════════════════════
 async function runAlertCheck(force = false) {
     if (!force && (await db.setting("auto_alert_enabled")) !== "1") return false;
 
     const summary = await radarSummary("latency");
     if (!summary) return false;
 
-    // ساختار summary ممکن است متفاوت باشد؛ اینجا فرض شده p50 دارد
     const p50 = summary.latency?.p50 ?? summary.p50 ?? null;
     if (p50 === null) return false;
 
-    // آستانه
-    const THRESHOLD = 150;
-    if (p50 < THRESHOLD && !force) return false;
+    if (p50 < ALERT_THRESHOLD && !force) return false;
 
-    // ضد اسپم (حداکثر هر 30 دقیقه)
     const lastAlert = await db.cache("last_alert");
     if (lastAlert && lastAlert.expires_at > now() && !force) return false;
 
     const alertMsg =
-        `🚨 <b>هشدار کیفیت اینترنت</b>\n━━━━━━━━━━━━━━━━\n\n` +
-        `⏱️ تاخیر (p50): <b>${p50} ms</b>\n` +
-        `📊 آستانه: ${THRESHOLD} ms\n` +
+        `🚨 هشدار کیفیت اینترنت\n━━━━━━━━━━━━━━━━\n\n` +
+        `⏱️ تاخیر (میانه): ${p50} میلی‌ثانیه\n` +
+        `📊 آستانه: ${ALERT_THRESHOLD} میلی‌ثانیه\n` +
         `⏰ ${faTime(now())}\n\n` +
-        `📡 منبع: Cloudflare Radar`;
+        `📡 منبع: کلادفلر رادار`;
 
     for (const aid of ADMIN_IDS) {
         await sendMessage(aid, alertMsg).catch(() => {});
     }
 
-    // کش 30 دقیقه‌ای
     await db.setCache("last_alert", "1", 1800);
     return true;
-}
-
-// ==========================================
-// 🚀 نقطه ورود اصلی
-// ==========================================
-export default {
-    async fetch(request, env, ctx) {
-        const url = new URL(request.url);
-
-        // API
-        if (url.pathname.startsWith("/api/")) {
-            return handleAPI(request);
-        }
-
-        // Webhook
-        if (url.pathname === "/webhook") {
-            if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== WEBHOOK_SECRET) {
-                return new Response("Unauthorized", { status: 403 });
-            }
-
-            let update;
-            try {
-                update = await request.json();
-            } catch {
-                return new Response("Bad Request", { status: 400 });
-            }
-
-            ctx.waitUntil((async () => {
-                try {
-                    if (update.message) {
-                        const msg = update.message;
-
-                        // state?
-                        if (await handleStateful(msg)) return;
-
-                        // /start
-                        if (msg.text?.startsWith("/start")) {
-                            await handleStart(msg);
-                        }
-                        // گروه
-                        else if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
-                            await handleGroupMessage(msg);
-                        }
-                    }
-
-                    if (update.callback_query) {
-                        await handleCallback(update.callback_query);
-                    }
-                } catch (e) {
-                    console.error("Update error:", e.message, e.stack);
-                }
-            })());
-
-            return new Response("Ok", { status: 200 });
-        }
-
-        // setWebhook (یک بار)
-        if (url.pathname === "/setWebhook") {
-            const webhookUrl = `${url.protocol}//${url.host}/webhook`;
-            const r = await tgApi("setWebhook", {
-                url: webhookUrl,
-                secret_token: WEBHOOK_SECRET,
-                allowed_updates: ["message", "callback_query"],
-                drop_pending_updates: true
-            });
-            return new Response(JSON.stringify(r), {
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        // deleteWebhook
-        if (url.pathname === "/deleteWebhook") {
-            const r = await tgApi("deleteWebhook", { drop_pending_updates: true });
-            return new Response(JSON.stringify(r), {
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        // getMe (تست)
-        if (url.pathname === "/getMe") {
-            const r = await tgApi("getMe");
-            return new Response(JSON.stringify(r), {
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        // صفحه اصلی
-        return new Response(
-            `🤖 ربات رادار اینترنت ایران v3.0\n\n` +
-            `📡 Endpoints:\n` +
-            `• /webhook — دریافت آپدیت‌های تلگرام\n` +
-            `• /setWebhook — فعال‌سازی webhook\n` +
-            `• /deleteWebhook — غیرفعال‌سازی\n` +
-            `• /getMe — تست ربات\n` +
-            `• /api/health — سلامت\n` +
-            `• /api/stats — آمار کلی\n` +
-            `• /api/quality/all — همه متریک‌ها\n` +
-            `• /api/ioda — قطعی‌ها\n` +
-            `• /api/ooni/{domain} — بررسی سانسور\n` +
-            `• /api/leaderboard — رتبه‌بندی\n`,
-            { headers: { "Content-Type": "text/plain; charset=utf-8" } }
-        );
-    },
-
-    async scheduled(event, env, ctx) {
-        if (event.cron === "0 * * * *") {
-            ctx.waitUntil(sendHourlyChart());
-        }
-        if (event.cron === "*/15 * * * *") {
-            ctx.waitUntil(runAlertCheck());
-        }
     }
-};
