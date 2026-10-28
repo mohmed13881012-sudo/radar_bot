@@ -1,22 +1,10 @@
 name = "radar-bot"
 main = "worker.js"
 compatibility_date = "2024-01-01"
-compatibility_flags = ["nodejs_compat"]
 
 [vars]
-BOT_TOKEN = "توکن-ربات-خودتان-را-اینجا-بگذارید"
+BOT_TOKEN = "8579994081:AAFTEYDx8zllFeY7WjX9_hK3YLaESLFv0Ek"
 CHANNEL_ID = "@radarinternetiran"
 GROUP_ID = "@radarinternetirangruop"
 POINTS_PER_MESSAGE = "1"
 POINTS_PER_INVITE = "10"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "radar-bot-db"
-database_id = "221e7d8c-90f0-449c-a71c-3d881f37edeb"
-
-[triggers]
-crons = [
-  "0 * * * *",
-  "*/15 * * * *"
-]
