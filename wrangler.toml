@@ -8,3 +8,8 @@ CHANNEL_ID = "@radarinternetiran"
 GROUP_ID = "@radarinternetirangruop"
 POINTS_PER_MESSAGE = "1"
 POINTS_PER_INVITE = "10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "radar-bot-db"
+database_id = "221e7d8c-90f0-449c-a71c-3d881f37edeb"
