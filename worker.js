@@ -1,11 +1,9 @@
 const CH1 = "@radarinternetiran";
-const CH2 = "@royal_trust_ir_official";
+const CH2 = "@radarinternetirangruop"; // لینک گروه جایگزین شد
 const ADMIN_PASS = "mohmedkord1388";
 const BOT_USERNAME = "Radarinternetiranbot";
 const CURRENT_VERSION = "2.0";
-
-// ⬇️ آیدی‌های ادمین (مالک و ادمین)
-const ADMIN_IDS = ["8344700031", "7652496428"];
+const ADMIN_IDS = ["8344700031", "7652496428"]; // آیدی مالک و ادمین
 
 let GLOBAL_STATS = null;
 
@@ -204,7 +202,7 @@ function quickChart(config) {
   return "https://quickchart.io/chart?w=900&h=500&bkg=%23ffffff&c=" + encodeURIComponent(json);
 }
 
-// ==================== نمودارهای جدید ====================
+// ==================== Charts ====================
 async function makeComprehensiveChart(env) {
   let blockPercent = 0;
   let ripeVisibility = 0;
@@ -775,22 +773,22 @@ async function handleUpdate(update, TG, STATS, env) {
     return;
   }
 
-  // ====== عضویت اجباری ======
+  // ====== عضویت اجباری (کانال + گروه) ======
   const inCh1 = await checkMember(TG, userId, CH1);
   const inCh2 = await checkMember(TG, userId, CH2);
 
   if (!inCh1 || !inCh2) {
     await sendMessage(TG, chatId,
       "╭━━━ 🔒 عضویت لازم ━━━╮\n\n" +
-      "  برای استفاده از ربات،\n  ابتدا در هر دو کانال زیر\n  عضو شوید:\n\n" +
-      "  📡 رادار اینترنت\n  👑 رویال تراست\n\n" +
+      "  برای استفاده از ربات،\n  ابتدا در کانال و گروه زیر\n  عضو شوید:\n\n" +
+      "  📡 کانال رادار اینترنت\n  👥 گروه رادار اینترنت\n\n" +
       "  پس از عضویت،\n  دوباره /start را بزنید.\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       {
         parse_mode: "HTML",
         inline_keyboard: [
-          [{ text: "📡 عضویت در رادار اینترنت", url: "https://t.me/radarinternetiran" }],
-          [{ text: "👑 عضویت در رویال تراست", url: "https://t.me/royal_trust_ir_official" }]
+          [{ text: "📡 عضویت در کانال", url: "https://t.me/radarinternetiran" }],
+          [{ text: "👥 عضویت در گروه", url: "https://t.me/radarinternetirangruop" }]
         ]
       }
     );
@@ -1743,4 +1741,4 @@ async function makeReport(mode) {
   } else out += "  ⚠️ RIPE در دسترس نیست\n";
   out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official";
   return out;
-        }
+    }
