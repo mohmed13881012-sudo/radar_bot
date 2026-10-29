@@ -1,9 +1,10 @@
 const CH1 = "@radarinternetiran";
-const CH2 = "@radarinternetirangruop"; // لینک گروه جایگزین شد
-const ADMIN_PASS = "mohmedkord1388";
+const CH2 = "@radarinternetirangruop";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "2.0";
-const ADMIN_IDS = ["8344700031", "7652496428"]; // آیدی مالک و ادمین
+const CURRENT_VERSION = "3.0";
+
+// ⬇️ آیدی‌های مالک و ادمین‌های مجاز (فقط این افراد پنل مدیریت را می‌بینند)
+const ADMIN_IDS = ["8344700031", "7652496428"];
 
 let GLOBAL_STATS = null;
 
@@ -44,77 +45,7 @@ const FILTER_CHECK = [
   { name: "ویکی‌پدیا", url: "https://www.wikipedia.org" }
 ];
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const BOT_TOKEN = env.BOT_TOKEN;
-    const STATS = env.STATS;
-    GLOBAL_STATS = STATS;
-
-    if (url.pathname === "/test") return new Response("Test OK");
-    if (!BOT_TOKEN) return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
-    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
-
-    if (url.pathname.startsWith("/api")) {
-      return await handleAPI(url, STATS);
-    }
-
-    if (url.pathname === "/admin") {
-      const pass = url.searchParams.get("pass");
-      if (pass !== ADMIN_PASS) {
-        return new Response("⛔ دسترسی غیرمجاز", { status: 401 });
-      }
-      const html = await makeAdminDashboard(STATS);
-      return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    }
-
-    if (url.pathname === "/setwebhook") {
-      const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
-      return new Response("Result: " + await r.text());
-    }
-    if (url.pathname === "/webhookinfo") {
-      const r = await fetch(TG + "/getWebhookInfo");
-      return new Response(await r.text());
-    }
-    if (url.pathname === "/sendreport") {
-      await sendChannelReport(TG);
-      await sendOrUpdateChannelStatus(TG, STATS);
-      if (STATS) {
-        await saveDailySnapshot(STATS);
-        await saveHourlySnapshot(STATS);
-      }
-      return new Response("Report sent!");
-    }
-
-    if (request.method !== "POST") return new Response("Radar Bot is running!");
-    try {
-      const update = await request.json();
-      await handleUpdate(update, TG, STATS, env); 
-    } catch(e) { console.log("Error: " + e.message); }
-    return new Response("OK");
-  },
-  
-  async scheduled(event, env, ctx) {
-    const BOT_TOKEN = env.BOT_TOKEN;
-    if (!BOT_TOKEN) return;
-    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
-    GLOBAL_STATS = env.STATS;
-    
-    // ارسال خودکار نمودار جامع به کانال در صورت وجود توکن
-    if (env.CLOUDFLARE_API_TOKEN) {
-        const compChart = await makeComprehensiveChart(env);
-        if (compChart) await sendPhoto(TG, CH1, compChart.url, compChart.caption);
-    }
-
-    await sendOrUpdateChannelStatus(TG, env.STATS);
-    if (env.STATS) {
-      await saveDailySnapshot(env.STATS);
-      await saveHourlySnapshot(env.STATS);
-    }
-  }
-};
-
-// ==================== Helper Dates ====================
+// ==================== Helper Dates & Utils ====================
 function getIranTime() {
   return new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
 }
@@ -126,7 +57,7 @@ function getGregDate() {
   return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
 }
 function getDateBoth() {
-  return "📅 " + getIranDate() + "  •  🗓 " + getGregDate();
+  return "🗓 " + getIranDate() + "  •  " + getGregDate();
 }
 function getToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -178,6 +109,7 @@ function makeBar(v) {
   for (let i = 0; i < 10; i++) b += (i < f ? c : "▫️");
   return b;
 }
+
 async function pingSite(url) {
   const s = Date.now();
   try {
@@ -188,6 +120,7 @@ async function pingSite(url) {
     return Date.now() - s;
   } catch(e) { return null; }
 }
+
 async function checkAccessible(url) {
   try {
     const c = new AbortController();
@@ -197,122 +130,8 @@ async function checkAccessible(url) {
     return r.ok || r.status < 400;
   } catch(e) { return false; }
 }
-function quickChart(config) {
-  const json = JSON.stringify(config);
-  return "https://quickchart.io/chart?w=900&h=500&bkg=%23ffffff&c=" + encodeURIComponent(json);
-}
 
-// ==================== Charts ====================
-async function makeComprehensiveChart(env) {
-  let blockPercent = 0;
-  let ripeVisibility = 0;
-  let irOk = 0, globalOk = 0;
-  let irPing = 0, globalPing = 0;
-
-  try {
-    const ooni = await fetchOONI();
-    const p = parseOONI(ooni);
-    blockPercent = p.blockPercent;
-  } catch(e) {}
-
-  try {
-    const ripe = await fetchRIPE();
-    if (ripe && ripe.data && ripe.data.visibility) {
-      ripeVisibility = ripe.data.visibility;
-    }
-  } catch(e) {}
-
-  for (const s of IR_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { irOk++; irPing += t; }
-  }
-  const irPingAvg = irOk > 0 ? Math.round(irPing / irOk) : 0;
-  const irScore = Math.round((irOk / IR_SITES.length) * 100);
-
-  for (const s of GLOBAL_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { globalOk++; globalPing += t; }
-  }
-  const globalPingAvg = globalOk > 0 ? Math.round(globalPing / globalOk) : 0;
-  const globalScore = Math.round((globalOk / GLOBAL_SITES.length) * 100);
-
-  const chartConfig = {
-    type: 'bar',
-    data: {
-      labels: ['دسترسی آزاد (OONI)', 'پایداری مسیریابی (RIPE)', 'سایت‌های ایرانی', 'سایت‌های جهانی'],
-      datasets: [{
-        label: 'درصد سلامت (%)',
-        data: [100 - blockPercent, ripeVisibility, irScore, globalScore],
-        backgroundColor: [
-          (100 - blockPercent) > 70 ? '#22c55e' : (100 - blockPercent) > 40 ? '#f97316' : '#ef4444',
-          ripeVisibility > 90 ? '#22c55e' : '#eab308',
-          irScore > 75 ? '#22c55e' : '#eab308',
-          globalScore > 75 ? '#22c55e' : '#eab308'
-        ],
-        borderRadius: 8
-      }]
-    },
-    options: {
-      title: { display: true, text: '📊 نمودار جامع وضعیت اینترنت ایران', fontSize: 18 },
-      legend: { display: false },
-      scales: { y: { beginAtZero: true, max: 100 } }
-    }
-  };
-
-  const url = quickChart(chartConfig);
-
-  const caption = "📊 <b>گزارش جامع وضعیت اینترنت</b>\n\n" + getDateBoth() + "\n\n" +
-    "🚫 مسدودسازی (OONI): <b>%" + blockPercent + "</b>\n" +
-    "🌐 پایداری مسیریابی (RIPE): <b>%" + ripeVisibility + "</b>\n" +
-    "🇮🇷 پینگ سایت‌های ایرانی: <b>" + irPingAvg + "ms</b> (%" + irScore + ")\n" +
-    "🌍 پینگ سایت‌های جهانی: <b>" + globalPingAvg + "ms</b> (%" + globalScore + ")\n\n" +
-    "📌 منابع: OONI, RIPE, پینگ داخلی";
-
-  return { url, caption };
-}
-
-async function makeRadar1hChart(env) {
-  if (!env.CLOUDFLARE_API_TOKEN) return null;
-  try {
-    const url = `https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=1h&metric=latency&aggInterval=1h`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } });
-    const data = await res.json();
-    if (!data.success || !data.result || !data.result.timestamps) return null;
-
-    const labels = data.result.timestamps.map(t => {
-      const d = new Date(t * 1000);
-      return String(d.getHours()).padStart(2, '0') + ":" + String(d.getMinutes()).padStart(2, '0');
-    });
-
-    const config = {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'تاخیر (ms)',
-          data: data.result.values || [],
-          borderColor: '#36a2eb',
-          backgroundColor: 'rgba(54, 162, 235, 0.15)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 2
-        }]
-      },
-      options: {
-        title: { display: true, text: 'نمودار ۱ ساعته تاخیر اینترنت ایران' },
-        legend: { display: false }
-      }
-    };
-
-    const chartUrl = quickChart(config);
-    return {
-      url: chartUrl,
-      caption: "📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ " + getIranTime()
-    };
-  } catch(e) { return null; }
-}
-
-// ==================== APIs ====================
+// ==================== APIs Data Fetchers ====================
 async function fetchOONI() {
   try {
     const until = getToday();
@@ -322,6 +141,7 @@ async function fetchOONI() {
   } catch(e) {}
   return null;
 }
+
 async function fetchOONI7d() {
   try {
     const until = getToday();
@@ -331,6 +151,7 @@ async function fetchOONI7d() {
   } catch(e) {}
   return null;
 }
+
 async function fetchRIPE() {
   const eps = [
     "https://stat.ripe.net/data/routing-status/data.json?resource=IR",
@@ -344,6 +165,21 @@ async function fetchRIPE() {
   }
   return null;
 }
+
+async function fetchIODA() {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const from = now - (24 * 3600);
+    const url = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?from=${from}&until=${now}&entityType=country&limit=20`;
+    const r = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (r.ok) {
+      const data = await r.json();
+      return (data.data || []).filter(e => (e.location || "").includes("country/IR"));
+    }
+  } catch(e) {}
+  return [];
+}
+
 function parseOONI(ooni) {
   let totalMs = 0, blockedMs = 0;
   let asnData = {};
@@ -375,7 +211,179 @@ function parseOONI(ooni) {
   return { blockPercent: totalMs > 0 ? Math.round((blockedMs / totalMs) * 100) : 0, totalMs, blockedMs, asnData, dayData };
 }
 
-// ==================== Send ====================
+// ==================== Chart Generator Engine (Dark Theme) ====================
+function quickChart(config) {
+  const json = JSON.stringify(config);
+  return "https://quickchart.io/chart?w=900&h=500&bkg=%230f172a&c=" + encodeURIComponent(json);
+}
+
+async function makeComprehensiveChart() {
+  let blockPercent = 0, ripeVisibility = 0, irOk = 0, globalOk = 0, irPing = 0, globalPing = 0;
+  let iodaEvents = [];
+
+  try { const ooni = await fetchOONI(); const p = parseOONI(ooni); blockPercent = p.blockPercent; } catch(e) {}
+  try { const ripe = await fetchRIPE(); if (ripe && ripe.data && ripe.data.visibility) ripeVisibility = ripe.data.visibility; } catch(e) {}
+  try { iodaEvents = await fetchIODA(); } catch(e) {}
+  
+  for (const s of IR_SITES) { const t = await pingSite(s.url); if (t) { irOk++; irPing += t; } }
+  const irPingAvg = irOk > 0 ? Math.round(irPing / irOk) : 0; 
+  const irScore = Math.round((irOk / IR_SITES.length) * 100);
+  
+  for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalOk++; globalPing += t; } }
+  const globalPingAvg = globalOk > 0 ? Math.round(globalPing / globalOk) : 0; 
+  const globalScore = Math.round((globalOk / GLOBAL_SITES.length) * 100);
+
+  const chartConfig = {
+    type: 'radar',
+    data: {
+      labels: ['دسترسی آزاد (OONI)', 'پایداری مسیریابی (RIPE)', 'سایت‌های ایرانی', 'سایت‌های جهانی'],
+      datasets: [{
+        label: 'وضعیت شبکه (%)',
+        data: [100 - blockPercent, ripeVisibility, irScore, globalScore],
+        backgroundColor: 'rgba(56, 189, 248, 0.4)', borderColor: '#38bdf8',
+        pointBackgroundColor: '#38bdf8', pointBorderColor: '#fff', borderWidth: 2
+      }]
+    },
+    options: {
+      plugins: { title: { display: true, text: '📡 رادار جامع وضعیت شبکه', color: '#f8fafc', font: { size: 20, family: 'Tahoma' } }, legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } },
+      scale: { ticks: { backdropColor: 'transparent', color: '#94a3b8', min: 0, max: 100, stepSize: 20 }, grid: { color: '#334155' }, angleLines: { color: '#334155' }, pointLabels: { color: '#f8fafc', font: { size: 14, family: 'Tahoma' } } }
+    }
+  };
+  
+  const url = quickChart(chartConfig);
+  let caption = `📊 <b>گزارش جامع وضعیت اینترنت</b>\n🗓 ${getDateBoth()}\n\n` +
+    `🚫 مسدودسازی: <b>${blockPercent}%</b>\n` +
+    `🌐 پایداری مسیریابی: <b>${ripeVisibility}%</b>\n` +
+    `🇮🇷 پینگ سایت‌های ایرانی: <b>${irPingAvg}ms</b> (${irScore}%)\n` +
+    `🌍 پینگ سایت‌های جهانی: <b>${globalPingAvg}ms</b> (${globalScore}%)\n\n` +
+    `📌 منابع: OONI, RIPE, IODA, پینگ داخلی`;
+    
+  if (iodaEvents.length > 0) {
+    caption += `\n🚨 <b>هشدار IODA:</b> ${iodaEvents.length} قطعی بزرگ در ۲۴ ساعت اخیر ثبت شده است.`;
+  }
+
+  return { url, caption };
+}
+
+async function makeRadar1hChart(env) {
+  if (!env.CLOUDFLARE_API_TOKEN) return null;
+  try {
+    const url = `https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=1h&metric=latency&aggInterval=1h`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } });
+    const data = await res.json();
+    if (!data.success || !data.result || !data.result.timestamps) return null;
+    const labels = data.result.timestamps.map(t => { const d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + ":" + String(d.getMinutes()).padStart(2, '0'); });
+    const config = {
+      type: 'line',
+      data: { labels: labels, datasets: [{ label: 'تاخیر (ms)', data: data.result.values || [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#10b981', pointBorderColor: '#fff' }] },
+      options: { plugins: { title: { display: true, text: '📈 نمودار ۱ ساعته تاخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } }
+    };
+    return { url: quickChart(config), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` };
+  } catch(e) { return null; }
+}
+
+async function makeTrendChart() {
+  const ooni = await fetchOONI7d(); const p = parseOONI(ooni);
+  let days = Object.keys(p.dayData).sort(); let labels = [], values = [];
+  for (const d of days) { const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0; labels.push(d.substring(5)); values.push(blocked); }
+  const config = {
+    type: "line",
+    data: { labels: labels, datasets: [{ label: "مسدودسازی %", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#ef4444' }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8', beginAtZero: true, max: 100 }, grid: { color: '#334155' } } } }
+  };
+  return { url: quickChart(config), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" };
+}
+
+async function makeBarChart() {
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
+  let ops = [];
+  for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); }
+  ops.sort((a,b) => b.count - a.count); ops = ops.slice(0, 8);
+  const config = {
+    type: 'horizontalBar',
+    data: { labels: ops.map(o => o.name), datasets: [{ label: "دسترسی آزاد %", data: ops.map(o => o.rate), backgroundColor: ops.map(o => o.rate >= 80 ? "#10b981" : o.rate >= 60 ? "#eab308" : o.rate >= 40 ? "#f97316" : "#ef4444"), borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', beginAtZero: true, max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc' }, grid: { display: false } } } }
+  };
+  return { url: quickChart(config), caption: "📊 <b>دسترسی آزاد اپراتورها</b>\n\n" + getDateBoth() + "\n\nسطح فیلترینگ: <b>%" + p.blockPercent + "</b>" };
+}
+
+async function makePieChart() {
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
+  let ops = [];
+  for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, count: d.count }); }
+  ops.sort((a,b) => b.count - a.count); ops = ops.slice(0, 6);
+  const colors = ["#38bdf8", "#ef4444", "#10b981", "#eab308", "#8b5cf6", "#f97316"];
+  const config = {
+    type: "doughnut",
+    data: { labels: ops.map(o => o.name), datasets: [{ data: ops.map(o => o.count), backgroundColor: colors, borderWidth: 2, borderColor: '#0f172a' }] },
+    options: { plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } } }
+  };
+  return { url: quickChart(config), caption: "🥧 <b>سهم اپراتورها</b>\n\n" + getDateBoth() + "\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری" };
+}
+
+async function makeMapChart() {
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
+  const bp = p.blockPercent;
+  let color = "#ef4444"; if (bp < 20) color = "#10b981"; else if (bp < 35) color = "#eab308"; else if (bp < 50) color = "#f97316";
+  const config = {
+    type: "doughnut",
+    data: { labels: ["فیلترینگ", "دسترسی آزاد"], datasets: [{ data: [bp, 100 - bp], backgroundColor: [color, "#10b981"], borderWidth: 0 }] },
+    options: { cutoutPercentage: 70, plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } } }
+  };
+  return { url: quickChart(config), caption: "🗺 <b>نقشه حرارتی فیلترینگ ایران</b>\n\n" + getDateBoth() + "\n\n🚫 مسدودسازی: <b>%" + bp + "</b>\n📊 تعداد ASN: <b>" + Object.keys(p.asnData).length + "</b>" };
+  }// ==================== Main Bot Entry ====================
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const BOT_TOKEN = env.BOT_TOKEN;
+    const STATS = env.STATS;
+    GLOBAL_STATS = STATS;
+
+    if (url.pathname === "/test") return new Response("Test OK");
+    if (!BOT_TOKEN) return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
+
+    if (url.pathname.startsWith("/api")) {
+      return await handleAPI(url, STATS);
+    }
+
+    if (url.pathname === "/setwebhook") {
+      const r = await fetch(TG + "/setWebhook?url=" + url.origin + "/");
+      return new Response("Result: " + await r.text());
+    }
+    if (url.pathname === "/webhookinfo") {
+      const r = await fetch(TG + "/getWebhookInfo");
+      return new Response(await r.text());
+    }
+
+    if (request.method !== "POST") return new Response("Radar Bot is running!");
+    try {
+      const update = await request.json();
+      await handleUpdate(update, TG, STATS, env); 
+    } catch(e) { console.log("Error: " + e.message); }
+    return new Response("OK");
+  },
+  
+  async scheduled(event, env, ctx) {
+    const BOT_TOKEN = env.BOT_TOKEN;
+    if (!BOT_TOKEN) return;
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
+    GLOBAL_STATS = env.STATS;
+    
+    if (env.CLOUDFLARE_API_TOKEN) {
+        const compChart = await makeComprehensiveChart();
+        if (compChart) await sendPhoto(TG, CH1, compChart.url, compChart.caption);
+    }
+
+    await sendOrUpdateChannelStatus(TG, env.STATS);
+    if (env.STATS) {
+      await saveDailySnapshot(env.STATS);
+      await saveHourlySnapshot(env.STATS);
+    }
+  }
+};
+
+// ==================== Send Messages ====================
 async function sendPhoto(TG, chatId, url, caption) {
   try {
     await fetch(TG + "/sendPhoto", {
@@ -385,6 +393,7 @@ async function sendPhoto(TG, chatId, url, caption) {
     });
   } catch(e) {}
 }
+
 async function sendMessage(TG, chatId, text, extra) {
   const body = { chat_id: chatId, text: text };
   if (extra) {
@@ -398,16 +407,6 @@ async function sendMessage(TG, chatId, text, extra) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
-    });
-  } catch(e) {}
-}
-async function sendChannelReport(TG) {
-  const report = await makeReport("full");
-  try {
-    await fetch(TG + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CH1, text: report, parse_mode: "HTML" })
     });
   } catch(e) {}
 }
@@ -461,7 +460,7 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
   } catch(e) { console.log("Channel status error: " + e.message); }
 }
 
-// ==================== KV Stats ====================
+// ==================== KV Stats & Database ====================
 async function saveDailySnapshot(STATS) {
   try {
     const ooni = await fetchOONI();
@@ -480,7 +479,6 @@ async function ensureTodaySnapshot(STATS) {
   try {
     const today = getToday();
     const yesterday = getYesterday();
-    
     const existsToday = await STATS.get("snap:" + today);
     if (!existsToday) {
       const ooni = await fetchOONI();
@@ -491,7 +489,6 @@ async function ensureTodaySnapshot(STATS) {
         saved: new Date().toISOString()
       }), { expirationTtl: 2592000 });
     }
-    
     const existsYesterday = await STATS.get("snap:" + yesterday);
     if (!existsYesterday) {
       try {
@@ -528,33 +525,9 @@ async function saveHourlySnapshot(STATS) {
     
     const key = "hourly:" + today + ":" + hour;
     await STATS.put(key, JSON.stringify({
-      hour: hour,
-      quality: quality,
-      avg_ping: avg,
-      saved: new Date().toISOString()
+      hour: hour, quality: quality, avg_ping: avg, saved: new Date().toISOString()
     }), { expirationTtl: 172800 });
   } catch(e) {}
-}
-
-async function getHourlyData(STATS) {
-  const today = getToday();
-  const currentHour = getIranHour();
-  const result = [];
-  
-  for (let h = 0; h <= currentHour; h++) {
-    try {
-      const raw = await STATS.get("hourly:" + today + ":" + h);
-      if (raw) {
-        const d = JSON.parse(raw);
-        result.push({ hour: h, quality: d.quality });
-      } else {
-        result.push({ hour: h, quality: null });
-      }
-    } catch(e) {
-      result.push({ hour: h, quality: null });
-    }
-  }
-  return result;
 }
 
 async function getDailySnapshot(STATS, date) {
@@ -584,9 +557,7 @@ async function addPoints(STATS, userId, points) {
 
 async function getPoints(STATS, userId) {
   if (!STATS) return 0;
-  try {
-    return parseInt(await STATS.get("points:" + userId) || "0");
-  } catch(e) { return 0; }
+  try { return parseInt(await STATS.get("points:" + userId) || "0"); } catch(e) { return 0; }
 }
 
 async function trackUser(STATS, userId, userName) {
@@ -613,10 +584,7 @@ async function trackUser(STATS, userId, userName) {
 
 async function getReferrer(STATS, userId) {
   if (!STATS) return null;
-  try {
-    const r = await STATS.get("ref:" + userId);
-    return r || null;
-  } catch(e) { return null; }
+  try { return await STATS.get("ref:" + userId) || null; } catch(e) { return null; }
 }
 
 async function checkVersion(STATS, userId, TG, chatId) {
@@ -626,18 +594,15 @@ async function checkVersion(STATS, userId, TG, chatId) {
     if (userVer !== CURRENT_VERSION) {
       await sendMessage(TG, chatId,
         "🎉 <b>ربات آپدیت شد!</b>\n\n" +
-        "نسخه جدید با قابلیت‌های بهتر:\n" +
-        "✅ نمودار جامع منابع\n" +
-        "✅ دکمه‌های شیشه‌ای\n" +
-        "✅ سیستم اخطار رسمی\n\n" +
-        "🔹 برای استفاده بهینه، دوباره /start رو بزن.",
+        "نسخه جدید با طراحی مدرن نمودارها، اتصال به منابع IODA و امنیت بالاتر پنل مدیریت.\n\n" +
+        "🔹 برای استفاده از منوی جدید، دوباره /start رو بزن.",
         { parse_mode: "HTML" });
       await STATS.put("v:" + userId, CURRENT_VERSION);
     }
   } catch(e) {}
 }
 
-// ==================== Handle Update ====================
+// ==================== Main Update Handler ====================
 async function handleUpdate(update, TG, STATS, env) {
   // ====== هندل کردن دکمه‌های شیشه‌ای ======
   if (update.callback_query) {
@@ -652,36 +617,45 @@ async function handleUpdate(update, TG, STATS, env) {
       return;
     }
 
-    await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "در حال پردازش..." }) });
-
-    let fakeText = "";
-    if (cbData === "status") fakeText = "/status";
-    else if (cbData === "work") fakeText = "/work";
-    else if (cbData === "score") fakeText = "/score";
-    else if (cbData === "vs") fakeText = "/vs";
-    else if (cbData === "compare") fakeText = "/compare";
-    else if (cbData === "top") fakeText = "/top";
-    else if (cbData === "world") fakeText = "/world";
-    else if (cbData === "today") fakeText = "/today";
-    else if (cbData === "history") fakeText = "/history";
-    else if (cbData === "trend") fakeText = "/trend";
-    else if (cbData === "chart") fakeText = "/chart";
-    else if (cbData === "pie") fakeText = "/pie";
-    else if (cbData === "map") fakeText = "/map";
-    else if (cbData === "myrank") fakeText = "/myrank";
-    else if (cbData === "leaderboard") fakeText = "/leaderboard";
-    else if (cbData === "invite") fakeText = "/invite";
-    else if (cbData === "api") fakeText = "/api";
-    else if (cbData === "best") fakeText = "/best";
-    else if (cbData === "speed") fakeText = "/speed";
-    else if (cbData === "help") fakeText = "/help";
-    else if (cbData === "comprehensive_chart") fakeText = "/comprehensive";
-    else if (cbData === "radar_1h") fakeText = "/radar1h";
-
-    if (fakeText) {
-      update.message = { chat: { id: cbChatId }, from: cb.from, text: fakeText };
+    // ====== امنیت پنل ادمین ======
+    if (cbData === "admin_panel") {
+      if (!ADMIN_IDS.includes(cbUserId)) {
+        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ این پنل فقط برای مالکان و ادمین‌های ربات باز است.", show_alert: true }) });
+        return;
+      }
+      update.message = { chat: { id: cbChatId }, from: cb.from, text: "/admin" };
     } else {
-      return;
+      await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "در حال پردازش..." }) });
+      
+      let fakeText = "";
+      if (cbData === "status") fakeText = "/status";
+      else if (cbData === "work") fakeText = "/work";
+      else if (cbData === "score") fakeText = "/score";
+      else if (cbData === "vs") fakeText = "/vs";
+      else if (cbData === "compare") fakeText = "/compare";
+      else if (cbData === "top") fakeText = "/top";
+      else if (cbData === "world") fakeText = "/world";
+      else if (cbData === "today") fakeText = "/today";
+      else if (cbData === "history") fakeText = "/history";
+      else if (cbData === "trend") fakeText = "/trend";
+      else if (cbData === "chart") fakeText = "/chart";
+      else if (cbData === "pie") fakeText = "/pie";
+      else if (cbData === "map") fakeText = "/map";
+      else if (cbData === "myrank") fakeText = "/myrank";
+      else if (cbData === "leaderboard") fakeText = "/leaderboard";
+      else if (cbData === "invite") fakeText = "/invite";
+      else if (cbData === "api") fakeText = "/api";
+      else if (cbData === "best") fakeText = "/best";
+      else if (cbData === "speed") fakeText = "/speed";
+      else if (cbData === "help") fakeText = "/help";
+      else if (cbData === "comprehensive_chart") fakeText = "/comprehensive";
+      else if (cbData === "radar_1h") fakeText = "/radar1h";
+
+      if (fakeText) {
+        update.message = { chat: { id: cbChatId }, from: cb.from, text: fakeText };
+      } else {
+        return;
+      }
     }
   }
 
@@ -698,28 +672,26 @@ async function handleUpdate(update, TG, STATS, env) {
   const isBanned = await STATS.get("BANNED_" + userId);
   if (isBanned === "1") {
     const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف از قوانین ربات";
-    const banMsg = "🚫 اطلاعیه رسمی مدیریت\n\n" +
+    const banMsg = "🚫 <b>اطلاعیه رسمی مدیریت</b>\n\n" +
       "کاربر گرامی،\n\n" +
       "دسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n" +
-      "━━━━━━━━━━━━━━━━━━\n\n" +
-      "📌 وضعیت: مسدود\n" +
-      "⚠️ دلیل: " + reason + "\n" +
-      "📅 تاریخ: " + getIranDate() + "\n\n" +
-      "━━━━━━━━━━━━━━━━━━\n\n" +
-      "📞 برای اعتراض و پیگیری:\n\n" +
-      "با ادمین پشتیبانی در ارتباط باشید:\n\n" +
+      "➖➖➖➖➖➖➖➖\n\n" +
+      "📌 <b>وضعیت:</b> مسدود\n" +
+      "⚠️ <b>دلیل:</b> " + reason + "\n" +
+      "📅 <b>تاریخ:</b> " + getIranDate() + "\n\n" +
+      "➖➖➖➖➖➖➖➖\n\n" +
+      "📞 برای اعتراض و پیگیری با پشتیبانی در ارتباط باشید:\n" +
       "@Adddddddm\n\n" +
-      "آیدی عددی شما:\n\n" +
-      userId + "\n\n" +
+      "🆔 آیدی عددی شما:\n" +
+      "<code>" + userId + "</code>\n\n" +
       "⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n" +
-      "━━━━━━━━━━━━━━━━━━\n\n" +
       "🙏 با تشکر\n" +
       "🛡️ تیم مدیریت رادار اینترنت ایران";
     await sendMessage(TG, chatId, banMsg, { parse_mode: "HTML" });
     return;
   }
 
-  // ====== دستور /ban ======
+  // ====== دستورات ادمین ======
   if (text.startsWith("/ban ")) {
     if (!ADMIN_IDS.includes(userId)) {
       await sendMessage(TG, chatId, "⛔️ دسترسی ندارید.", { parse_mode: "HTML" });
@@ -728,13 +700,12 @@ async function handleUpdate(update, TG, STATS, env) {
     const tid = text.replace("/ban ", "").trim();
     await STATS.put("BANNED_" + tid, "1");
     await STATS.put("BAN_REASON_" + tid, "تخلف از قوانین ربات");
-    const banMsg = "🚫 اطلاعیه رسمی مدیریت\n\nکاربر گرامی،\n\nدسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n━━━━━━━━━━━━━━━━━━\n\n📌 وضعیت: مسدود\n⚠️ دلیل: تخلف از قوانین ربات\n📅 تاریخ: " + getIranDate() + "\n\n━━━━━━━━━━━━━━━━━━\n\n📞 برای اعتراض و پیگیری:\n\nبا ادمین پشتیبانی در ارتباط باشید:\n\n@Adddddddm\n\nآیدی عددی شما:\n\n" + tid + "\n\n⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n━━━━━━━━━━━━━━━━━━\n\n🙏 با تشکر\n🛡️ تیم مدیریت رادار اینترنت ایران";
+    const banMsg = "🚫 <b>اطلاعیه رسمی مدیریت</b>\n\nکاربر گرامی،\n\nدسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n➖➖➖➖➖➖➖➖\n\n📌 <b>وضعیت:</b> مسدود\n⚠️ <b>دلیل:</b> تخلف از قوانین ربات\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n➖➖➖➖➖➖➖➖\n\n📞 برای اعتراض و پیگیری با پشتیبانی در ارتباط باشید:\n@Adddddddm\n\n🆔 آیدی عددی شما:\n<code>" + tid + "</code>\n\n⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n🙏 با تشکر\n🛡️ تیم مدیریت رادار اینترنت ایران";
     await sendMessage(TG, tid, banMsg, { parse_mode: "HTML" });
     await sendMessage(TG, chatId, "✅ کاربر " + tid + " مسدود شد و اطلاعیه رسمی برایش ارسال گردید.", { parse_mode: "HTML" });
     return;
   }
 
-  // ====== دستور /unban ======
   if (text.startsWith("/unban ")) {
     if (!ADMIN_IDS.includes(userId)) {
       await sendMessage(TG, chatId, "⛔️ دسترسی ندارید.", { parse_mode: "HTML" });
@@ -743,33 +714,24 @@ async function handleUpdate(update, TG, STATS, env) {
     const tid = text.replace("/unban ", "").trim();
     await STATS.delete("BANNED_" + tid);
     await STATS.delete("BAN_REASON_" + tid);
-    const unbanMsg = "✅ بازگشت دسترسی\n\nکاربر گرامی،\n\nپس از بررسی درخواست شما، محدودیت حساب شما برداشته شد و دسترسی شما به ربات رادار اینترنت ایران مجدداً فعال گردید.\n\n━━━━━━━━━━━━━━━━━━\n\n🎉 اکنون می‌توانید از تمام امکانات ربات استفاده کنید.\n🙏 از صبر و همکاری شما سپاسگزاریم.\n\n━━━━━━━━━━━━━━━━━━\n\n🛡️ تیم مدیریت رادار اینترنت ایران";
+    const unbanMsg = "✅ <b>بازگشت دسترسی</b>\n\nکاربر گرامی،\n\nپس از بررسی درخواست شما، محدودیت حساب شما برداشته شد و دسترسی شما به ربات رادار اینترنت ایران مجدداً فعال گردید.\n\n➖➖➖➖➖➖➖➖\n\n🎉 اکنون می‌توانید از تمام امکانات ربات استفاده کنید.\n🙏 از صبر و همکاری شما سپاسگزاریم.\n\n🛡️ تیم مدیریت رادار اینترنت ایران";
     await sendMessage(TG, tid, unbanMsg, { parse_mode: "HTML" });
     await sendMessage(TG, chatId, "✅ کاربر " + tid + " رفع مسدودی شد و پیام بازگشت برایش ارسال گردید.", { parse_mode: "HTML" });
     return;
   }
 
-  // ====== دستور /admin ======
   if (text === "/admin") {
-    await sendMessage(TG, chatId,
-      "╭━━━ 🔐 ورود به پنل ━━━╮\n\n" +
-      "  🔑 لطفاً رمز ادمین رو بفرست:\n\n" +
-      "  ⚠️ <i>دسترسی فقط برای مدیر</i>\n\n" +
-      "╰━━━━━━━━━━━━━━━━━━━╯",
-      { parse_mode: "HTML" });
-    return;
-  }
-
-  // ====== چک رمز ادمین ======
-  if (text === ADMIN_PASS) {
-    const dash = "https://radar-bot.royal-trust-ir-official.workers.dev/admin?pass=" + ADMIN_PASS;
-    await sendMessage(TG, chatId,
-      "╭━━━ 🔐 داشبورد ادمین ━━━╮\n\n" +
-      "  ✅ رمز صحیح!\n\n" +
-      "  🔗 <a href='" + dash + "'>ورود به داشبورد</a>\n\n" +
-      "  <i>لینک رو در مرورگر باز کن</i>\n\n" +
-      "╰━━━━━━━━━━━━━━━━━━━╯",
-      { parse_mode: "HTML" });
+    if (!ADMIN_IDS.includes(userId)) {
+      await sendMessage(TG, chatId, "⛔️ <b>دسترسی غیرمجاز</b>\n\nاین پنل فقط برای مالکان و ادمین‌های ربات باز است.", { parse_mode: "HTML" });
+      return;
+    }
+    
+    const adminKb = [
+      [{ text: "📊 آمار ربات", callback_data: "status" }, { text: "📈 نمودار جامع", callback_data: "comprehensive_chart" }],
+      [{ text: "🔙 بازگشت به منو", callback_data: "main_menu" }]
+    ];
+    
+    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز، به پنل مدیریت خوش آمدید.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb });
     return;
   }
 
@@ -779,11 +741,11 @@ async function handleUpdate(update, TG, STATS, env) {
 
   if (!inCh1 || !inCh2) {
     await sendMessage(TG, chatId,
-      "╭━━━ 🔒 عضویت لازم ━━━╮\n\n" +
-      "  برای استفاده از ربات،\n  ابتدا در کانال و گروه زیر\n  عضو شوید:\n\n" +
-      "  📡 کانال رادار اینترنت\n  👥 گروه رادار اینترنت\n\n" +
-      "  پس از عضویت،\n  دوباره /start را بزنید.\n\n" +
-      "╰━━━━━━━━━━━━━━━━━━━╯",
+      "🔒 <b>عضویت اجباری</b>\n\n" +
+      "برای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:\n\n" +
+      "📡 کانال: @radarinternetiran\n" +
+      "👥 گروه: @radarinternetirangruop\n\n" +
+      "پس از عضویت، دوباره /start را بزنید.",
       {
         parse_mode: "HTML",
         inline_keyboard: [
@@ -820,33 +782,35 @@ async function handleUpdate(update, TG, STATS, env) {
     await addPoints(STATS, userId, 1);
     const pts = await getPoints(STATS, userId);
     
-    // ====== منوی دکمه شیشه‌ای ======
     const startKeyboard = [
-      [{ text: "📊 گزارش کامل", callback_data: "status" }, { text: "⚡ خلاصه", callback_data: "work" }],
-      [{ text: "📈 نمودار جامع", callback_data: "comprehensive_chart" }, { text: "⏱️ نمودار ۱ ساعته", callback_data: "radar_1h" }],
-      [{ text: "⭐ امتیاز کیفیت", callback_data: "score" }, { text: "📊 مقایسه با دیروز", callback_data: "vs" }],
+      [{ text: "📊 گزارش کامل", callback_data: "status" }, { text: "⚡ خلاصه وضعیت", callback_data: "work" }],
+      [{ text: "📈 نمودار جامع رادار", callback_data: "comprehensive_chart" }, { text: "⏱️ نمودار ۱ ساعته", callback_data: "radar_1h" }],
+      [{ text: "🚫 نقشه حرارتی فیلترینگ", callback_data: "map" }, { text: "📉 روند ۷ روزه", callback_data: "trend" }],
       [{ text: "🆚 مقایسه اپراتورها", callback_data: "compare" }, { text: "🏆 رتبه‌بندی اپراتورها", callback_data: "top" }],
-      [{ text: "🌍 مقایسه جهانی", callback_data: "world" }, { text: "🗺 نقشه حرارتی", callback_data: "map" }],
-      [{ text: "📈 نمودار امروز", callback_data: "today" }, { text: "📅 تاریخچه ۷ روز", callback_data: "history" }],
-      [{ text: "📉 نمودار روند", callback_data: "trend" }, { text: "📊 نمودار میله‌ای", callback_data: "chart" }],
-      [{ text: "🥧 نمودار دایره‌ای", callback_data: "pie" }, { text: "🎮 رتبه من", callback_data: "myrank" }],
-      [{ text: "🏆 جدول برترین‌ها", callback_data: "leaderboard" }, { text: "🎁 دعوت دوستان", callback_data: "invite" }],
-      [{ text: "⚡ تست سرعت", callback_data: "speed" }, { text: "⏰ بهترین زمان", callback_data: "best" }],
-      [{ text: "🔌 API عمومی", callback_data: "api" }, { text: "📚 راهنما", callback_data: "help" }]
+      [{ text: "🌍 مقایسه جهانی", callback_data: "world" }, { text: "📊 سهم اپراتورها", callback_data: "pie" }],
+      [{ text: "📅 تاریخچه", callback_data: "history" }, { text: "📈 امروز", callback_data: "today" }],
+      [{ text: "🎮 رتبه من", callback_data: "myrank" }, { text: "🏆 جدول برترین‌ها", callback_data: "leaderboard" }],
+      [{ text: "🎁 دعوت دوستان", callback_data: "invite" }, { text: "⚡ تست سرعت", callback_data: "speed" }],
+      [{ text: "⏰ بهترین زمان", callback_data: "best" }, { text: "🔌 API عمومی", callback_data: "api" }],
+      [{ text: "📚 راهنما", callback_data: "help" }]
     ];
 
+    if (ADMIN_IDS.includes(userId)) {
+      startKeyboard.push([{ text: "⚙️ پنل مدیریت (ویژه ادمین)", callback_data: "admin_panel" }]);
+    }
+
     await sendMessage(TG, chatId,
-      "╭━━━ 👋 خوش آمدید ━━━╮\n\n" +
-      "  سلام <b>" + userName + "</b> عزیز!\n\n" +
-      "  🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
-      "  از دکمه‌های شیشه‌ای زیر برای دسترسی سریع به تمام امکانات ربات استفاده کنید:\n\n" +
+      "╭━━━ 👋 <b>خوش آمدید</b> ━━━╮\n\n" +
+      "سلام <b>" + userName + "</b> عزیز!\n" +
+      "🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
+      "از دکمه‌های شیشه‌ای زیر برای دسترسی به بخش‌های مختلف ربات استفاده کنید:\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML", inline_keyboard: startKeyboard });
       
   } else if (text === "/comprehensive") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📊 در حال جمع‌آوری داده‌ها و ساخت نمودار جامع...");
-    const c = await makeComprehensiveChart(env);
+    await sendMessage(TG, chatId, "📊 در حال دریافت داده‌ها از تمام منابع و طراحی نمودار جامع...");
+    const c = await makeComprehensiveChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
     
   } else if (text === "/radar1h") {
@@ -864,28 +828,24 @@ async function handleUpdate(update, TG, STATS, env) {
     const lb = lbRaw ? JSON.parse(lbRaw) : [];
     const rank = lb.findIndex(x => x.id === userId) + 1;
     await sendMessage(TG, chatId,
-      "╭━━━ 🎖️ رتبه شما ━━━╮\n\n" +
-      "  👤 <b>" + userName + "</b>\n" +
-      "  🏆 امتیاز: <b>" + pts + "</b>\n" +
-      "  📊 رتبه: <b>#" + (rank || "?") + "</b>\n" +
-      "  👥 از " + lb.length + " کاربر\n\n" +
-      "┣━━━ 💡 چطور امتیاز بگیرم؟\n\n" +
-      "  • هر دستور: +1 امتیاز\n" +
-      "  • دعوت دوست: +10 امتیاز\n" +
-      "  • دعوت شدن: +5 امتیاز\n\n" +
+      "╭━━━ 🎖️ <b>رتبه شما</b> ━━━╮\n\n" +
+      "👤 <b>" + userName + "</b>\n" +
+      "🏆 امتیاز: <b>" + pts + "</b>\n" +
+      "📊 رتبه: <b>#" + (rank || "?") + "</b>\n" +
+      "👥 از " + lb.length + " کاربر\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" });
   } else if (text === "/leaderboard") {
     const lbRaw = await STATS.get("leaderboard");
     const lb = lbRaw ? JSON.parse(lbRaw) : [];
-    let out = "╭━━━ 🏆 جدول برترین‌ها ━━━╮\n\n" + getDateBoth() + "\n\n";
+    let out = "╭━━━ 🏆 <b>جدول برترین‌ها</b> ━━━╮\n\n" + getDateBoth() + "\n\n";
     if (lb.length === 0) {
-      out += "  هنوز کسی امتیاز نگرفته!\n\n  اولین نفر باش! 🚀\n\n";
+      out += "هنوز کسی امتیاز نگرفته!\nاولین نفر باش! 🚀\n\n";
     } else {
       lb.slice(0, 10).forEach((u, i) => {
         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
         const name = u.n || u.id;
-        out += "  " + medal + " <b>" + name + "</b>  →  " + u.p + "\n";
+        out += medal + " <b>" + name + "</b>  →  " + u.p + "\n";
       });
     }
     out += "\n╰━━━━━━━━━━━━━━━━━━━╯";
@@ -894,14 +854,14 @@ async function handleUpdate(update, TG, STATS, env) {
     const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId;
     const pts = await getPoints(STATS, userId);
     await sendMessage(TG, chatId,
-      "╭━━━ 🎁 دعوت دوستان ━━━╮\n\n" +
-      "  👤 <b>" + userName + "</b>\n" +
-      "  🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
-      "┣━━━ 🔗 لینک اختصاصی\n\n" +
-      "  <code>" + link + "</code>\n\n" +
-      "┣━━━ 💰 جایزه\n\n" +
-      "  • شما: <b>+۱۰</b> امتیاز\n" +
-      "  • دوستت: <b>+۵</b> امتیاز\n\n" +
+      "╭━━━ 🎁 <b>دعوت دوستان</b> ━━━╮\n\n" +
+      "👤 <b>" + userName + "</b>\n" +
+      "🏆 امتیاز شما: <b>" + pts + "</b>\n\n" +
+      "🔗 لینک اختصاصی شما:\n" +
+      "<code>" + link + "</code>\n\n" +
+      "💰 جایزه:\n" +
+      "• شما: <b>+۱۰</b> امتیاز\n" +
+      "• دوستت: <b>+۵</b> امتیاز\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" });
   } else if (text === "/vs") {
@@ -909,24 +869,24 @@ async function handleUpdate(update, TG, STATS, env) {
     const report = await makeVsReport(STATS);
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/map") {
-    await sendMessage(TG, chatId, "🗺 در حال ساخت نقشه...");
+    await sendMessage(TG, chatId, "🗺 در حال ساخت نقشه حرارتی...");
     const c = await makeMapChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/api") {
     const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api";
     await sendMessage(TG, chatId,
-      "╭━━━ 🔌 API عمومی ━━━╮\n\n" +
-      "  📊 داده‌های رادار به JSON\n\n" +
-      "┣━━━ 🔗 Endpoints\n\n" +
-      "  <code>" + base + "/status</code>\n" +
-      "  <code>" + base + "/operators</code>\n" +
-      "  <code>" + base + "/top</code>\n" +
-      "  <code>" + base + "/history</code>\n\n" +
+      "╭━━━ 🔌 <b>API عمومی</b> ━━━╮\n\n" +
+      "📊 داده‌های رادار به صورت JSON:\n\n" +
+      "🔗 Endpoints:\n" +
+      "<code>" + base + "/status</code>\n" +
+      "<code>" + base + "/operators</code>\n" +
+      "<code>" + base + "/top</code>\n" +
+      "<code>" + base + "/history</code>\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" });
   } else if (text === "/status" || text === "/status full") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "⏳ در حال دریافت...");
+    await sendMessage(TG, chatId, "⏳ در حال دریافت گزارش کامل...");
     const report = await makeReport("full");
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/status simple" || text === "/work") {
@@ -939,7 +899,7 @@ async function handleUpdate(update, TG, STATS, env) {
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/compare") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "🆚 در حال مقایسه...");
+    await sendMessage(TG, chatId, "🆚 در حال مقایسه اپراتورها...");
     const report = await makeCompareReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/top") {
@@ -950,7 +910,7 @@ async function handleUpdate(update, TG, STATS, env) {
   } else if (text === "/isp") {
     await sendMessage(TG, chatId,
       "🔍 <b>چک ISP خاص</b>\n\n" +
-      "مثال:\n<code>/isp ایرانسل</code>\n<code>/isp مخابرات</code>\n<code>/isp شاتل</code>",
+      "مثال:\n<code>/isp ایرانسل</code>\n<code>/isp مخابرات</code>",
       { parse_mode: "HTML" });
   } else if (text.startsWith("/isp ")) {
     await addPoints(STATS, userId, 1);
@@ -960,17 +920,17 @@ async function handleUpdate(update, TG, STATS, env) {
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/world") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "🌍 در حال دریافت...");
+    await sendMessage(TG, chatId, "🌍 در حال دریافت داده‌های جهانی...");
     const report = await makeWorldReport();
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/today") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📅 در حال ساخت...");
+    await sendMessage(TG, chatId, "📅 در حال ساخت نمودار امروز...");
     const c = await makeTodayChart(STATS);
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/history") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📅 در حال ساخت...");
+    await sendMessage(TG, chatId, "📅 در حال ساخت تاریخچه...");
     const c = await makeHistoryChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/best") {
@@ -998,36 +958,35 @@ async function handleUpdate(update, TG, STATS, env) {
     await sendMessage(TG, chatId, report, { parse_mode: "HTML" });
   } else if (text === "/chart") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📊 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "📊 در حال ساخت نمودار میله‌ای...");
     const c = await makeBarChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/pie") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار دایره‌ای...");
     const c = await makePieChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/trend") {
     await addPoints(STATS, userId, 1);
-    await sendMessage(TG, chatId, "📈 در حال ساخت نمودار...");
+    await sendMessage(TG, chatId, "📈 در حال ساخت نمودار روند...");
     const c = await makeTrendChart();
     await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/help") {
     await sendMessage(TG, chatId,
-      "╭━━━ 📚 راهنما ━━━╮\n\n" +
-      "┣━━━ 📊 گزارش\n" +
-      "  /status، /work، /score، /vs\n\n" +
-      "┣━━━ 🆚 مقایسه\n" +
-      "  /compare، /top، /isp، /world\n\n" +
-      "┣━━━ 📈 نمودار\n" +
-      "  /comprehensive، /radar1h\n" +
-      "  /today، /history، /trend\n" +
-      "  /chart، /pie، /map\n\n" +
-      "┣━━━ 🎮 گیمیفیکیشن\n" +
-      "  /myrank، /leaderboard، /invite\n\n" +
-      "┣━━━ 🔌 API\n" +
-      "  /api\n\n" +
-      "┣━━━ ⚡ تست\n" +
-      "  /speed، /best، /ping\n\n" +
+      "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n" +
+      "📊 گزارش‌ها:\n" +
+      "/status، /work، /score، /vs\n\n" +
+      "🆚 مقایسه:\n" +
+      "/compare، /top، /isp، /world\n\n" +
+      "📈 نمودارها:\n" +
+      "/comprehensive، /radar1h\n" +
+      "/today، /history، /trend، /chart، /pie، /map\n\n" +
+      "🎮 گیمیفیکیشن:\n" +
+      "/myrank، /leaderboard، /invite\n\n" +
+      "🔌 API:\n" +
+      "/api\n\n" +
+      "⚡ تست:\n" +
+      "/speed، /best، /ping\n\n" +
       "╰━━━━━━━━━━━━━━━━━━━╯",
       { parse_mode: "HTML" });
   }
@@ -1043,462 +1002,57 @@ async function checkMember(TG, userId, channel) {
     }
   } catch(e) {}
   return false;
-}
-
-// ==================== API عمومی ====================
-async function handleAPI(url, STATS) {
-  const cors = {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*"
-  };
-  
-  try {
-    if (url.pathname === "/api/status") {
-      const ooni = await fetchOONI();
-      const p = parseOONI(ooni);
-      const ripe = await fetchRIPE();
-      return new Response(JSON.stringify({
-        ok: true,
-        data: {
-          block_percent: p.blockPercent,
-          total_measurements: p.totalMs,
-          ripe_visibility: ripe && ripe.data ? ripe.data.visibility : null,
-          date_iran: getIranDate(),
-          date_greg: getGregDate(),
-          time_iran: getIranTime(),
-          source: "OONI + RIPE"
-        }
-      }, null, 2), { headers: cors });
-    }
-    
-    if (url.pathname === "/api/operators") {
-      const ooni = await fetchOONI();
-      const p = parseOONI(ooni);
-      const ops = [];
-      for (const [asn, d] of Object.entries(p.asnData)) {
-        const name = await asnNameAuto(asn);
-        ops.push({
-          asn: "AS" + asn,
-          name: name,
-          free_percent: Math.round((d.ok / d.total) * 100),
-          tests: d.count
-        });
-      }
-      ops.sort((a, b) => b.tests - a.tests);
-      return new Response(JSON.stringify({ ok: true, count: ops.length, data: ops.slice(0, 20) }, null, 2), { headers: cors });
-    }
-    
-    if (url.pathname === "/api/top") {
-      const ooni = await fetchOONI7d();
-      const p = parseOONI(ooni);
-      const ops = [];
-      for (const [asn, d] of Object.entries(p.asnData)) {
-        if (d.count >= 500) {
-          const name = await asnNameAuto(asn);
-          ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), tests: d.count });
-        }
-      }
-      ops.sort((a, b) => b.rate - a.rate);
-      return new Response(JSON.stringify({
-        ok: true,
-        period: "7 days",
-        best: ops.slice(0, 5),
-        worst: ops.slice(-5).reverse()
-      }, null, 2), { headers: cors });
-    }
-    
-    if (url.pathname === "/api/history") {
-      const ooni = await fetchOONI7d();
-      const p = parseOONI(ooni);
-      const days = Object.keys(p.dayData).sort();
-      const data = days.map(d => ({
-        date: d,
-        block_percent: p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0,
-        total: p.dayData[d].total
-      }));
-      return new Response(JSON.stringify({ ok: true, data }, null, 2), { headers: cors });
-    }
-    
-    if (url.pathname === "/api" || url.pathname === "/api/") {
-      return new Response(JSON.stringify({
-        ok: true,
-        name: "Radar Internet Public API",
-        version: "2.0",
-        endpoints: {
-          status: "/api/status",
-          operators: "/api/operators",
-          top: "/api/top",
-          history: "/api/history"
-        },
-        source: "OONI, RIPE",
-        free: true
-      }, null, 2), { headers: cors });
-    }
-    
-    return new Response(JSON.stringify({ ok: false, error: "Not found" }), { status: 404, headers: cors });
-  } catch(e) {
-    return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500, headers: cors });
-  }
-}
-
-// ==================== Admin Dashboard ====================
-async function makeAdminDashboard(STATS) {
-  if (!STATS) return "<h1 style='color:#fff;font-family:Tahoma;padding:40px'>⚠️ KV not connected</h1>";
-  const today = getToday();
-  const totalUsers = await STATS.get("total_users") || "0";
-  const dauRaw = await STATS.get("dau:" + today);
-  const dau = dauRaw ? JSON.parse(dauRaw) : [];
-  const lbRaw = await STATS.get("leaderboard");
-  const lb = lbRaw ? JSON.parse(lbRaw) : [];
-  
-  let lbHtml = "";
-  lb.slice(0, 10).forEach((u, i) => {
-    const name = u.n || u.id;
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i+1);
-    lbHtml += "<tr><td>" + medal + "</td><td><b>" + name + "</b></td><td>" + u.p + "</td></tr>";
-  });
-  
-  return "<!DOCTYPE html><html lang='fa' dir='rtl'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>داشبورد رادار</title>" +
-    "<style>body{font-family:Tahoma;background:#0a1128;color:#fff;padding:20px;margin:0}h1{color:#d4af37;text-align:center;margin-bottom:20px}" +
-    ".card{background:rgba(255,255,255,0.05);border-radius:15px;padding:20px;margin:15px 0;border:1px solid rgba(212,175,55,0.3)}" +
-    ".stat{display:inline-block;margin:10px 20px;text-align:center}.stat-v{font-size:36px;color:#d4af37;font-weight:bold}" +
-    ".stat-l{color:#8899bb;font-size:13px;margin-top:5px}table{width:100%;border-collapse:collapse}th,td{padding:12px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)}" +
-    "th{color:#d4af37;font-size:14px}code{background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;font-size:12px}" +
-    ".date{color:#8899bb;font-size:14px;text-align:center;margin-bottom:20px}a{color:#d4af37;text-decoration:none}" +
-    ".head{color:#d4af37;border-bottom:2px solid #d4af37;padding-bottom:10px;margin-bottom:15px;display:inline-block}</style></head><body>" +
-    "<h1>🔐 داشبورد ادمین رادار اینترنت</h1>" +
-    "<div class='date'>" + getIranDate() + "  •  " + getGregDate() + "  •  " + getIranTime() + "</div>" +
-    "<div class='card'><div class='head'>📊 آمار کلی</div>" +
-    "<div class='stat'><div class='stat-v'>" + totalUsers + "</div><div class='stat-l'>👥 کاربر کل</div></div>" +
-    "<div class='stat'><div class='stat-v'>" + dau.length + "</div><div class='stat-l'>✅ فعال امروز</div></div>" +
-    "<div class='stat'><div class='stat-v'>" + lb.length + "</div><div class='stat-l'>🏆 در جدول</div></div>" +
-    "</div>" +
-    "<div class='card'><div class='head'>🏆 جدول برترین‌ها</div><table><tr><th>#</th><th>نام</th><th>امتیاز</th></tr>" + lbHtml + "</table></div>" +
-    "<div class='card'><div class='head'>🔌 API عمومی</div><p><a href='/api'>/api</a> — لیست endpoints</p><p><a href='/api/status'>/api/status</a> — وضعیت لحظه‌ای</p></div>" +
-    "<div class='card'><div class='head'>📅 تاریخ</div><p>" + getDateBoth() + "</p></div>" +
-    "</body></html>";
-}
-
-// ==================== Charts ====================
-async function makeBarChart() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    const name = await asnNameAuto(asn);
-    ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
-  }
-  ops.sort((a,b) => b.count - a.count);
-  ops = ops.slice(0, 8);
-  return {
-    url: quickChart({
-      type: "horizontalBar",
-      data: { labels: ops.map(o => o.name), datasets: [{ label: "دسترسی آزاد %", data: ops.map(o => o.rate), backgroundColor: ops.map(o => o.rate >= 80 ? "#22c55e" : o.rate >= 60 ? "#eab308" : o.rate >= 40 ? "#f97316" : "#ef4444") }] },
-      options: { title: { display: true, text: "دسترسی آزاد اپراتورها", fontSize: 18 }, legend: { display: false }, scales: { xAxes: [{ ticks: { beginAtZero: true, max: 100 } }] } }
-    }),
-    caption: "📊 <b>دسترسی اپراتورها</b>\n\n" + getDateBoth() + "\n\nسطح فیلترینگ: <b>%" + p.blockPercent + "</b>"
-  };
-}
-
-async function makePieChart() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    const name = await asnNameAuto(asn);
-    ops.push({ name: name, count: d.count });
-  }
-  ops.sort((a,b) => b.count - a.count);
-  ops = ops.slice(0, 6);
-  const colors = ["#3b82f6", "#ef4444", "#22c55e", "#eab308", "#a855f7", "#f97316"];
-  return {
-    url: quickChart({ type: "pie", data: { labels: ops.map(o => o.name), datasets: [{ data: ops.map(o => o.count), backgroundColor: colors }] }, options: { title: { display: true, text: "سهم اپراتورها", fontSize: 18 } } }),
-    caption: "🥧 <b>سهم اپراتورها</b>\n\n" + getDateBoth() + "\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری"
-  };
-}
-
-async function makeTrendChart() {
-  const ooni = await fetchOONI7d();
-  const p = parseOONI(ooni);
-  let days = Object.keys(p.dayData).sort();
-  let labels = [], values = [];
-  for (const d of days) {
-    const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0;
-    labels.push(d.substring(5));
-    values.push(blocked);
-  }
-  return {
-    url: quickChart({
-      type: "line",
-      data: { labels: labels, datasets: [{ label: "درصد مسدودسازی", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.15)", fill: true, tension: 0.3, borderWidth: 3 }] },
-      options: { title: { display: true, text: "روند فیلترینگ ۷ روز", fontSize: 18 }, scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] } }
-    }),
-    caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>"
-  };
-}
-
-async function makeHistoryChart() {
-  const ooni = await fetchOONI7d();
-  const p = parseOONI(ooni);
-  let days = Object.keys(p.dayData).sort();
-  let labels = [], values = [];
-  for (const d of days) {
-    const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0;
-    labels.push(d.substring(5));
-    values.push(blocked);
-  }
-  const avg = values.length > 0 ? Math.round(values.reduce((a,b) => a+b, 0) / values.length) : 0;
-  return {
-    url: quickChart({
-      type: "line",
-      data: { labels: labels, datasets: [{ label: "مسدودسازی %", data: values, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.15)", fill: true, tension: 0.3, borderWidth: 3 }] },
-      options: { title: { display: true, text: "تاریخچه ۷ روز اخیر", fontSize: 18 }, scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] } }
-    }),
-    caption: "📅 <b>تاریخچه</b>\n\n" + getDateBoth() + "\n\nمیانگین: <b>%" + avg + "</b>"
-  };
-}
-
-async function makeTodayChart(STATS) {
-  const currentHour = getIranHour();
-  const today = getToday();
-  
-  const pattern = [];
-  for (let h = 0; h < 24; h++) {
-    let base;
-    if (h >= 2 && h <= 6) base = 85;
-    else if (h >= 7 && h <= 9) base = 72;
-    else if (h >= 10 && h <= 12) base = 55;
-    else if (h >= 13 && h <= 17) base = 45;
-    else if (h >= 18 && h <= 22) base = 35;
-    else base = 60;
-    pattern.push(base);
-  }
-  
-  let realData = {};
-  if (STATS) {
-    for (let h = 0; h < 24; h++) {
-      try {
-        const raw = await STATS.get("hourly:" + today + ":" + h);
-        if (raw) {
-          const d = JSON.parse(raw);
-          realData[h] = d.quality;
-        }
-      } catch(e) {}
-    }
-  }
-  
-  const t1 = await pingSite("https://www.google.com");
-  const t2 = await pingSite("https://digikala.com");
-  const t3 = await pingSite("https://irancell.ir");
-  const times = [t1, t2, t3].filter(x => x !== null);
-  let liveQuality = null;
-  if (times.length > 0) {
-    const avg = Math.round(times.reduce((a,b) => a+b, 0) / times.length);
-    liveQuality = Math.round(Math.max(10, Math.min(95, 100 - (avg / 5))));
-    realData[currentHour] = liveQuality;
-    if (STATS) {
-      try {
-        await STATS.put("hourly:" + today + ":" + currentHour, JSON.stringify({
-          hour: currentHour,
-          quality: liveQuality,
-          avg_ping: avg,
-          saved: new Date().toISOString()
-        }), { expirationTtl: 172800 });
-      } catch(e) {}
-    }
-  }
-  
-  const labels = [];
-  const values = [];
-  for (let h = 0; h <= currentHour; h++) {
-    labels.push(h + ":00");
-    values.push(realData[h] !== undefined ? realData[h] : pattern[h]);
-  }
-  
-  const realCount = Object.keys(realData).length;
-  const totalShown = currentHour + 1;
-  
-  return {
-    url: quickChart({
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [{
-          label: "کیفیت",
-          data: values,
-          borderColor: "#22c55e",
-          backgroundColor: "rgba(34,197,94,0.15)",
-          fill: true,
-          tension: 0.3,
-          borderWidth: 3,
-          pointRadius: 3
-        }]
-      },
-      options: {
-        title: { display: true, text: "کیفیت اینترنت امروز (ساعتی)", fontSize: 18 },
-        scales: { yAxes: [{ ticks: { beginAtZero: true, max: 100 } }] }
-      }
-    }),
-    caption: "📅 <b>نمودار امروز</b>\n\n" + getDateBoth() + "\n\n" +
-      "⏰ ساعت فعلی: <b>" + currentHour + ":00</b>\n" +
-      "📊 کیفیت زنده: <b>%" + (liveQuality || "—") + "</b>\n" +
-      "📈 داده واقعی: <b>" + realCount + "/" + totalShown + " ساعت</b>\n" +
-      "💡 ساعات بدون داده با الگو تخمین زده می‌شن"
-  };
-}
-
-async function makeMapChart() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  const bp = p.blockPercent;
-  let color = "#ef4444";
-  if (bp < 20) color = "#22c55e";
-  else if (bp < 35) color = "#eab308";
-  else if (bp < 50) color = "#f97316";
-  
-  const chartUrl = quickChart({
-    type: "doughnut",
-    data: {
-      labels: ["فیلترینگ", "دسترسی آزاد"],
-      datasets: [{
-        data: [bp, 100 - bp],
-        backgroundColor: [color, "#22c55e"]
-      }]
-    },
-    options: {
-      title: { display: true, text: "نقشه حرارتی فیلترینگ ایران", fontSize: 20, fontColor: "#d4af37" },
-      legend: { labels: { fontColor: "#fff" } }
-    }
-  });
-  
-  return {
-    url: chartUrl,
-    caption: "🗺 <b>نقشه حرارتی فیلترینگ ایران</b>\n\n" + getDateBoth() + "\n\n🚫 مسدودسازی: <b>%" + bp + "</b>\n📊 تعداد ASN: <b>" + Object.keys(p.asnData).length + "</b>\n📈 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>"
-  };
-}
-
-// ==================== Reports ====================
+  }// ==================== Text Reports Generators ====================
 async function makePingReport() {
-  let irList = "", globalList = "";
-  let irOk = 0, globalOk = 0;
-  for (const s of IR_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { irOk++; irList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
-    else { irList += "  ❌ " + s.name + "\n"; }
-  }
-  for (const s of GLOBAL_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { globalOk++; globalList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
-    else { globalList += "  ❌ " + s.name + "\n"; }
-  }
-  return "╭━━━ 🌐 پینگ سایت‌ها ━━━╮\n\n" + getDateBoth() + "\n\n" +
-    "┣━━━ 🇮🇷 <b>ایرانی</b>  <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n" + irList + "\n" +
-    "┣━━━ 🌍 <b>جهانی</b>  <b>" + globalOk + "/" + GLOBAL_SITES.length + "</b>\n\n" + globalList + "\n" +
-    "╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let irList = "", globalList = ""; let irOk = 0, globalOk = 0;
+  for (const s of IR_SITES) { const t = await pingSite(s.url); if (t) { irOk++; irList += "✅ " + s.name + " - <code>" + t + "ms</code>\n"; } else { irList += "❌ " + s.name + "\n"; } }
+  for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalOk++; globalList += "✅ " + s.name + " - <code>" + t + "ms</code>\n"; } else { globalList += "❌ " + s.name + "\n"; } }
+  return "🌐 <b>پینگ سایت‌ها</b>\n" + getDateBoth() + "\n\n🇮🇷 <b>ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n\n" + irList + "\n🌍 <b>جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n\n" + globalList;
 }
 
 async function makeFilteringReport() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
   let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    const name = await asnNameAuto(asn);
-    ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
-  }
+  for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); }
   ops.sort((a,b) => b.count - a.count);
-
-  let level = "🟢 پایین";
-  if (p.blockPercent >= 60) level = "🔴 بالا";
-  else if (p.blockPercent >= 40) level = "🟠 نسبتاً بالا";
-  else if (p.blockPercent >= 20) level = "🟡 متوسط";
-
-  let out = "╭━━━ 🚫 فیلترینگ ایران ━━━╮\n\n" + getDateBoth() + "\n\n";
-  out += "  📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n";
-  out += "  📈 سطح: " + level + "\n  " + makeBar(p.blockPercent / 10) + "\n\n";
-  out += "  📡 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n";
-  out += "  🌐 تعداد ASN: <code>" + ops.length + "</code>\n\n";
-
-  if (ops.length > 0) {
-    out += "┣━━━ 📡 <b>وضعیت اپراتورها</b>\n\n";
-    ops.slice(0, 12).forEach(o => {
-      const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴";
-      out += "  " + e + " <b>" + o.name + "</b>\n     └ %" + o.rate + " آزاد  •  " + o.count.toLocaleString("fa-IR") + " تست\n";
-    });
-  }
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n📌 منبع: OONI\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let level = "🟢 پایین"; if (p.blockPercent >= 60) level = "🔴 بالا"; else if (p.blockPercent >= 40) level = "🟠 نسبتاً بالا"; else if (p.blockPercent >= 20) level = "🟡 متوسط";
+  let out = "🚫 <b>گزارش فیلترینگ ایران</b>\n" + getDateBoth() + "\n\n📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n📈 سطح: " + level + "\n" + makeBar(p.blockPercent / 10) + "\n\n📡 تعداد ASN: <code>" + ops.length + "</code>\n\n";
+  if (ops.length > 0) { out += "📡 <b>وضعیت اپراتورها</b>\n\n"; ops.slice(0, 12).forEach(o => { const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴"; out += e + " <b>" + o.name + "</b> - %" + o.rate + " آزاد (" + o.count.toLocaleString("fa-IR") + " تست)\n"; }); }
   return out;
 }
 
 async function makeSitesReport() {
-  let out = "╭━━━ 🌐 وضعیت سرویس‌ها ━━━╮\n\n" + getDateBoth() + "\n\n";
-  let acc = 0, list = "";
-  for (const s of FILTER_CHECK) {
-    const ok = await checkAccessible(s.url);
-    if (ok) { acc++; list += "  ✅ " + s.name + "\n"; }
-    else { list += "  🚫 " + s.name + "\n"; }
-  }
-  out += "┣━━━ 📊 نتیجه\n\n  دسترسی: <b>" + acc + "/" + FILTER_CHECK.length + "</b>\n  " + makeBar((acc/FILTER_CHECK.length) * 10) + "\n\n";
-  out += "┣━━━ 📋 جزئیات\n\n" + list;
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let out = "🌐 <b>وضعیت سرویس‌ها</b>\n" + getDateBoth() + "\n\n"; let acc = 0, list = "";
+  for (const s of FILTER_CHECK) { const ok = await checkAccessible(s.url); if (ok) { acc++; list += "✅ " + s.name + "\n"; } else { list += "🚫 " + s.name + "\n"; } }
+  out += "📊 دسترسی: <b>" + acc + "/" + FILTER_CHECK.length + "</b>\n" + makeBar((acc/FILTER_CHECK.length) * 10) + "\n\n📋 جزئیات:\n\n" + list;
   return out;
 }
 
 async function makeCompareReport() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
   let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    if (d.count >= 100) {
-      const name = await asnNameAuto(asn);
-      ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
-    }
-  }
+  for (const [asn, d] of Object.entries(p.asnData)) { if (d.count >= 100) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); } }
   if (ops.length === 0) return "❌ داده کافی نیست.";
   ops.sort((a, b) => b.rate - a.rate);
-
-  let out = "╭━━━ 🆚 مقایسه اپراتورها ━━━╮\n\n" + getDateBoth() + "\n\n";
-  out += "┣━━━ 🏆 <b>بهترین‌ها</b>\n\n";
-  ops.slice(0, 5).forEach((o, i) => {
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🏅";
-    out += "  " + medal + " <b>" + o.name + "</b>\n     └ %" + o.rate + " آزاد\n";
-  });
-  out += "\n┣━━━ 🔻 <b>ضعیف‌ترین‌ها</b>\n\n";
-  ops.slice(-5).reverse().forEach(o => {
-    out += "  🔴 <b>" + o.name + "</b>\n     └ %" + o.rate + " آزاد\n";
-  });
-  out += "\n┣━━━ 📊 خلاصه\n\n  📡 تعداد: <b>" + ops.length + "</b>\n";
+  let out = "🆚 <b>مقایسه اپراتورها</b>\n" + getDateBoth() + "\n\n🏆 <b>بهترین‌ها</b>\n\n";
+  ops.slice(0, 5).forEach((o, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🏅"; out += medal + " <b>" + o.name + "</b> - %" + o.rate + " آزاد\n"; });
+  out += "\n🔻 <b>ضعیف‌ترین‌ها</b>\n\n";
+  ops.slice(-5).reverse().forEach(o => { out += "🔴 <b>" + o.name + "</b> - %" + o.rate + " آزاد\n"; });
   const avg = Math.round(ops.reduce((a, b) => a + b.rate, 0) / ops.length);
-  out += "  📈 میانگین: <b>%" + avg + "</b>\n  " + makeBar(avg / 10) + "\n";
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  out += "\n📊 میانگین کل: <b>%" + avg + "</b>\n" + makeBar(avg / 10);
   return out;
 }
 
 async function makeTopReport() {
-  const ooni = await fetchOONI7d();
-  const p = parseOONI(ooni);
+  const ooni = await fetchOONI7d(); const p = parseOONI(ooni);
   let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    if (d.count >= 500) {
-      const name = await asnNameAuto(asn);
-      ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
-    }
-  }
+  for (const [asn, d] of Object.entries(p.asnData)) { if (d.count >= 500) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); } }
   if (ops.length === 0) return "❌ داده کافی نیست.";
   ops.sort((a, b) => b.rate - a.rate);
-
-  let out = "╭━━━ 🏆 رتبه‌بندی هفتگی ━━━╮\n\n📅 ۷ روز اخیر  •  " + getGregDate() + "\n\n";
-  out += "┣━━━ 🥇 <b>بهترین‌ها</b>\n\n";
-  ops.slice(0, 7).forEach((o, i) => {
-    const rank = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
-    out += "  " + rank + " <b>" + o.name + "</b>  %" + o.rate + "\n";
-  });
-  out += "\n┣━━━ 🔻 <b>پایین‌ترین‌ها</b>\n\n";
-  ops.slice(-5).reverse().forEach(o => {
-    out += "  🔴 <b>" + o.name + "</b>  %" + o.rate + "\n";
-  });
-  out += "\n┣━━━ 📊 خلاصه\n\n  📡 تعداد: <b>" + ops.length + "</b>\n";
-  out += "  🥇 بهترین: <b>%" + ops[0].rate + "</b>\n  🔻 بدترین: <b>%" + ops[ops.length-1].rate + "</b>\n";
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n📌 OONI\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let out = "🏆 <b>رتبه‌بندی هفتگی</b>\n📅 ۷ روز اخیر\n\n🥇 <b>بهترین‌ها</b>\n\n";
+  ops.slice(0, 7).forEach((o, i) => { const rank = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += rank + " <b>" + o.name + "</b> - %" + o.rate + "\n"; });
+  out += "\n🔻 <b>پایین‌ترین‌ها</b>\n\n";
+  ops.slice(-5).reverse().forEach(o => { out += "🔴 <b>" + o.name + "</b> - %" + o.rate + "\n"; });
   return out;
 }
 
@@ -1506,239 +1060,133 @@ async function makeISPReport(query) {
   const q = query.toLowerCase();
   const ISP_MAP = { "ایرانسل": "44244", "همراه اول": "197207", "mci": "197207", "irancell": "44244", "مخابرات": "58224", "tci": "58224", "شاتل": "31549", "shuttle": "31549", "پارس آنلاین": "42337", "parsonline": "42337", "آسیاتک": "43754", "asiatech": "43754", "رایتل": "57218", "rightel": "57218", "پارس پک": "16322", "parspack": "16322" };
   let asn = null;
-  for (const [name, code] of Object.entries(ISP_MAP)) {
-    if (q.includes(name) || name.includes(q)) { asn = code; break; }
-  }
+  for (const [name, code] of Object.entries(ISP_MAP)) { if (q.includes(name) || name.includes(q)) { asn = code; break; } }
   if (!asn) return "❌ ISP پیدا نشد: <b>" + query + "</b>";
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  const d = p.asnData[asn];
+  const ooni = await fetchOONI(); const p = parseOONI(ooni); const d = p.asnData[asn];
   if (!d) return "❌ داده‌ای برای <b>" + asnName(asn) + "</b> یافت نشد.";
   const rate = Math.round((d.ok / d.total) * 100);
-  let emoji = "🔴", status = "ضعیف";
-  if (rate >= 80) { emoji = "🟢"; status = "عالی"; }
-  else if (rate >= 60) { emoji = "🟡"; status = "خوب"; }
-  else if (rate >= 40) { emoji = "🟠"; status = "متوسط"; }
-  
-  let out = "╭━━━ 📡 " + asnName(asn) + " ━━━╮\n\n" + getDateBoth() + "\n\n";
-  out += "  " + emoji + "  <b>" + status + "</b>\n\n";
-  out += "┣━━━ 📊 آمار امروز\n\n";
-  out += "  🔓 دسترسی آزاد: <b>%" + rate + "</b>\n  " + makeBar(rate / 10) + "\n\n";
-  out += "  📈 تعداد تست: <code>" + d.count.toLocaleString("fa-IR") + "</code>\n";
-  out += "  🔒 مسدود: %" + (100 - rate) + "\n\n";
-  out += "╰━━━━━━━━━━━━━━━━━━━╯\n\n📌 OONI\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
-  return out;
+  let emoji = "🔴", status = "ضعیف"; if (rate >= 80) { emoji = "🟢"; status = "عالی"; } else if (rate >= 60) { emoji = "🟡"; status = "خوب"; } else if (rate >= 40) { emoji = "🟠"; status = "متوسط"; }
+  return "📡 <b>" + asnName(asn) + "</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🔓 دسترسی آزاد: <b>%" + rate + "</b>\n" + makeBar(rate / 10) + "\n\n📈 تعداد تست: <code>" + d.count.toLocaleString("fa-IR") + "</code>\n🔒 مسدود: %" + (100 - rate);
 }
 
 async function makeWorldReport() {
-  const COUNTRIES = [
-    { code: "IR", name: "🇮🇷 ایران" }, { code: "TR", name: "🇹🇷 ترکیه" },
-    { code: "IQ", name: "🇮🇶 عراق" }, { code: "AE", name: "🇦🇪 امارات" }, { code: "SA", name: "🇸🇦 عربستان" }
-  ];
-  let out = "╭━━━ 🌍 مقایسه جهانی ━━━╮\n\n" + getDateBoth() + "\n\n";
+  const COUNTRIES = [ { code: "IR", name: "🇮🇷 ایران" }, { code: "TR", name: "🇹🇷 ترکیه" }, { code: "IQ", name: "🇮🇶 عراق" }, { code: "AE", name: "🇦🇪 امارات" }, { code: "SA", name: "🇸🇦 عربستان" } ];
   let results = [];
   for (const c of COUNTRIES) {
     try {
-      const since = getYesterday();
-      const until = getToday();
+      const since = getYesterday(); const until = getToday();
       const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=" + c.code + "&since=" + since + "&until=" + until + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
-      if (r.ok) {
-        const d = await r.json();
-        let total = 0, blocked = 0;
-        if (d.result) for (const row of d.result) { total += row.measurement_count || 0; blocked += (row.anomaly_count || 0) + (row.confirmed_count || 0); }
-        const percent = total > 0 ? Math.round((blocked / total) * 100) : 0;
-        results.push({ name: c.name, percent, count: total });
-      }
+      if (r.ok) { const d = await r.json(); let total = 0, blocked = 0; if (d.result) for (const row of d.result) { total += row.measurement_count || 0; blocked += (row.anomaly_count || 0) + (row.confirmed_count || 0); } const percent = total > 0 ? Math.round((blocked / total) * 100) : 0; results.push({ name: c.name, percent, count: total }); }
     } catch(e) {}
   }
   if (results.length === 0) return "❌ داده کافی نیست.";
   results.sort((a, b) => a.percent - b.percent);
-  out += "┣━━━ 🏆 رتبه‌بندی\n\n";
-  results.forEach((r, i) => {
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + ".";
-    const e = r.percent < 15 ? "🟢" : r.percent < 30 ? "🟡" : r.percent < 50 ? "🟠" : "🔴";
-    out += "  " + medal + " " + r.name + "\n     " + e + " %" + r.percent + " مسدود\n";
-  });
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n📌 OONI\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let out = "🌍 <b>مقایسه جهانی</b>\n" + getDateBoth() + "\n\n🏆 رتبه‌بندی:\n\n";
+  results.forEach((r, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; const e = r.percent < 15 ? "🟢" : r.percent < 30 ? "🟡" : r.percent < 50 ? "🟠" : "🔴"; out += medal + " " + r.name + " - " + e + " %" + r.percent + " مسدود\n"; });
   return out;
 }
 
 async function makeVsReport(STATS) {
-  const yesterday = getYesterday();
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  const todayPercent = p.blockPercent;
-  
+  const yesterday = getYesterday(); const ooni = await fetchOONI(); const p = parseOONI(ooni); const todayPercent = p.blockPercent;
   let yPercent = null;
-  
-  if (STATS) {
-    const ySnap = await getDailySnapshot(STATS, yesterday);
-    if (ySnap) yPercent = ySnap.blockPercent;
-  }
-  
-  if (yPercent === null) {
-    try {
-      const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + yesterday + "&until=" + yesterday + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } });
-      if (r.ok) {
-        const d = await r.json();
-        const yp = parseOONI(d);
-        if (yp.totalMs > 0) {
-          yPercent = yp.blockPercent;
-          if (STATS) {
-            await STATS.put("snap:" + yesterday, JSON.stringify({
-              blockPercent: yPercent,
-              totalMs: yp.totalMs,
-              saved: new Date().toISOString(),
-              retrospective: true
-            }), { expirationTtl: 2592000 });
-          }
-        }
-      }
-    } catch(e) {}
-  }
-  
-  let out = "╭━━━ 📊 مقایسه روز ━━━╮\n\n";
-  out += "📅 " + getIranDate() + "  •  " + getGregDate() + "\n\n";
-  out += "┣━━━ 🗓 دیروز vs امروز\n\n";
-  
+  if (STATS) { const ySnap = await getDailySnapshot(STATS, yesterday); if (ySnap) yPercent = ySnap.blockPercent; }
+  if (yPercent === null) { try { const r = await fetch("https://api.ooni.io/api/v1/aggregation?probe_cc=IR&since=" + yesterday + "&until=" + yesterday + "&axis_x=probe_asn&axis_y=measurement_start_day", { headers: { "Accept": "application/json" } }); if (r.ok) { const d = await r.json(); const yp = parseOONI(d); if (yp.totalMs > 0) { yPercent = yp.blockPercent; if (STATS) { await STATS.put("snap:" + yesterday, JSON.stringify({ blockPercent: yPercent, totalMs: yp.totalMs, saved: new Date().toISOString(), retrospective: true }), { expirationTtl: 2592000 }); } } } } catch(e) {} }
+  let out = "📊 <b>مقایسه روز</b>\n📅 " + getIranDate() + "\n\n";
   if (yPercent !== null) {
-    out += "  دیروز: <b>%" + yPercent + "</b>\n";
-    out += "  امروز: <b>%" + todayPercent + "</b>\n\n";
+    out += "دیروز: <b>%" + yPercent + "</b>\nامروز: <b>%" + todayPercent + "</b>\n\n";
     const diff = todayPercent - yPercent;
-    let trend = "➖ ثابت";
-    if (diff > 3) trend = "📈 بدتر (" + diff + "+)";
-    else if (diff > 0) trend = "🔺 کمی بدتر (+" + diff + ")";
-    else if (diff < -3) trend = "📉 بهتر (" + diff + ")";
-    else if (diff < 0) trend = "🔻 کمی بهتر (" + diff + ")";
-    out += "  " + trend + "\n\n";
-    out += "  " + makeBar(todayPercent / 10) + "\n";
-  } else {
-    out += "  امروز: <b>%" + todayPercent + "</b>\n";
-    out += "  " + makeBar(todayPercent / 10) + "\n\n";
-    out += "  ⚠️ داده دیروز در دسترس نیست\n";
-  }
-  
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime();
+    let trend = "➖ ثابت"; if (diff > 3) trend = "📈 بدتر (" + diff + "+)"; else if (diff > 0) trend = "🔺 کمی بدتر (+" + diff + ")"; else if (diff < -3) trend = "📉 بهتر (" + diff + ")"; else if (diff < 0) trend = "🔻 کمی بهتر (" + diff + ")";
+    out += trend + "\n" + makeBar(todayPercent / 10);
+  } else { out += "امروز: <b>%" + todayPercent + "</b>\n" + makeBar(todayPercent / 10) + "\n\n⚠️ داده دیروز در دسترس نیست"; }
   return out;
 }
 
 async function makeWorkReport() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  let irOk = 0;
+  const ooni = await fetchOONI(); const p = parseOONI(ooni); let irOk = 0;
   for (const s of IR_SITES) { if (await pingSite(s.url)) irOk++; }
-  let emoji = "🟢", status = "خوبه";
-  if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; }
-  else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; }
-  else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
-  return "╭━━━ ⚡ خلاصه ━━━╮\n\n" + getDateBoth() + "\n\n  " + emoji + "  <b>" + status + "</b>\n\n  🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n  🌐 سایت‌های ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let emoji = "🟢", status = "خوبه"; if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; } else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; } else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
+  return "⚡ <b>خلاصه وضعیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n🌐 سایت‌های ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>";
 }
 
 async function makeScoreReport() {
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
-  let score = 0;
-  const filterScore = Math.max(0, 100 - (p.blockPercent * 2.5));
-  score += filterScore * 0.4;
-  let irOk = 0;
-  for (const s of IR_SITES) { if (await pingSite(s.url)) irOk++; }
-  const irScore = (irOk / IR_SITES.length) * 100;
-  score += irScore * 0.3;
-  let globalPing = 0, globalCount = 0;
-  for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalPing += t; globalCount++; } }
-  const avgPing = globalCount > 0 ? globalPing / globalCount : 500;
-  const pingScore = Math.max(0, 100 - (avgPing / 5));
-  score += pingScore * 0.3;
+  const ooni = await fetchOONI(); const p = parseOONI(ooni); let score = 0;
+  const filterScore = Math.max(0, 100 - (p.blockPercent * 2.5)); score += filterScore * 0.4;
+  let irOk = 0; for (const s of IR_SITES) { if (await pingSite(s.url)) irOk++; }
+  const irScore = (irOk / IR_SITES.length) * 100; score += irScore * 0.3;
+  let globalPing = 0, globalCount = 0; for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalPing += t; globalCount++; } }
+  const avgPing = globalCount > 0 ? globalPing / globalCount : 500; const pingScore = Math.max(0, 100 - (avgPing / 5)); score += pingScore * 0.3;
   score = Math.round(score);
-  let emoji = "🔴", status = "بحرانی";
-  if (score >= 80) { emoji = "🟢"; status = "عالی"; }
-  else if (score >= 60) { emoji = "🟡"; status = "خوب"; }
-  else if (score >= 40) { emoji = "🟠"; status = "متوسط"; }
-  return "╭━━━ 🎖️ امتیاز کیفیت ━━━╮\n\n" + getDateBoth() + "\n\n  " + emoji + "  <b>" + status + "</b>\n\n  ⭐ امتیاز: <b>" + score + "/100</b>\n  " + makeBar(score / 10) + "\n\n┣━━━ 📊 جزئیات\n\n  🚫 فیلترینگ: <b>%" + Math.round(filterScore) + "</b>\n  🇮🇷 سایت ایرانی: <b>%" + Math.round(irScore) + "</b>\n  🌍 پینگ جهانی: <b>%" + Math.round(pingScore) + "</b>\n\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
+  let emoji = "🔴", status = "بحرانی"; if (score >= 80) { emoji = "🟢"; status = "عالی"; } else if (score >= 60) { emoji = "🟡"; status = "خوب"; } else if (score >= 40) { emoji = "🟠"; status = "متوسط"; }
+  return "🎖️ <b>امتیاز کیفیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n⭐ امتیاز: <b>" + score + "/100</b>\n" + makeBar(score / 10) + "\n\n🚫 فیلترینگ: %" + Math.round(filterScore) + "\n🇮🇷 سایت ایرانی: %" + Math.round(irScore) + "\n🌍 پینگ جهانی: %" + Math.round(pingScore);
 }
 
 async function makeBestTimeReport() {
-  const hours = [
-    { range: "۰۲:۰۰ تا ۰۶:۰۰", quality: 90, emoji: "🏆", note: "بهترین زمان" },
-    { range: "۰۶:۰۰ تا ۰۹:۰۰", quality: 75, emoji: "✅", note: "خوب" },
-    { range: "۰۹:۰۰ تا ۱۲:۰۰", quality: 55, emoji: "🟡", note: "متوسط" },
-    { range: "۱۲:۰۰ تا ۱۷:۰۰", quality: 45, emoji: "🟠", note: "شلوغ" },
-    { range: "۱۷:۰۰ تا ۲۲:۰۰", quality: 35, emoji: "🔴", note: "پیک شلوغی" },
-    { range: "۲۲:۰۰ تا ۰۲:۰۰", quality: 70, emoji: "✅", note: "بهتر" }
-  ];
-  let out = "╭━━━ ⏰ بهترین زمان ━━━╮\n\n" + getDateBoth() + "\n\n📊 برای دانلود و استریم\n\n┣━━━ 🏆 پیشنهاد\n\n  بهترین: <b>۲ بامداد تا ۶ صبح</b>\n  🟢 کیفیت: ۹۰٪\n\n┣━━━ 📊 جدول زمانی\n\n";
-  for (const h of hours) {
-    out += "  " + h.emoji + " " + h.range + "\n     └ " + h.note + "  •  %" + h.quality + "\n";
-  }
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n💡 تخمینی بر اساس الگوی مصرف";
+  const hours = [ { range: "۰۲:۰۰ تا ۰۶:۰۰", quality: 90, emoji: "🏆", note: "بهترین زمان" }, { range: "۰۶:۰۰ تا ۰۹:۰۰", quality: 75, emoji: "✅", note: "خوب" }, { range: "۰۹:۰۰ تا ۱۲:۰۰", quality: 55, emoji: "🟡", note: "متوسط" }, { range: "۱۲:۰۰ تا ۱۷:۰۰", quality: 45, emoji: "🟠", note: "شلوغ" }, { range: "۱۷:۰۰ تا ۲۲:۰۰", quality: 35, emoji: "🔴", note: "پیک شلوغی" }, { range: "۲۲:۰۰ تا ۰۲:۰۰", quality: 70, emoji: "✅", note: "بهتر" } ];
+  let out = "⏰ <b>بهترین زمان دانلود</b>\n" + getDateBoth() + "\n\n🏆 پیشنهاد: <b>۲ بامداد تا ۶ صبح</b> (۹۰٪)\n\n📊 جدول زمانی:\n\n";
+  for (const h of hours) { out += h.emoji + " " + h.range + " - " + h.note + " (%" + h.quality + ")\n"; }
   return out;
 }
 
 async function makeSpeedReport() {
-  let out = "╭━━━ ⚡ تست سرعت ━━━╮\n\n  📋 <b>راهنما:</b>\n\n  1️⃣ لینک تست رو باز کن\n  2️⃣ سرعتت رو اندازه بگیر\n  3️⃣ مقایسه کن\n\n┣━━━ 🔗 لینک‌ها\n\n";
-  out += "  🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n";
-  out += "  📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n";
-  out += "  ⚡ <a href='https://fast.com/'>Fast.com</a>\n";
-  out += "  🇮🇷 <a href='https://speedtest.ir/'>Speedtest.ir</a>\n\n";
-  out += "┣━━━ 💡 نکات\n\n  • وای‌فای رو قطع کن\n  • اپ‌های دیگه رو ببند\n  • ۳ بار تست کن\n\n";
-  out += "╰━━━━━━━━━━━━━━━━━━━╯\n\n📡 @Radarinternetiran";
-  return out;
+  return "⚡ <b>تست سرعت</b>\n\n📋 راهنما:\n۱. لینک تست را باز کنید\n۲. سرعت خود را بسنجید\n۳. مقایسه کنید\n\n🔗 لینک‌ها:\n🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n⚡ <a href='https://fast.com/'>Fast.com</a>\n🇮🇷 <a href='https://speedtest.ir/'>Speedtest.ir</a>";
 }
 
 async function makeReport(mode) {
   if (mode === undefined) mode = "full";
-  const ooni = await fetchOONI();
-  const p = parseOONI(ooni);
+  const ooni = await fetchOONI(); const p = parseOONI(ooni);
   let ops = [];
-  for (const [asn, d] of Object.entries(p.asnData)) {
-    const name = await asnNameAuto(asn);
-    ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100) });
-  }
+  for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100) }); }
   ops.sort((a, b) => a.rate - b.rate);
-
-  if (mode === "simple") {
-    let emoji = "🟢", status = "پایدار";
-    if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; }
-    else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; }
-    else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
-    return "╭━━━ 📊 وضعیت اینترنت ━━━╮\n\n" + getDateBoth() + "\n\n  " + emoji + "  <b>" + status + "</b>\n\n  🚫 مسدودسازی: <b>%" + p.blockPercent + "</b>\n  " + makeBar(p.blockPercent / 10) + "\n\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🕒 " + getIranTime() + "\n📡 @Radarinternetiran";
-  }
-
+  if (mode === "simple") { return await makeWorkReport(); }
   let irOk = 0, globalOk = 0, irList = "", globalList = "";
-  for (const s of IR_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { irOk++; irList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
-    else { irList += "  ❌ " + s.name + "\n"; }
-  }
-  for (const s of GLOBAL_SITES) {
-    const t = await pingSite(s.url);
-    if (t) { globalOk++; globalList += "  ✅ " + s.name + "  <code>" + t + "ms</code>\n"; }
-    else { globalList += "  ❌ " + s.name + "\n"; }
-  }
-
+  for (const s of IR_SITES) { const t = await pingSite(s.url); if (t) { irOk++; irList += "✅ " + s.name + " - <code>" + t + "ms</code>\n"; } else { irList += "❌ " + s.name + "\n"; } }
+  for (const s of GLOBAL_SITES) { const t = await pingSite(s.url); if (t) { globalOk++; globalList += "✅ " + s.name + " - <code>" + t + "ms</code>\n"; } else { globalList += "❌ " + s.name + "\n"; } }
   const ripe = await fetchRIPE();
-  let mainEmoji = "🟢", mainStatus = "پایدار";
-  if (p.blockPercent >= 60) { mainEmoji = "🔴"; mainStatus = "بحرانی"; }
-  else if (p.blockPercent >= 40) { mainEmoji = "🟠"; mainStatus = "ناپایدار"; }
-  else if (p.blockPercent >= 20) { mainEmoji = "🟡"; mainStatus = "متوسط"; }
-
-  let out = "╭━━━ 📊 گزارش اینترنت ━━━╮\n\n  " + getDateBoth() + "\n  🕒 <b>" + getIranTime() + "</b>\n\n  " + mainEmoji + "  <b>" + mainStatus + "</b>\n\n";
-  out += "┣━━━ 🌐 <b>دسترسی سایت‌ها</b>\n\n  🇮🇷 ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>\n\n" + irList + "\n  🌍 جهانی: <b>" + globalOk + "/" + GLOBAL_SITES.length + "</b>\n\n" + globalList + "\n";
-  out += "┣━━━ 🚫 <b>فیلترینگ</b>\n\n  📊 مسدودسازی: <b>%" + p.blockPercent + "</b>\n  " + makeBar(p.blockPercent / 10) + "\n\n  📈 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n\n";
-  if (ops.length > 0) {
-    out += "  🔻 <b>بدترین اپراتورها:</b>\n\n";
-    ops.slice(0, 5).forEach(o => {
-      const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴";
-      out += "  " + e + " " + o.name + "  <b>%" + o.rate + "</b>\n";
-    });
-    out += "\n";
-  }
-  out += "┣━━━ 🚨 <b>مسیریابی</b>\n\n";
-  if (ripe && ripe.data && ripe.data.visibility !== undefined) {
-    const v = ripe.data.visibility;
-    const vE = v > 95 ? "🟢" : v > 80 ? "🟡" : "🔴";
-    out += "  " + vE + " Visibility: <b>%" + v + "</b>\n  " + makeBar(v / 10) + "\n";
-  } else out += "  ⚠️ RIPE در دسترس نیست\n";
-  out += "\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🔗 @radarinternetiran\n👑 @royal_trust_ir_official";
+  let mainEmoji = "🟢", mainStatus = "پایدار"; if (p.blockPercent >= 60) { mainEmoji = "🔴"; mainStatus = "بحرانی"; } else if (p.blockPercent >= 40) { mainEmoji = "🟠"; mainStatus = "ناپایدار"; } else if (p.blockPercent >= 20) { mainEmoji = "🟡"; mainStatus = "متوسط"; }
+  let out = "📊 <b>گزارش کامل اینترنت</b>\n" + getDateBoth() + "\n⏰ " + getIranTime() + "\n\n" + mainEmoji + " <b>" + mainStatus + "</b>\n\n";
+  out += "🌐 <b>دسترسی سایت‌ها</b>\n\n🇮🇷 ایرانی (" + irOk + "/" + IR_SITES.length + ")\n" + irList + "\n🌍 جهانی (" + globalOk + "/" + GLOBAL_SITES.length + ")\n" + globalList + "\n";
+  out += "🚫 <b>فیلترینگ</b>\n\nمسدودسازی: <b>%" + p.blockPercent + "</b>\n" + makeBar(p.blockPercent / 10) + "\n\n";
+  if (ops.length > 0) { out += "🔻 <b>بدترین اپراتورها:</b>\n"; ops.slice(0, 5).forEach(o => { const e = o.rate >= 80 ? "🟢" : o.rate >= 60 ? "🟡" : o.rate >= 40 ? "🟠" : "🔴"; out += e + " " + o.name + " - %" + o.rate + "\n"; }); out += "\n"; }
+  if (ripe && ripe.data && ripe.data.visibility !== undefined) { const v = ripe.data.visibility; const vE = v > 95 ? "🟢" : v > 80 ? "🟡" : "🔴"; out += "🚨 <b>مسیریابی</b>\n" + vE + " Visibility: <b>%" + v + "</b>\n" + makeBar(v / 10) + "\n"; }
   return out;
+}
+
+// ==================== Public API ====================
+async function handleAPI(url, STATS) {
+  const cors = { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" };
+  try {
+    if (url.pathname === "/api/status") {
+      const ooni = await fetchOONI(); const p = parseOONI(ooni); const ripe = await fetchRIPE();
+      return new Response(JSON.stringify({ ok: true, data: { block_percent: p.blockPercent, total_measurements: p.totalMs, ripe_visibility: ripe && ripe.data ? ripe.data.visibility : null, date_iran: getIranDate(), time_iran: getIranTime(), source: "OONI + RIPE" } }, null, 2), { headers: cors });
     }
+    if (url.pathname === "/api/operators") {
+      const ooni = await fetchOONI(); const p = parseOONI(ooni); const ops = [];
+      for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ asn: "AS" + asn, name: name, free_percent: Math.round((d.ok / d.total) * 100), tests: d.count }); }
+      ops.sort((a, b) => b.tests - a.tests);
+      return new Response(JSON.stringify({ ok: true, count: ops.length, data: ops.slice(0, 20) }, null, 2), { headers: cors });
+    }
+    if (url.pathname === "/api/top") {
+      const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const ops = [];
+      for (const [asn, d] of Object.entries(p.asnData)) { if (d.count >= 500) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), tests: d.count }); } }
+      ops.sort((a, b) => b.rate - a.rate);
+      return new Response(JSON.stringify({ ok: true, period: "7 days", best: ops.slice(0, 5), worst: ops.slice(-5).reverse() }, null, 2), { headers: cors });
+    }
+    if (url.pathname === "/api/history") {
+      const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const days = Object.keys(p.dayData).sort();
+      const data = days.map(d => ({ date: d, block_percent: p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0, total: p.dayData[d].total }));
+      return new Response(JSON.stringify({ ok: true, data }, null, 2), { headers: cors });
+    }
+    if (url.pathname === "/api" || url.pathname === "/api/") {
+      return new Response(JSON.stringify({ ok: true, name: "Radar Internet Public API", version: "3.0", endpoints: { status: "/api/status", operators: "/api/operators", top: "/api/top", history: "/api/history" }, source: "OONI, RIPE", free: true }, null, 2), { headers: cors });
+    }
+    return new Response(JSON.stringify({ ok: false, error: "Not found" }), { status: 404, headers: cors });
+  } catch(e) {
+    return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500, headers: cors });
+  }
+}
+
+// ==================== Admin Dashboard (Fallback) ====================
+async function makeAdminDashboard(STATS) {
+  if (!STATS) return "<h1 style='color:#fff;font-family:Tahoma;padding:40px'>⚠️ KV not connected</h1>";
+  return "<html><body><h1>Admin Dashboard</h1></body></html>";
+                                                                                               }
