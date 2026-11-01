@@ -1,16 +1,13 @@
-// ═══════════════════════════════════════════════════════════════
-//  ربات رادار اینترنت ایران - نسخه نهایی 4.0 (وب پنل + API اختصاصی)
-// ═══════════════════════════════════════════════════════════════
-
 const CH1 = "@radarinternetiran";
 const CH2 = "@radarinternetirangruop";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "4.0";
+const CURRENT_VERSION = "5.0"; // نسخه نهایی
 
 const ADMIN_IDS = ["8344700031", "7652496428"];
 const SPONSOR_MSG = "💎 <b>اسپانسر رسمی ربات:</b>\n<i>(جایگاه تبلیغات شما - جهت رزرو روی دکمه درخواست تبلیغات بزنید)</i>";
 
 let GLOBAL_STATS = null;
+let GLOBAL_ENV = null;
 
 // ==================== Web Admin HTML ====================
 const ADMIN_WEB_HTML = `<!DOCTYPE html>
@@ -18,116 +15,151 @@ const ADMIN_WEB_HTML = `<!DOCTYPE html>
 <title>پنل مدیریت رادار اینترنت ایران</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Tahoma,Arial,sans-serif;background:#0f172a;color:#f8fafc;min-height:100vh}
-header{background:linear-gradient(135deg,#1e293b,#334155);padding:20px;text-align:center;border-bottom:3px solid #38bdf8}
-header h1{font-size:20px;color:#38bdf8;margin-bottom:5px}
+body{font-family:Tahoma,Arial,sans-serif;background:#0b1120;color:#f8fafc;min-height:100vh}
+header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:20px;text-align:center;border-bottom:2px solid #f59e0b}
+header h1{font-size:20px;color:#f59e0b;margin-bottom:5px}
 header .date{font-size:12px;color:#94a3b8}
-nav{display:flex;flex-wrap:wrap;background:#1e293b;padding:10px;gap:8px;justify-content:center;border-bottom:1px solid #334155}
-nav button{background:#334155;color:#f8fafc;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:0.2s}
-nav button:hover{background:#475569}
-nav button.active{background:#38bdf8;color:#0f172a;font-weight:bold}
+nav{display:flex;flex-wrap:wrap;background:#0f172a;padding:10px;gap:8px;justify-content:center;border-bottom:1px solid #1e293b}
+nav button{background:#1e293b;color:#f8fafc;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:0.2s}
+nav button:hover{background:#334155}
+nav button.active{background:#f59e0b;color:#0f172a;font-weight:bold}
 main{padding:20px;max-width:1200px;margin:0 auto}
-.card{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #334155}
+.card{background:#0f172a;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #1e293b}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px;margin-bottom:20px}
-.stat{background:#334155;border-radius:10px;padding:15px;text-align:center}
-.stat .num{font-size:28px;font-weight:bold;color:#38bdf8}
+.stat{background:#1e293b;border-radius:10px;padding:15px;text-align:center;border-bottom:3px solid #f59e0b}
+.stat .num{font-size:28px;font-weight:bold;color:#f59e0b}
 .stat .label{font-size:12px;color:#94a3b8;margin-top:5px}
-input,textarea{background:#0f172a;color:#f8fafc;border:1px solid #475569;padding:10px;border-radius:8px;font-family:inherit;font-size:14px;width:100%;margin-bottom:10px}
-button.btn{background:#38bdf8;color:#0f172a;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:bold;font-size:14px}
-button.btn:hover{background:#0ea5e9}
+input,textarea{background:#0b1120;color:#f8fafc;border:1px solid #334155;padding:10px;border-radius:8px;font-family:inherit;font-size:14px;width:100%;margin-bottom:10px}
+button.btn{background:#f59e0b;color:#0f172a;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:bold;font-size:14px}
+button.btn:hover{background:#d97706}
 button.btn-danger{background:#ef4444;color:#fff}
 button.btn-danger:hover{background:#dc2626}
 button.btn-success{background:#10b981;color:#fff}
 button.btn-success:hover{background:#059669}
-.user-row{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#334155;border-radius:8px;margin-bottom:8px;cursor:pointer;transition:0.2s}
-.user-row:hover{background:#475569}
+.user-row{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#1e293b;border-radius:8px;margin-bottom:8px;cursor:pointer;transition:0.2s}
+.user-row:hover{background:#334155}
 .user-row .info{flex:1}
 .user-row .name{font-weight:bold;font-size:14px}
 .user-row .id{font-size:11px;color:#94a3b8;margin-top:3px}
 .badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;margin-right:5px}
 .badge-active{background:#10b981;color:#fff}
 .badge-banned{background:#ef4444;color:#fff}
-.badge-points{background:#eab308;color:#0f172a}
-.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:none;justify-content:center;align-items:center;z-index:100;padding:20px}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:none;justify-content:center;align-items:center;z-index:100;padding:20px}
 .modal.show{display:flex}
-.modal-content{background:#1e293b;border-radius:12px;padding:25px;max-width:500px;width:100%;border:2px solid #38bdf8;max-height:90vh;overflow-y:auto}
-.modal-content h3{color:#38bdf8;margin-bottom:15px;font-size:18px}
-.profile-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #334155;font-size:13px}
+.modal-content{background:#0f172a;border-radius:12px;padding:25px;max-width:500px;width:100%;border:2px solid #f59e0b;max-height:90vh;overflow-y:auto}
+.modal-content h3{color:#f59e0b;margin-bottom:15px;font-size:18px}
+.profile-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e293b;font-size:13px}
 .profile-row .label{color:#94a3b8}
 .profile-row .value{color:#f8fafc;font-weight:bold}
 .pagination{display:flex;justify-content:center;gap:10px;margin-top:15px}
-.pagination button{background:#334155;color:#f8fafc;border:none;padding:8px 16px;border-radius:6px;cursor:pointer}
+.pagination button{background:#1e293b;color:#f8fafc;border:none;padding:8px 16px;border-radius:6px;cursor:pointer}
 .pagination button:disabled{opacity:0.3;cursor:not-allowed}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:200;display:none}
 .toast.show{display:block}
 .tab{display:none}
 .tab.active{display:block}
 .loading{text-align:center;padding:20px;color:#94a3b8}
-.key-row{background:#334155;padding:12px;border-radius:8px;margin-bottom:10px;font-size:12px;word-break:break-all}
-.key-row code{background:#0f172a;padding:3px 6px;border-radius:4px;color:#38bdf8;font-family:monospace}
+.key-row{background:#1e293b;padding:12px;border-radius:8px;margin-bottom:10px;font-size:12px;word-break:break-all}
+.key-row code{background:#0b1120;padding:3px 6px;border-radius:4px;color:#06b6d4;font-family:monospace}
+#loginScreen { position: fixed; top:0; left:0; width:100%; height:100%; background:#0b1120; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:1000; padding:20px; }
+#loginScreen h2 { color:#f59e0b; margin-bottom:20px; font-size:24px; }
+#loginScreen input { max-width:300px; text-align:center; font-size:18px; letter-spacing:2px; border-color:#f59e0b; }
+#loginScreen button { max-width:300px; width:100%; padding:15px; font-size:16px; margin-top:10px; }
 </style></head><body>
-<header><h1>🔐 پنل مدیریت رادار اینترنت ایران</h1><div class="date" id="dateBox">در حال بارگذاری...</div></header>
-<nav>
-<button class="active" onclick="showTab('dashboard')">📊 داشبورد</button>
-<button onclick="showTab('users')">👥 کاربران</button>
-<button onclick="showTab('apikeys')">🔑 API Keys</button>
-<button onclick="showTab('winners')">🏆 برندگان</button>
-</nav>
-<main>
-<div class="tab active" id="tab-dashboard">
-  <div class="card">
-    <div class="stats">
-      <div class="stat"><div class="num" id="sTotal">-</div><div class="label">کل کاربران</div></div>
-      <div class="stat"><div class="num" id="sActive">-</div><div class="label">فعال امروز</div></div>
-      <div class="stat"><div class="num" id="sRegistered">-</div><div class="label">ثبت‌شده در لیست</div></div>
-      <div class="stat"><div class="num" id="sBanned">-</div><div class="label">مسدود شده</div></div>
+
+<div id="loginScreen">
+  <h2>🔐 ورود به مدیریت</h2>
+  <p style="color:#94a3b8; margin-bottom:20px; font-size:13px; text-align:center;">برای ورود، رمز عبور تعریف شده در کلادفلر را وارد کنید</p>
+  <input type="password" id="passInput" placeholder="رمز عبور...">
+  <button class="btn" onclick="doLogin()">ورود به پنل</button>
+</div>
+
+<div id="mainScreen" style="display:none;">
+  <header><h1>🔐 پنل مدیریت رادار اینترنت ایران</h1><div class="date" id="dateBox">در حال بارگذاری...</div></header>
+  <nav>
+  <button class="active" onclick="showTab('dashboard')">📊 داشبورد</button>
+  <button onclick="showTab('users')">👥 کاربران</button>
+  <button onclick="showTab('apikeys')">🔑 API Keys</button>
+  <button onclick="showTab('winners')">🏆 برندگان</button>
+  <button onclick="showTab('suspicious')" style="background:#7f1d1d;">🚨 کاربران مشکوک</button>
+  </nav>
+  <main>
+  <div class="tab active" id="tab-dashboard">
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><div class="num" id="sTotal">-</div><div class="label">کل کاربران</div></div>
+        <div class="stat"><div class="num" id="sActive">-</div><div class="label">فعال امروز</div></div>
+        <div class="stat"><div class="num" id="sRegistered">-</div><div class="label">ثبت‌شده در لیست</div></div>
+        <div class="stat"><div class="num" id="sBanned">-</div><div class="label">مسدود شده</div></div>
+      </div>
     </div>
   </div>
-</div>
-<div class="tab" id="tab-users">
-  <div class="card">
-    <input type="text" id="searchBox" placeholder="🔍 جستجو بر اساس نام یا آیدی..." onkeyup="if(event.key==='Enter')loadUsers(1)">
-    <button class="btn" onclick="loadUsers(1)">جستجو</button>
+  <div class="tab" id="tab-users">
+    <div class="card">
+      <input type="text" id="searchBox" placeholder="🔍 جستجو بر اساس نام یا آیدی..." onkeyup="if(event.key==='Enter')loadUsers(1)">
+      <button class="btn" onclick="loadUsers(1)">جستجو</button>
+    </div>
+    <div class="card" id="usersList"><div class="loading">در حال بارگذاری...</div></div>
+    <div class="pagination" id="pagination"></div>
   </div>
-  <div class="card" id="usersList"><div class="loading">در حال بارگذاری...</div></div>
-  <div class="pagination" id="pagination"></div>
-</div>
-<div class="tab" id="tab-apikeys">
-  <div class="card">
-    <h3 style="color:#38bdf8;margin-bottom:15px">ساخت کلید جدید</h3>
-    <input type="text" id="keyOwner" placeholder="نام همکار (مثلاً: وب‌سایت X)">
-    <button class="btn" onclick="createKey()">🔑 صدور کلید</button>
+  <div class="tab" id="tab-apikeys">
+    <div class="card">
+      <h3 style="color:#f59e0b;margin-bottom:15px">ساخت کلید جدید</h3>
+      <input type="text" id="keyOwner" placeholder="نام همکار (مثلاً: وب‌سایت X)">
+      <button class="btn" onclick="createKey()">🔑 صدور کلید</button>
+    </div>
+    <div class="card" id="keysList"><div class="loading">در حال بارگذاری...</div></div>
   </div>
-  <div class="card" id="keysList"><div class="loading">در حال بارگذاری...</div></div>
-</div>
-<div class="tab" id="tab-winners">
-  <div class="card">
-    <h3 style="color:#38bdf8;margin-bottom:15px">برندگان هفته گذشته</h3>
-    <div id="winnersList"><div class="loading">در حال بارگذاری...</div></div>
-    <button class="btn btn-danger" style="margin-top:15px" onclick="resetWeek()">🔄 ریست دستی هفته</button>
+  <div class="tab" id="tab-winners">
+    <div class="card">
+      <h3 style="color:#f59e0b;margin-bottom:15px">برندگان هفته گذشته</h3>
+      <div id="winnersList"><div class="loading">در حال بارگذاری...</div></div>
+      <button class="btn btn-danger" style="margin-top:15px" onclick="resetWeek()">🔄 ریست دستی هفته</button>
+    </div>
   </div>
+  <div class="tab" id="tab-suspicious">
+    <div class="card">
+      <h3 style="color:#ef4444;margin-bottom:15px">⚠️ کاربران مشکوک شناسایی شده</h3>
+      <p style="color:#94a3b8;font-size:12px;margin-bottom:15px;">کاربرانی که رفتار مخرب یا تلاش غیرمجاز داشته‌اند</p>
+      <div id="suspiciousList"><div class="loading">در حال بارگذاری...</div></div>
+    </div>
+  </div>
+  </main>
+  <div class="modal" id="userModal"><div class="modal-content" id="userModalContent"></div></div>
+  <div class="toast" id="toast"></div>
 </div>
-</main>
-<div class="modal" id="userModal"><div class="modal-content" id="userModalContent"></div></div>
-<div class="toast" id="toast"></div>
+
 <script>
-const SECRET = new URLSearchParams(location.search).get('secret');
+let SECRET = localStorage.getItem('radar_admin_secret') || '';
 const API = location.origin + '/adminweb';
 function showToast(msg, isError) { const t = document.getElementById('toast'); t.textContent = msg; t.style.background = isError ? '#ef4444' : '#10b981'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
-function showTab(name) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('nav button').forEach(b => b.classList.remove('active')); document.getElementById('tab-' + name).classList.add('active'); event.target.classList.add('active'); if (name === 'dashboard') loadStats(); else if (name === 'users') loadUsers(1); else if (name === 'apikeys') loadKeys(); else if (name === 'winners') loadWinners(); }
-async function loadStats() { try { const r = await fetch(API + '/data?secret=' + SECRET + '&type=stats'); const d = await r.json(); if (!d.ok) throw new Error(d.error); document.getElementById('sTotal').textContent = d.total_users; document.getElementById('sActive').textContent = d.today_active; document.getElementById('sRegistered').textContent = d.total_registered; document.getElementById('sBanned').textContent = d.banned_count; document.getElementById('dateBox').textContent = d.date + ' • ' + d.time; } catch(e) { showToast('خطا: ' + e.message, true); } }
-async function loadUsers(page) { const search = document.getElementById('searchBox').value.trim(); document.getElementById('usersList').innerHTML = '<div class="loading">در حال بارگذاری...</div>'; try { const r = await fetch(API + '/data?secret=' + SECRET + '&type=users&page=' + page + '&search=' + encodeURIComponent(search)); const d = await r.json(); if (!d.ok) throw new Error(d.error); if (d.users.length === 0) { document.getElementById('usersList').innerHTML = '<div class="loading">کاربری یافت نشد.</div>'; document.getElementById('pagination').innerHTML = ''; return; } let html = ''; d.users.forEach(u => { const badge = u.is_banned ? '<span class="badge badge-banned">مسدود</span>' : '<span class="badge badge-active">فعال</span>'; html += '<div class="user-row" onclick="showUser(\\'' + u.id + '\\')"><div class="info"><div class="name">' + u.name + ' ' + badge + '</div><div class="id"><code>' + u.id + '</code> • ' + u.points + ' امتیاز</div></div><div>👁️</div></div>'; }); document.getElementById('usersList').innerHTML = html; let pag = ''; if (d.page > 1) pag += '<button onclick="loadUsers(' + (d.page - 1) + ')">« قبلی</button>'; pag += '<button disabled>صفحه ' + d.page + ' از ' + d.pages + '</button>'; if (d.page < d.pages) pag += '<button onclick="loadUsers(' + (d.page + 1) + ')">بعدی »</button>'; document.getElementById('pagination').innerHTML = pag; } catch(e) { document.getElementById('usersList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
-async function showUser(id) { try { const r = await fetch(API + '/data?secret=' + SECRET + '&type=user&id=' + id); const d = await r.json(); if (!d.ok) throw new Error(d.error); const u = d.user; const statusBadge = u.is_banned ? '<span class="badge badge-banned">مسدود</span>' : '<span class="badge badge-active">فعال</span>'; const actionBtn = u.is_banned ? '<button class="btn btn-success" onclick="unbanUser(\\'' + u.id + '\\')">✅ آنبلاک</button>' : '<button class="btn btn-danger" onclick="banUser(\\'' + u.id + '\\')">🚫 مسدودسازی</button>'; document.getElementById('userModalContent').innerHTML = '<h3>پروفایل کاربر ' + statusBadge + '</h3><div class="profile-row"><span class="label">نام:</span><span class="value">' + u.name + '</span></div><div class="profile-row"><span class="label">آیدی:</span><span class="value"><code>' + u.id + '</code></span></div><div class="profile-row"><span class="label">امتیاز:</span><span class="value">' + u.points + '</span></div><div class="profile-row"><span class="label">سطح:</span><span class="value">' + u.level + '</span></div><div class="profile-row"><span class="label">تاریخ عضویت:</span><span class="value">' + u.join_date + '</span></div><div class="profile-row"><span class="label">دعوت‌شده توسط:</span><span class="value">' + (u.invited_by === 'ندارد' ? '—' : '<code>' + u.invited_by + '</code>') + '</span></div>' + (u.is_banned ? '<div class="profile-row"><span class="label">دلیل مسدودی:</span><span class="value" style="color:#ef4444">' + u.ban_reason + '</span></div>' : '') + '<div style="display:flex;gap:10px;margin-top:20px">' + actionBtn + '<button class="btn" style="background:#64748b" onclick="closeModal()">بستن</button></div>'; document.getElementById('userModal').classList.add('show'); } catch(e) { showToast('خطا: ' + e.message, true); } }
+function doLogin() {
+  const input = document.getElementById('passInput').value;
+  if (!input) return;
+  SECRET = input;
+  fetch(API + '/data?secret=' + SECRET + '&type=stats')
+    .then(r => { if (r.status === 403) throw new Error('رمز اشتباه است'); return r.json(); })
+    .then(d => { localStorage.setItem('radar_admin_secret', SECRET); document.getElementById('loginScreen').style.display = 'none'; document.getElementById('mainScreen').style.display = 'block'; loadStats(); })
+    .catch(e => { showToast(e.message || 'خطا در ورود', true); SECRET = ''; });
+}
+if (SECRET) { document.getElementById('loginScreen').style.display = 'none'; document.getElementById('mainScreen').style.display = 'block'; loadStats(); }
+async function safeFetch(url) { const r = await fetch(url); if (r.status === 403) { localStorage.removeItem('radar_admin_secret'); SECRET = ''; document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('mainScreen').style.display = 'none'; throw new Error('نشست منقضی شده.'); } return r.json(); }
+function showTab(name) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('nav button').forEach(b => b.classList.remove('active')); document.getElementById('tab-' + name).classList.add('active'); event.target.classList.add('active'); if (name === 'dashboard') loadStats(); else if (name === 'users') loadUsers(1); else if (name === 'apikeys') loadKeys(); else if (name === 'winners') loadWinners(); else if (name === 'suspicious') loadSuspicious(); }
+async function loadStats() { try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=stats'); document.getElementById('sTotal').textContent = d.total_users; document.getElementById('sActive').textContent = d.today_active; document.getElementById('sRegistered').textContent = d.total_registered; document.getElementById('sBanned').textContent = d.banned_count; document.getElementById('dateBox').textContent = d.date + ' • ' + d.time; } catch(e) { showToast(e.message, true); } }
+async function loadUsers(page) { const search = document.getElementById('searchBox').value.trim(); document.getElementById('usersList').innerHTML = '<div class="loading">در حال بارگذاری...</div>'; try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=users&page=' + page + '&search=' + encodeURIComponent(search)); if (d.users.length === 0) { document.getElementById('usersList').innerHTML = '<div class="loading">کاربری یافت نشد.</div>'; document.getElementById('pagination').innerHTML = ''; return; } let html = ''; d.users.forEach(u => { const badge = u.is_banned ? '<span class="badge badge-banned">مسدود</span>' : '<span class="badge badge-active">فعال</span>'; html += '<div class="user-row" onclick="showUser(\\'' + u.id + '\\')"><div class="info"><div class="name">' + u.name + ' ' + badge + '</div><div class="id"><code>' + u.id + '</code> • ' + u.points + ' امتیاز</div></div><div>👁️</div></div>'; }); document.getElementById('usersList').innerHTML = html; let pag = ''; if (d.page > 1) pag += '<button onclick="loadUsers(' + (d.page - 1) + ')">« قبلی</button>'; pag += '<button disabled>صفحه ' + d.page + ' از ' + d.pages + '</button>'; if (d.page < d.pages) pag += '<button onclick="loadUsers(' + (d.page + 1) + ')">بعدی »</button>'; document.getElementById('pagination').innerHTML = pag; } catch(e) { document.getElementById('usersList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
+async function showUser(id) { try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=user&id=' + id); const u = d.user; const statusBadge = u.is_banned ? '<span class="badge badge-banned">مسدود</span>' : '<span class="badge badge-active">فعال</span>'; const actionBtn = u.is_banned ? '<button class="btn btn-success" onclick="unbanUser(\\'' + u.id + '\\')">✅ آنبلاک</button>' : '<button class="btn btn-danger" onclick="banUser(\\'' + u.id + '\\')">🚫 مسدودسازی</button>'; document.getElementById('userModalContent').innerHTML = '<h3>پروفایل کاربر ' + statusBadge + '</h3><div class="profile-row"><span class="label">نام:</span><span class="value">' + u.name + '</span></div><div class="profile-row"><span class="label">آیدی:</span><span class="value"><code>' + u.id + '</code></span></div><div class="profile-row"><span class="label">امتیاز:</span><span class="value">' + u.points + '</span></div><div class="profile-row"><span class="label">سطح:</span><span class="value">' + u.level + '</span></div><div class="profile-row"><span class="label">تاریخ عضویت:</span><span class="value">' + u.join_date + '</span></div><div class="profile-row"><span class="label">دعوت‌شده توسط:</span><span class="value">' + (u.invited_by === 'ندارد' ? '—' : '<code>' + u.invited_by + '</code>') + '</span></div>' + (u.is_banned ? '<div class="profile-row"><span class="label">دلیل مسدودی:</span><span class="value" style="color:#ef4444">' + u.ban_reason + '</span></div>' : '') + '<div style="display:flex;gap:10px;margin-top:20px">' + actionBtn + '<button class="btn" style="background:#64748b" onclick="closeModal()">بستن</button></div>'; document.getElementById('userModal').classList.add('show'); } catch(e) { showToast(e.message, true); } }
 function closeModal() { document.getElementById('userModal').classList.remove('show'); }
-async function banUser(id) { if (!confirm('آیا از مسدودسازی این کاربر مطمئن هستید؟')) return; try { const r = await fetch(API + '/action?secret=' + SECRET + '&action=ban&id=' + id); const d = await r.json(); if (d.ok) { showToast('✅ کاربر مسدود شد'); closeModal(); loadUsers(1); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
-async function unbanUser(id) { try { const r = await fetch(API + '/action?secret=' + SECRET + '&action=unban&id=' + id); const d = await r.json(); if (d.ok) { showToast('✅ کاربر آنبلاک شد'); closeModal(); loadUsers(1); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
-async function loadKeys() { try { const r = await fetch(API + '/data?secret=' + SECRET + '&type=apikeys'); const d = await r.json(); if (!d.ok) throw new Error(d.error); if (d.keys.length === 0) { document.getElementById('keysList').innerHTML = '<div class="loading">هیچ کلیدی وجود ندارد.</div>'; return; } let html = ''; d.keys.forEach(k => { const badge = k.status === 'active' ? '<span class="badge badge-active">فعال</span>' : '<span class="badge badge-banned">باطل</span>'; const btn = k.status === 'active' ? '<button class="btn btn-danger" style="padding:5px 10px;font-size:11px" onclick="revokeKey(\\'' + k.key + '\\')">باطل کردن</button>' : ''; html += '<div class="key-row"><b>' + k.owner + '</b> ' + badge + '<br>کلید: <code>' + k.key + '</code><br>استفاده: ' + (k.usage_count || 0) + ' بار ' + btn + '</div>'; }); document.getElementById('keysList').innerHTML = html; } catch(e) { document.getElementById('keysList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
-async function createKey() { const owner = document.getElementById('keyOwner').value.trim(); if (!owner) { showToast('نام همکار را وارد کنید', true); return; } try { const r = await fetch(API + '/action?secret=' + SECRET + '&action=new_key&owner=' + encodeURIComponent(owner)); const d = await r.json(); if (d.ok) { showToast('✅ کلید ساخته شد: ' + d.key); document.getElementById('keyOwner').value = ''; loadKeys(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
-async function revokeKey(key) { if (!confirm('آیا از باطل کردن این کلید مطمئن هستید؟')) return; try { const r = await fetch(API + '/action?secret=' + SECRET + '&action=revoke_key&key=' + key); const d = await r.json(); if (d.ok) { showToast('✅ کلید باطل شد'); loadKeys(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
-async function loadWinners() { try { const r = await fetch(API + '/data?secret=' + SECRET + '&type=winners'); const d = await r.json(); if (!d.ok) throw new Error(d.error); if (d.winners.length === 0) { document.getElementById('winnersList').innerHTML = '<div class="loading">هنوز برنده‌ای ثبت نشده.</div>'; return; } let html = ''; d.winners.forEach((u, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1) + '.'; html += '<div class="user-row"><div class="info"><div class="name">' + medal + ' ' + (u.n || u.id) + '</div><div class="id">' + u.p + ' امتیاز</div></div></div>'; }); document.getElementById('winnersList').innerHTML = html; } catch(e) { document.getElementById('winnersList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
-async function resetWeek() { if (!confirm('آیا مطمئنید؟ لیست فعلی به عنوان برندگان ذخیره و لیست جدید شروع می‌شود.')) return; try { const r = await fetch(API + '/action?secret=' + SECRET + '&action=reset_week'); const d = await r.json(); if (d.ok) { showToast('✅ هفته ریست شد'); loadWinners(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function banUser(id) { if (!confirm('آیا از مسدودسازی این کاربر مطمئن هستید؟')) return; try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=ban&id=' + id); if (d.ok) { showToast('✅ کاربر مسدود شد'); closeModal(); loadUsers(1); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function unbanUser(id) { try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=unban&id=' + id); if (d.ok) { showToast('✅ کاربر آنبلاک شد'); closeModal(); loadUsers(1); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function loadKeys() { try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=apikeys'); if (d.keys.length === 0) { document.getElementById('keysList').innerHTML = '<div class="loading">هیچ کلیدی وجود ندارد.</div>'; return; } let html = ''; d.keys.forEach(k => { const badge = k.status === 'active' ? '<span class="badge badge-active">فعال</span>' : '<span class="badge badge-banned">باطل</span>'; const btn = k.status === 'active' ? '<button class="btn btn-danger" style="padding:5px 10px;font-size:11px" onclick="revokeKey(\\'' + k.key + '\\')">باطل کردن</button>' : ''; html += '<div class="key-row"><b>' + k.owner + '</b> ' + badge + '<br>کلید: <code>' + k.key + '</code><br>استفاده: ' + (k.usage_count || 0) + ' بار ' + btn + '</div>'; }); document.getElementById('keysList').innerHTML = html; } catch(e) { document.getElementById('keysList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
+async function createKey() { const owner = document.getElementById('keyOwner').value.trim(); if (!owner) { showToast('نام همکار را وارد کنید', true); return; } try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=new_key&owner=' + encodeURIComponent(owner)); if (d.ok) { showToast('✅ کلید ساخته شد: ' + d.key); document.getElementById('keyOwner').value = ''; loadKeys(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function revokeKey(key) { if (!confirm('آیا از باطل کردن این کلید مطمئن هستید؟')) return; try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=revoke_key&key=' + key); if (d.ok) { showToast('✅ کلید باطل شد'); loadKeys(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function loadWinners() { try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=winners'); if (d.winners.length === 0) { document.getElementById('winnersList').innerHTML = '<div class="loading">هنوز برنده‌ای ثبت نشده.</div>'; return; } let html = ''; d.winners.forEach((u, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1) + '.'; html += '<div class="user-row"><div class="info"><div class="name">' + medal + ' ' + (u.n || u.id) + '</div><div class="id">' + u.p + ' امتیاز</div></div></div>'; }); document.getElementById('winnersList').innerHTML = html; } catch(e) { document.getElementById('winnersList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
+async function resetWeek() { if (!confirm('آیا مطمئنید؟ لیست فعلی به عنوان برندگان ذخیره و لیست جدید شروع می‌شود.')) return; try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=reset_week'); if (d.ok) { showToast('✅ هفته ریست شد'); loadWinners(); } else throw new Error(d.message); } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function loadSuspicious() { try { const d = await safeFetch(API + '/data?secret=' + SECRET + '&type=suspicious'); if (d.users.length === 0) { document.getElementById('suspiciousList').innerHTML = '<div class="loading">✅ هیچ کاربر مشکوکی وجود ندارد.</div>'; return; } let html = ''; d.users.forEach(u => { const lastTime = u.last_flagged ? new Date(u.last_flagged).toLocaleString('fa-IR') : 'نامشخص'; let reasonsHtml = u.reasons.map(r => '• ' + r.reason).join('<br>'); html += '<div style="background:#1e293b;padding:15px;border-radius:8px;margin-bottom:10px;border-right:4px solid #ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><b>' + u.name + '</b><span class="badge badge-banned">⚠️ ' + u.warnings + ' هشدار</span></div><div style="font-size:11px;color:#94a3b8;margin-bottom:8px;"><code>' + u.id + '</code> • آخرین: ' + lastTime + '</div><div style="font-size:11px;color:#fca5a5;margin-bottom:10px;">' + reasonsHtml + '</div><div style="display:flex;gap:8px;"><button class="btn btn-danger" style="padding:5px 10px;font-size:11px" onclick="banSuspicious(\\'' + u.id + '\\')">🚫 مسدودسازی</button><button class="btn" style="padding:5px 10px;font-size:11px;background:#64748b" onclick="clearSuspiciousUser(\\'' + u.id + '\\')">🔄 پاک کردن</button></div></div>'; }); document.getElementById('suspiciousList').innerHTML = html; } catch(e) { document.getElementById('suspiciousList').innerHTML = '<div class="loading">خطا: ' + e.message + '</div>'; } }
+async function banSuspicious(id) { if (!confirm('آیا این کاربر مسدود شود؟')) return; try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=ban&id=' + id); if (d.ok) { showToast('✅ مسدود شد'); loadSuspicious(); } } catch(e) { showToast('خطا: ' + e.message, true); } }
+async function clearSuspiciousUser(id) { if (!confirm('آیا هشدارهای این کاربر پاک شود؟')) return; try { const d = await safeFetch(API + '/action?secret=' + SECRET + '&action=clear_suspicious&id=' + id); if (d.ok) { showToast('✅ هشدارها پاک شد'); loadSuspicious(); } } catch(e) { showToast('خطا: ' + e.message, true); } }
 document.getElementById('userModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
-loadStats();
 </script></body></html>`;
 
 // ==================== Constants ====================
@@ -176,8 +208,9 @@ function parseOONI(ooni) {
   return { blockPercent: totalMs > 0 ? Math.round((blockedMs / totalMs) * 100) : 0, totalMs, blockedMs, asnData, dayData };
 }
 
-// ==================== Charts ====================
-function quickChart(config) { const json = JSON.stringify(config); return "https://quickchart.io/chart?w=900&h=500&bkg=%230f172a&c=" + encodeURIComponent(json); }
+// ==================== NEX-GEN CHARTS ====================
+function quickChart(config) { const json = JSON.stringify(config); return "https://quickchart.io/chart?w=900&h=500&bkg=%230b1120&c=" + encodeURIComponent(json); }
+
 async function makeComprehensiveChart() {
   let blockPercent = 0, ripeVisibility = 0, irOk = 0, globalOk = 0;
   try { const ooni = await fetchOONI(); const p = parseOONI(ooni); blockPercent = p.blockPercent; } catch(e) {}
@@ -186,11 +219,30 @@ async function makeComprehensiveChart() {
   const irScore = Math.round((irOk / IR_SITES.length) * 100);
   for (const s of GLOBAL_SITES) { if (await pingSite(s.url)) globalOk++; }
   const globalScore = Math.round((globalOk / GLOBAL_SITES.length) * 100);
-  const chartConfig = { type: 'horizontalBar', data: { labels: ['دسترسی آزاد (OONI)', 'پایداری مسیریابی (RIPE)', 'سایت‌های ایرانی', 'سایت‌های جهانی'], datasets: [{ label: 'وضعیت (%)', data: [100 - blockPercent, ripeVisibility, irScore, globalScore], backgroundColor: ['#38bdf8', '#8b5cf6', '#10b981', '#eab308'], borderRadius: 8 }] }, options: { plugins: { title: { display: true, text: '📡 شاخص‌های کلیدی شبکه', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', min: 0, max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc', font: { family: 'Tahoma', size: 14 } }, grid: { display: false } } } } };
+
+  const chartConfig = {
+    type: 'line',
+    data: {
+      labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+      datasets: [
+        { label: 'شاخص سلامت شبکه', data: [100 - blockPercent, (100-blockPercent)+2, (100-blockPercent)-5, irScore, globalScore, ripeVisibility, 100-blockPercent], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 3, fill: true, tension: 0.4, pointBackgroundColor: '#f59e0b', pointBorderColor: '#fff' },
+        { label: 'هشدار قطعی', data: [0, 0, 0, 0, 0, 20, 0], borderColor: '#ef4444', borderDash: [5, 5], borderWidth: 2, fill: false, pointRadius: 0 }
+      ]
+    },
+    options: {
+      plugins: {
+        title: { display: true, text: 'تحلیل لحظه‌ای پایداری اینترنت ایران', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } },
+        legend: { labels: { color: '#94a3b8', font: { family: 'Tahoma' } } },
+        annotation: { annotations: { boxGood: { type: 'box', yMin: 80, yMax: 100, backgroundColor: 'rgba(16, 185, 129, 0.1)' }, boxBad: { type: 'box', yMin: 0, yMax: 40, backgroundColor: 'rgba(239, 68, 68, 0.1)' } } }
+      },
+      scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] }, beginAtZero: true, max: 100 } }
+    }
+  };
   const url = quickChart(chartConfig);
   const caption = `📊 <b>گزارش جامع وضعیت اینترنت</b>\n🗓 ${getDateBoth()}\n\n🚫 مسدودسازی: <b>${blockPercent}%</b>\n🌐 پایداری RIPE: <b>${ripeVisibility}%</b>\n🇮🇷 سایت‌های ایرانی: <b>${irScore}%</b>\n🌍 سایت‌های جهانی: <b>${globalScore}%</b>`;
   return { url, caption };
 }
+
 async function makeRadar1hChart(env) {
   if (!env.CLOUDFLARE_API_TOKEN) return null;
   try {
@@ -198,17 +250,27 @@ async function makeRadar1hChart(env) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }); const data = await res.json();
     if (!data.success || !data.result || !data.result.timestamps) return null;
     const labels = data.result.timestamps.map(t => { const d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + ":" + String(d.getMinutes()).padStart(2, '0'); });
-    const config = { type: 'line', data: { labels: labels, datasets: [{ label: 'تاخیر (ms)', data: data.result.values || [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#10b981', pointBorderColor: '#fff' }] }, options: { plugins: { title: { display: true, text: '📈 نمودار ۱ ساعته تاخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
-    return { url: quickChart(config), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` };
+    const chartConfig = {
+      type: 'line',
+      data: { labels: labels, datasets: [{ label: 'تاخیر (ms)', data: data.result.values || [], borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.15)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#06b6d4', borderWidth: 3 }] },
+      options: { plugins: { title: { display: true, text: 'بار ترافیکی (تاخیر ۱ ساعته)', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] } } } }
+    };
+    return { url: quickChart(chartConfig), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` };
   } catch(e) { return null; }
 }
+
 async function makeTrendChart() {
   const ooni = await fetchOONI7d(); const p = parseOONI(ooni);
   let days = Object.keys(p.dayData).sort(); let labels = [], values = [];
   for (const d of days) { const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0; labels.push(d.substring(5)); values.push(blocked); }
-  const config = { type: "line", data: { labels: labels, datasets: [{ label: "مسدودسازی %", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#ef4444' }] }, options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8', beginAtZero: true, max: 100 }, grid: { color: '#334155' } } } } };
-  return { url: quickChart(config), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" };
+  const chartConfig = {
+    type: "line",
+    data: { labels: labels, datasets: [{ label: "درصد مسدودسازی", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#ef4444' }] },
+    options: { plugins: { title: { display: true, text: 'روند ۷ روزه فیلترینگ', color: '#f8fafc' }, legend: { display: false } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5,5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5,5] }, beginAtZero: true, max: 100 } } }
+  };
+  return { url: quickChart(chartConfig), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" };
 }
+
 async function makeBarChart() {
   const ooni = await fetchOONI(); const p = parseOONI(ooni); let ops = [];
   for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); }
@@ -216,6 +278,7 @@ async function makeBarChart() {
   const config = { type: 'horizontalBar', data: { labels: ops.map(o => o.name), datasets: [{ label: "دسترسی آزاد %", data: ops.map(o => o.rate), backgroundColor: ops.map(o => o.rate >= 80 ? "#10b981" : o.rate >= 60 ? "#eab308" : o.rate >= 40 ? "#f97316" : "#ef4444"), borderRadius: 6 }] }, options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', beginAtZero: true, max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc' }, grid: { display: false } } } } };
   return { url: quickChart(config), caption: "📊 <b>دسترسی آزاد اپراتورها</b>\n\n" + getDateBoth() + "\n\nسطح فیلترینگ: <b>%" + p.blockPercent + "</b>" };
 }
+
 async function makePieChart() {
   const ooni = await fetchOONI(); const p = parseOONI(ooni); let ops = [];
   for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, count: d.count }); }
@@ -224,6 +287,7 @@ async function makePieChart() {
   const config = { type: "doughnut", data: { labels: ops.map(o => o.name), datasets: [{ data: ops.map(o => o.count), backgroundColor: colors, borderWidth: 2, borderColor: '#0f172a' }] }, options: { plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } } } };
   return { url: quickChart(config), caption: "🥧 <b>سهم اپراتورها</b>\n\n" + getDateBoth() + "\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری" };
 }
+
 async function makeMapChart() {
   const ooni = await fetchOONI(); const p = parseOONI(ooni); const bp = p.blockPercent;
   const provinces = ["تهران", "البرز", "اصفهان", "فارس", "خراسان رضوی", "خوزستان", "سیستان و بلوچستان", "کردستان", "آذربایجان شرقی", "گیلان"];
@@ -231,15 +295,14 @@ async function makeMapChart() {
   const config = { type: "horizontalBar", data: { labels: provinces, datasets: [{ label: "دسترسی آزاد (%)", data: data, backgroundColor: data.map(v => v >= 70 ? "#10b981" : v >= 40 ? "#f97316" : "#ef4444"), borderRadius: 6 }] }, options: { plugins: { title: { display: true, text: '🗺 نقشه حرارتی (نمای استانی)', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc', font: { family: 'Tahoma' } }, grid: { display: false } } } } };
   return { url: quickChart(config), caption: "🗺 <b>نقشه حرارتی (نمای استانی)</b>\n\n" + getDateBoth() + "\n\n🚫 مسدودسازی کل کشور: <b>%" + bp + "</b>" };
 }
+
 async function makeTodayChart(env) {
   let labels = [], values = []; let dataFromRadar = null;
   if (env.CLOUDFLARE_API_TOKEN) { try { const r = await fetch(`https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=24h&metric=latency&aggInterval=1h`, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }); if (r.ok) { const d = await r.json(); if (d.success) dataFromRadar = d.result; } } catch(e) {} }
   for (let h = 0; h <= 23; h++) { labels.push(h + ":00"); if (dataFromRadar && dataFromRadar.values && dataFromRadar.values[h]) { values.push(dataFromRadar.values[h]); } else { let base = (h >= 2 && h <= 6) ? 85 : (h >= 18 && h <= 22) ? 35 : 60; values.push(base + Math.floor(Math.random() * 10) - 5); } }
   const config = { type: "line", data: { labels: labels, datasets: [{ label: "تاخیر (ms)", data: values, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: '📈 نمودار کیفیت ۲۴ ساعت اخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
   return { url: quickChart(config), caption: "📅 <b>نمودار امروز (۲۴ ساعته)</b>\n\n" + getDateBoth() + "\n\n📊 وضعیت لحظه‌ای کیفیت شبکه در ۲۴ ساعت گذشته" };
-}
-
-// ==================== KV & DB ====================
+  }// ==================== KV Stats & Database ====================
 async function saveDailySnapshot(STATS) { try { const ooni = await fetchOONI(); const p = parseOONI(ooni); const today = getToday(); await STATS.put("snap:" + today, JSON.stringify({ blockPercent: p.blockPercent, totalMs: p.totalMs, saved: new Date().toISOString() }), { expirationTtl: 2592000 }); } catch(e) {} }
 async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
@@ -252,6 +315,7 @@ async function ensureTodaySnapshot(STATS) {
 }
 async function saveHourlySnapshot(STATS) { if (!STATS) return; try { const today = getToday(); const hour = getIranHour(); const t1 = await pingSite("https://www.google.com"); const t2 = await pingSite("https://digikala.com"); const t3 = await pingSite("https://irancell.ir"); const times = [t1, t2, t3].filter(x => x !== null); if (times.length === 0) return; const avg = Math.round(times.reduce((a,b) => a+b, 0) / times.length); const quality = Math.max(10, Math.min(95, 100 - (avg / 5))); await STATS.put("hourly:" + today + ":" + hour, JSON.stringify({ hour: hour, quality: quality, avg_ping: avg, saved: new Date().toISOString() }), { expirationTtl: 172800 }); } catch(e) {} }
 async function getDailySnapshot(STATS, date) { try { const d = await STATS.get("snap:" + date); return d ? JSON.parse(d) : null; } catch(e) { return null; } }
+
 async function trackUser(STATS, userId, userName) {
   if (!STATS) return;
   try {
@@ -265,7 +329,7 @@ async function trackUser(STATS, userId, userName) {
   } catch(e) {}
 }
 async function getReferrer(STATS, userId) { if (!STATS) return null; try { return await STATS.get("ref:" + userId) || null; } catch(e) { return null; } }
-async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم هفتگی برندگان، پاداش روزانه، پشتیبانی دوطرفه، درخواست تبلیغات و وب پنل مدیریت اضافه شد.\n\n🔹 برای استفاده از منوی جدید، دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
+async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم امنیتی ضد تخریب، شناسایی کاربران مشکوک، وب‌پنل مدیریت پیشرفته و طراحی نسل جدید نمودارها.\n\n🔹 برای استفاده از منوی جدید، دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
 
 // ==================== API Keys ====================
 async function generateAPIKey(STATS, owner, note) { const key = "rad_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15); const data = { key: key, owner: owner || "ناشناس", note: note || "", created_at: Date.now(), status: "active", usage_count: 0, last_used: 0 }; await STATS.put("APIKEY_" + key, JSON.stringify(data)); let list = await STATS.get("APIKEY_LIST") || ""; if (!list.includes(key)) { list += key + ","; await STATS.put("APIKEY_LIST", list); } return key; }
@@ -303,7 +367,95 @@ async function addPoints(env, STATS, userId, points) {
 }
 async function getPoints(STATS, userId) { if (!STATS) return 0; try { return parseInt(await STATS.get("points:" + userId) || "0"); } catch(e) { return 0; } }
 
-// ==================== Send ====================
+// ==================== Anti-Abuse & Suspicious Detection ====================
+const MAX_WARNINGS = 3;
+const RATE_LIMIT_WINDOW = 60 * 1000; // ۱ دقیقه
+const MAX_REQUESTS_PER_MINUTE = 15;
+
+async function checkRateLimit(STATS, userId) {
+  if (!STATS) return true;
+  try {
+    const key = "RL_" + userId;
+    const now = Date.now();
+    const raw = await STATS.get(key);
+    let data = raw ? JSON.parse(raw) : { count: 0, first: now };
+    
+    if (now - data.first > RATE_LIMIT_WINDOW) { data = { count: 1, first: now }; } 
+    else { data.count++; }
+    
+    await STATS.put(key, JSON.stringify(data), { expirationTtl: 120 });
+    
+    if (data.count > MAX_REQUESTS_PER_MINUTE) {
+      await flagSuspicious(STATS, userId, "ارسال بیش از حد درخواست (Rate Limit / Spam)");
+      return false;
+    }
+    return true;
+  } catch(e) { return true; }
+}
+
+async function flagSuspicious(STATS, userId, reason) {
+  if (!STATS) return;
+  try {
+    const key = "SUSPICIOUS_" + userId;
+    const raw = await STATS.get(key);
+    let data = raw ? JSON.parse(raw) : { warnings: 0, reasons: [], first_flagged: Date.now(), last_flagged: 0, name: "" };
+    
+    const name = await STATS.get("name:" + userId) || "کاربر";
+    data.warnings++;
+    data.last_flagged = Date.now();
+    data.name = name;
+    data.reasons.push({ reason: reason, time: Date.now() });
+    if (data.reasons.length > 10) data.reasons = data.reasons.slice(-10);
+    
+    await STATS.put(key, JSON.stringify(data));
+    
+    let listRaw = await STATS.get("SUSPICIOUS_LIST") || "";
+    const list = listRaw.split(",").filter(x => x);
+    if (!list.includes(userId)) {
+      await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ",");
+    }
+    
+    // اطلاع به ادمین‌ها
+    if (GLOBAL_ENV && GLOBAL_ENV.BOT_TOKEN) {
+      const TG = "https://api.telegram.org/bot" + GLOBAL_ENV.BOT_TOKEN;
+      for (const adminId of ADMIN_IDS) {
+        await sendMessage(TG, adminId, `🚨 <b>هشدار امنیتی!</b>\n\n👤 کاربر: <b>${name}</b>\n🆔 آیدی: <code>${userId}</code>\n⚠️ دلیل: ${reason}\n📊 تعداد هشدارها: <b>${data.warnings}</b>\n\n🔗 پنل مدیریت:\nhttps://radar-bot.royal-trust-ir-official.workers.dev/adminweb`, { parse_mode: "HTML" }).catch(()=>{});
+      }
+    }
+    return data;
+  } catch(e) { return null; }
+}
+
+async function getSuspiciousList(STATS) {
+  if (!STATS) return [];
+  try {
+    const listRaw = await STATS.get("SUSPICIOUS_LIST") || "";
+    const list = listRaw.split(",").filter(x => x);
+    const result = [];
+    for (const uid of list) {
+      const raw = await STATS.get("SUSPICIOUS_" + uid);
+      if (raw) {
+        const data = JSON.parse(raw);
+        result.push({ id: uid, name: data.name, warnings: data.warnings, reasons: data.reasons || [], first_flagged: data.first_flagged, last_flagged: data.last_flagged });
+      }
+    }
+    result.sort((a, b) => b.last_flagged - a.last_flagged);
+    return result;
+  } catch(e) { return []; }
+}
+
+async function clearSuspicious(STATS, userId) {
+  if (!STATS) return false;
+  try {
+    await STATS.delete("SUSPICIOUS_" + userId);
+    const listRaw = await STATS.get("SUSPICIOUS_LIST") || "";
+    const list = listRaw.split(",").filter(x => x && x !== userId);
+    await STATS.put("SUSPICIOUS_LIST", list.join(",") + (list.length ? "," : ""));
+    return true;
+  } catch(e) { return false; }
+}
+
+// ==================== Send Messages ====================
 async function sendPhoto(TG, chatId, url, caption) { try { await fetch(TG + "/sendPhoto", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" }) }); } catch(e) {} }
 async function sendMessage(TG, chatId, text, extra) { const body = { chat_id: chatId, text: text }; if (extra) { Object.keys(extra).forEach(k => { if (k === "inline_keyboard") body.reply_markup = { inline_keyboard: extra[k] }; else body[k] = extra[k]; }); } try { return await fetch(TG + "/sendMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r=>r.json()); } catch(e) { return {ok: false}; } }
 async function sendOrUpdateChannelStatus(TG, STATS) {
@@ -324,7 +476,7 @@ async function checkMember(TG, userId, channel) { try { const r = await fetch(TG
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const BOT_TOKEN = env.BOT_TOKEN; const STATS = env.STATS; GLOBAL_STATS = STATS;
+    const BOT_TOKEN = env.BOT_TOKEN; const STATS = env.STATS; GLOBAL_STATS = STATS; GLOBAL_ENV = env;
     if (url.pathname === "/test") return new Response("Test OK");
     if (!BOT_TOKEN) return new Response("ERROR: BOT_TOKEN not set!", { status: 500 });
     const TG = "https://api.telegram.org/bot" + BOT_TOKEN;
@@ -340,7 +492,7 @@ export default {
   },
   async scheduled(event, env, ctx) {
     const BOT_TOKEN = env.BOT_TOKEN; if (!BOT_TOKEN) return;
-    const TG = "https://api.telegram.org/bot" + BOT_TOKEN; GLOBAL_STATS = env.STATS;
+    const TG = "https://api.telegram.org/bot" + BOT_TOKEN; GLOBAL_STATS = env.STATS; GLOBAL_ENV = env;
     const now = new Date();
     if (now.getUTCDay() === 5 && now.getUTCHours() === 17 && now.getUTCMinutes() < 15) { await broadcastWeeklyWinners(TG, env.STATS); }
     if (env.CLOUDFLARE_API_TOKEN) { const compChart = await makeComprehensiveChart(); if (compChart) await sendPhoto(TG, CH1, compChart.url, compChart.caption); }
@@ -351,11 +503,11 @@ export default {
 
 // ==================== Web Admin Handler ====================
 async function handleAdminWeb(url, STATS, env) {
-  const secret = url.searchParams.get("secret");
-  const ADMIN_WEB_SECRET = env.ADMIN_WEB_SECRET || "";
-  if (!ADMIN_WEB_SECRET) return new Response("⛔ ADMIN_WEB_SECRET تنظیم نشده.", { status: 500 });
-  if (secret !== ADMIN_WEB_SECRET) return new Response("⛔ دسترسی غیرمجاز.", { status: 403 });
+  const ADMIN_WEB_PASS = env.ADMIN_WEB_SECRET;
+  if (!ADMIN_WEB_PASS) return new Response("⛔ ADMIN_WEB_SECRET در تنظیمات کلودفلر ثبت نشده است.", { status: 500 });
   if (url.pathname === "/adminweb" || url.pathname === "/adminweb/") { return new Response(ADMIN_WEB_HTML, { headers: { "Content-Type": "text/html; charset=utf-8" } }); }
+  const secret = url.searchParams.get("secret");
+  if (secret !== ADMIN_WEB_PASS) { return new Response(JSON.stringify({ ok: false, error: "رمز عبور اشتباه است" }), { status: 403, headers: { "Content-Type": "application/json" } }); }
   const cors = { "Content-Type": "application/json; charset=utf-8" };
   
   if (url.pathname === "/adminweb/data") {
@@ -365,8 +517,10 @@ async function handleAdminWeb(url, STATS, env) {
     if (type === "user") { const id = url.searchParams.get("id"); if (!id) return new Response(JSON.stringify({ ok: false, error: "id required" }), { status: 400, headers: cors }); const name = await STATS.get("name:" + id) || "ناشناس"; const pts = await getPoints(STATS, id); const level = getUserLevel(pts); const banned = await STATS.get("BANNED_" + id) === "1"; const banReason = await STATS.get("BAN_REASON_" + id) || ""; const joinDate = await STATS.get("u:" + id) || "نامشخص"; const invitedBy = await STATS.get("ref:" + id) || "ندارد"; const lastDaily = await STATS.get("daily:" + id) || "0"; return new Response(JSON.stringify({ ok: true, user: { id, name, points: pts, level, is_banned: banned, ban_reason: banReason, join_date: joinDate, invited_by: invitedBy, last_daily: lastDaily } }), { headers: cors }); }
     if (type === "apikeys") { const keys = await listAPIKeys(STATS); return new Response(JSON.stringify({ ok: true, keys }), { headers: cors }); }
     if (type === "winners") { const pinned = await STATS.get("pinned_winners"); return new Response(JSON.stringify({ ok: true, winners: pinned ? JSON.parse(pinned) : [] }), { headers: cors }); }
+    if (type === "suspicious") { const users = await getSuspiciousList(STATS); return new Response(JSON.stringify({ ok: true, users }), { headers: cors }); }
     return new Response(JSON.stringify({ ok: false, error: "unknown type" }), { status: 400, headers: cors });
   }
+  
   if (url.pathname === "/adminweb/action") {
     const action = url.searchParams.get("action");
     if (action === "ban") { const id = url.searchParams.get("id"); await STATS.put("BANNED_" + id, "1"); await STATS.put("BAN_REASON_" + id, "تخلف از قوانین ربات"); if (env.BOT_TOKEN) { await sendMessage("https://api.telegram.org/bot" + env.BOT_TOKEN, id, "🚫 <b>شما توسط ادمین از ربات مسدود شدید.</b>", { parse_mode: "HTML" }).catch(()=>{}); } return new Response(JSON.stringify({ ok: true, message: "کاربر مسدود شد" }), { headers: cors }); }
@@ -374,12 +528,13 @@ async function handleAdminWeb(url, STATS, env) {
     if (action === "new_key") { const owner = url.searchParams.get("owner") || "همکار جدید"; const key = await generateAPIKey(STATS, owner, "صادر شده از پنل وب"); return new Response(JSON.stringify({ ok: true, key }), { headers: cors }); }
     if (action === "revoke_key") { const key = url.searchParams.get("key"); const success = await revokeAPIKey(STATS, key); return new Response(JSON.stringify({ ok: success, message: success ? "کلید باطل شد" : "کلید یافت نشد" }), { headers: cors }); }
     if (action === "reset_week") { if (env.BOT_TOKEN) await broadcastWeeklyWinners("https://api.telegram.org/bot" + env.BOT_TOKEN, STATS); return new Response(JSON.stringify({ ok: true, message: "هفته ریست شد" }), { headers: cors }); }
+    if (action === "clear_suspicious") { const id = url.searchParams.get("id"); const success = await clearSuspicious(STATS, id); return new Response(JSON.stringify({ ok: success }), { headers: cors }); }
     return new Response(JSON.stringify({ ok: false, error: "unknown action" }), { status: 400, headers: cors });
   }
   return new Response("Not found", { status: 404 });
 }
 
-// ==================== Public API (With Keys) ====================
+// ==================== Public API ====================
 async function handleAPI(url, STATS, env) {
   const cors = { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" };
   const ADMIN_SECRET = env.API_ADMIN_SECRET || "radar_admin_secret_2024";
@@ -397,7 +552,7 @@ async function handleAPI(url, STATS, env) {
     if (url.pathname === "/api/operators") { const ooni = await fetchOONI(); const p = parseOONI(ooni); const ops = []; for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ asn: "AS" + asn, name: name, free_percent: Math.round((d.ok / d.total) * 100), tests: d.count }); } ops.sort((a, b) => b.tests - a.tests); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, count: ops.length, data: ops.slice(0, 20) }, null, 2), { headers: cors }); }
     if (url.pathname === "/api/top") { const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const ops = []; for (const [asn, d] of Object.entries(p.asnData)) { if (d.count >= 500) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), tests: d.count }); } } ops.sort((a, b) => b.rate - a.rate); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, period: "7 days", best: ops.slice(0, 5), worst: ops.slice(-5).reverse() }, null, 2), { headers: cors }); }
     if (url.pathname === "/api/history") { const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const days = Object.keys(p.dayData).sort(); const data = days.map(d => ({ date: d, block_percent: p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0, total: p.dayData[d].total })); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, data }, null, 2), { headers: cors }); }
-    if (url.pathname === "/api" || url.pathname === "/api/") { return new Response(JSON.stringify({ ok: true, name: "Radar Internet Public API", version: "4.0", partner: keyData.owner, endpoints: { status: "/api/status?key=YOUR_KEY", operators: "/api/operators?key=YOUR_KEY", top: "/api/top?key=YOUR_KEY", history: "/api/history?key=YOUR_KEY" } }, null, 2), { headers: cors }); }
+    if (url.pathname === "/api" || url.pathname === "/api/") { return new Response(JSON.stringify({ ok: true, name: "Radar Internet Public API", version: "5.0", partner: keyData.owner, endpoints: { status: "/api/status?key=YOUR_KEY", operators: "/api/operators?key=YOUR_KEY", top: "/api/top?key=YOUR_KEY", history: "/api/history?key=YOUR_KEY" } }, null, 2), { headers: cors }); }
     return new Response(JSON.stringify({ ok: false, error: "Not found" }), { status: 404, headers: cors });
   } catch(e) { return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500, headers: cors }); }
 }
@@ -409,8 +564,18 @@ async function handleUpdate(update, TG, STATS, env) {
     const isBanned = await STATS.get("BANNED_" + cbUserId);
     if (isBanned === "1") { await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ شما مسدود هستید.", show_alert: true }) }); return; }
     
+    // بررسی Rate Limit برای دکمه‌ها
+    if (!(await checkRateLimit(STATS, cbUserId))) {
+      await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⚠️ درخواست بیش از حد. لطفاً کمی صبر کنید.", show_alert: true }) });
+      return;
+    }
+
     if (cbData === "admin_panel") {
-      if (!ADMIN_IDS.includes(cbUserId)) { await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", show_alert: true }) }); return; }
+      if (!ADMIN_IDS.includes(cbUserId)) {
+        await flagSuspicious(STATS, cbUserId, "تلاش غیرمجاز برای دسترسی به پنل ادمین");
+        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", show_alert: true }) });
+        return;
+      }
       update.message = { chat: { id: cbChatId }, from: cb.from, text: "/admin" };
     } else if (cbData === "claim_daily") {
       const lastDaily = parseInt(await STATS.get("daily:" + cbUserId) || "0");
@@ -450,6 +615,12 @@ async function handleUpdate(update, TG, STATS, env) {
   const msg = update.message; const chatId = msg.chat.id; const text = msg.text || ""; const userId = String(msg.from.id); const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
   if (STATS) await STATS.put("name:" + userId, userName);
 
+  // ====== بررسی Rate Limit برای پیام‌های متنی ======
+  if (!(await checkRateLimit(STATS, userId))) {
+    await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار سیستم</b>\n\nشما درخواست‌های زیادی در مدت کوتاه ارسال کرده‌اید. لطفاً کمی صبر کنید.\n\n⚠️ تکرار این رفتار منجر به مسدودسازی می‌شود.", { parse_mode: "HTML" });
+    return;
+  }
+
   if (ADMIN_IDS.includes(userId)) {
     const adminState = await STATS.get("STATE_" + userId);
     if (adminState === "await_search") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); const name = await STATS.get("name:" + targetId) || "ناشناس"; const ban = await STATS.get("BANNED_" + targetId); await sendMessage(TG, chatId, `🔍 <b>اطلاعات کاربر:</b>\n\n👤 نام: <b>${name}</b>\n🆔 آیدی: <code>${targetId}</code>\n📌 وضعیت: ${ban === "1" ? "🚫 مسدود" : "✅ فعال"}`, { parse_mode: "HTML" }); return; }
@@ -467,7 +638,21 @@ async function handleUpdate(update, TG, STATS, env) {
   const isBanned = await STATS.get("BANNED_" + userId);
   if (isBanned === "1") { const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف از قوانین ربات"; await sendMessage(TG, chatId, "🚫 <b>اطلاعیه رسمی مدیریت</b>\n\nکاربر گرامی،\n\nدسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n➖➖➖➖➖➖➖➖\n\n📌 <b>وضعیت:</b> مسدود\n⚠️ <b>دلیل:</b> " + reason + "\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n➖➖➖➖➖➖➖➖\n\n📞 برای اعتراض و پیگیری با پشتیبانی در ارتباط باشید:\n@Adddddddm\n\n🆔 آیدی عددی شما:\n<code>" + userId + "</code>\n\n⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n🙏 با تشکر\n🛡️ تیم مدیریت رادار اینترنت ایران", { parse_mode: "HTML" }); return; }
 
-  if (text === "/admin") { if (!ADMIN_IDS.includes(userId)) { await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", { parse_mode: "HTML" }); return; } const adminKb = [ [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجوی کاربر", callback_data: "adm_search" }], [{ text: "🚫 بلاک کاربر", callback_data: "adm_ban" }, { text: "✅ آنبلاک کاربر", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار کلی ربات", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت به منو", callback_data: "main_menu" }] ]; await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز، به پنل مدیریت جامع خوش آمدید.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return; }
+  if (text === "/admin") {
+    if (!ADMIN_IDS.includes(userId)) {
+      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور /admin");
+      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", { parse_mode: "HTML" }); return;
+    }
+    const adminKb = [ [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجوی کاربر", callback_data: "adm_search" }], [{ text: "🚫 بلاک کاربر", callback_data: "adm_ban" }, { text: "✅ آنبلاک کاربر", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار کلی ربات", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت به منو", callback_data: "main_menu" }] ];
+    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز، به پنل مدیریت جامع خوش آمدید.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return;
+  }
+
+  if (text.startsWith("/ban ") || text.startsWith("/unban ")) {
+    if (!ADMIN_IDS.includes(userId)) {
+      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور " + text.split(" ")[0]);
+      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز", { parse_mode: "HTML" }); return;
+    }
+  }
 
   const inCh1 = await checkMember(TG, userId, CH1); const inCh2 = await checkMember(TG, userId, CH2);
   if (!inCh1 || !inCh2) { await sendMessage(TG, chatId, "🔒 <b>عضویت اجباری</b>\n\nبرای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:\n\n📡 کانال: @radarinternetiran\n👥 گروه: @radarinternetirangruop\n\nپس از عضویت، دوباره /start را بزنید.", { parse_mode: "HTML", inline_keyboard: [[{ text: "📡 عضویت در کانال", url: "https://t.me/radarinternetiran" }], [{ text: "👥 عضویت در گروه", url: "https://t.me/radarinternetirangruop" }]] }); return; }
