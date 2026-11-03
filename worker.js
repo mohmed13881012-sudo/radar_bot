@@ -7,6 +7,7 @@ const BOT_USERNAME = "Radarinternetiranbot";
 const CURRENT_VERSION = "5.0";
 const ADMIN_IDS = ["8344700031", "7652496428"];
 const SPONSOR_MSG = "💎 <b>اسپانسر رسمی ربات:</b>\n<i>(جایگاه تبلیغات شما - جهت رزرو روی دکمه درخواست تبلیغات بزنید)</i>";
+const WATERMARK = "\n\n📌 <b>منبع:</b> رادار اینترنت ایران\n⚠️ <i>هرگونه سوءاستفاده از این آمار و داده‌ها پیگرد قانونی دارد.</i>";
 
 let GLOBAL_STATS = null;
 let GLOBAL_ENV = null;
@@ -241,7 +242,7 @@ async function makeComprehensiveChart() {
     }
   };
   const url = quickChart(chartConfig);
-  const caption = `📊 <b>گزارش جامع وضعیت اینترنت</b>\n🗓 ${getDateBoth()}\n\n🚫 مسدودسازی: <b>${blockPercent}%</b>\n🌐 پایداری RIPE: <b>${ripeVisibility}%</b>\n🇮🇷 سایت‌های ایرانی: <b>${irScore}%</b>\n🌍 سایت‌های جهانی: <b>${globalScore}%</b>`;
+  const caption = `📊 <b>گزارش جامع وضعیت اینترنت</b>\n🗓 ${getDateBoth()}\n\n🚫 مسدودسازی: <b>${blockPercent}%</b>\n🌐 پایداری RIPE: <b>${ripeVisibility}%</b>\n🇮🇷 سایت‌های ایرانی: <b>${irScore}%</b>\n🌍 سایت‌های جهانی: <b>${globalScore}%</b>` + WATERMARK;
   return { url, caption };
 }
 
@@ -261,7 +262,7 @@ async function makeRadar1hChart(env) {
         scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] } } }
       }
     };
-    return { url: quickChart(chartConfig), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` };
+    return { url: quickChart(chartConfig), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` + WATERMARK };
   } catch(e) { return null; }
 }
 
@@ -278,7 +279,7 @@ async function makeTrendChart() {
       scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5,5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5,5] }, beginAtZero: true, max: 100 } }
     }
   };
-  return { url: quickChart(chartConfig), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" };
+  return { url: quickChart(chartConfig), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" + WATERMARK };
 }
 
 async function makeBarChart() {
@@ -286,7 +287,7 @@ async function makeBarChart() {
   for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count }); }
   ops.sort((a,b) => b.count - a.count); ops = ops.slice(0, 8);
   const config = { type: 'horizontalBar', data: { labels: ops.map(o => o.name), datasets: [{ label: "دسترسی آزاد %", data: ops.map(o => o.rate), backgroundColor: ops.map(o => o.rate >= 80 ? "#10b981" : o.rate >= 60 ? "#eab308" : o.rate >= 40 ? "#f97316" : "#ef4444"), borderRadius: 6 }] }, options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', beginAtZero: true, max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc' }, grid: { display: false } } } } };
-  return { url: quickChart(config), caption: "📊 <b>دسترسی آزاد اپراتورها</b>\n\n" + getDateBoth() + "\n\nسطح فیلترینگ: <b>%" + p.blockPercent + "</b>" };
+  return { url: quickChart(config), caption: "📊 <b>دسترسی آزاد اپراتورها</b>\n\n" + getDateBoth() + "\n\nسطح فیلترینگ: <b>%" + p.blockPercent + "</b>" + WATERMARK };
 }
 
 async function makePieChart() {
@@ -295,7 +296,7 @@ async function makePieChart() {
   ops.sort((a,b) => b.count - a.count); ops = ops.slice(0, 6);
   const colors = ["#38bdf8", "#ef4444", "#10b981", "#eab308", "#8b5cf6", "#f97316"];
   const config = { type: "doughnut", data: { labels: ops.map(o => o.name), datasets: [{ data: ops.map(o => o.count), backgroundColor: colors, borderWidth: 2, borderColor: '#0f172a' }] }, options: { plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Tahoma' } } } } } };
-  return { url: quickChart(config), caption: "🥧 <b>سهم اپراتورها</b>\n\n" + getDateBoth() + "\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری" };
+  return { url: quickChart(config), caption: "🥧 <b>سهم اپراتورها</b>\n\n" + getDateBoth() + "\n\nاز <b>" + p.totalMs.toLocaleString("fa-IR") + "</b> اندازه‌گیری" + WATERMARK };
 }
 
 async function makeMapChart() {
@@ -303,7 +304,7 @@ async function makeMapChart() {
   const provinces = ["تهران", "البرز", "اصفهان", "فارس", "خراسان رضوی", "خوزستان", "سیستان و بلوچستان", "کردستان", "آذربایجان شرقی", "گیلان"];
   const data = provinces.map((p, i) => Math.max(5, Math.min(95, Math.round((100 - bp) + (Math.sin(i) * 15))))).sort((a,b) => b - a);
   const config = { type: "horizontalBar", data: { labels: provinces, datasets: [{ label: "دسترسی آزاد (%)", data: data, backgroundColor: data.map(v => v >= 70 ? "#10b981" : v >= 40 ? "#f97316" : "#ef4444"), borderRadius: 6 }] }, options: { plugins: { title: { display: true, text: '🗺 نقشه حرارتی (نمای استانی)', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', max: 100 }, grid: { color: '#334155' } }, y: { ticks: { color: '#f8fafc', font: { family: 'Tahoma' } }, grid: { display: false } } } } };
-  return { url: quickChart(config), caption: "🗺 <b>نقشه حرارتی (نمای استانی)</b>\n\n" + getDateBoth() + "\n\n🚫 مسدودسازی کل کشور: <b>%" + bp + "</b>" };
+  return { url: quickChart(config), caption: "🗺 <b>نقشه حرارتی (نمای استانی)</b>\n\n" + getDateBoth() + "\n\n🚫 مسدودسازی کل کشور: <b>%" + bp + "</b>" + WATERMARK };
 }
 
 async function makeTodayChart(env) {
@@ -311,8 +312,8 @@ async function makeTodayChart(env) {
   if (env.CLOUDFLARE_API_TOKEN) { try { const r = await fetch(`https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=24h&metric=latency&aggInterval=1h`, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }); if (r.ok) { const d = await r.json(); if (d.success) dataFromRadar = d.result; } } catch(e) {} }
   for (let h = 0; h <= 23; h++) { labels.push(h + ":00"); if (dataFromRadar && dataFromRadar.values && dataFromRadar.values[h]) { values.push(dataFromRadar.values[h]); } else { let base = (h >= 2 && h <= 6) ? 85 : (h >= 18 && h <= 22) ? 35 : 60; values.push(base + Math.floor(Math.random() * 10) - 5); } }
   const config = { type: "line", data: { labels: labels, datasets: [{ label: "تاخیر (ms)", data: values, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: '📈 نمودار کیفیت ۲۴ ساعت اخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
-  return { url: quickChart(config), caption: "📅 <b>نمودار امروز (۲۴ ساعته)</b>\n\n" + getDateBoth() + "\n\n📊 وضعیت لحظه‌ای کیفیت شبکه در ۲۴ ساعت گذشته" };
-                   }// ==================== KV Stats & Database ====================
+  return { url: quickChart(config), caption: "📅 <b>نمودار امروز (۲۴ ساعته)</b>\n\n" + getDateBoth() + "\n\n📊 وضعیت لحظه‌ای کیفیت شبکه در ۲۴ ساعت گذشته" + WATERMARK };
+  }// ==================== KV Stats & Database ====================
 async function saveDailySnapshot(STATS) { try { const ooni = await fetchOONI(); const p = parseOONI(ooni); const today = getToday(); await STATS.put("snap:" + today, JSON.stringify({ blockPercent: p.blockPercent, totalMs: p.totalMs, saved: new Date().toISOString() }), { expirationTtl: 2592000 }); } catch(e) {} }
 async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
@@ -379,7 +380,7 @@ async function getPoints(STATS, userId) { if (!STATS) return 0; try { return par
 
 // ==================== Anti-Abuse & Suspicious Detection ====================
 const MAX_WARNINGS = 3;
-const RATE_LIMIT_WINDOW = 60 * 1000; // ۱ دقیقه
+const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_MINUTE = 15;
 
 async function checkRateLimit(STATS, userId) {
@@ -425,7 +426,6 @@ async function flagSuspicious(STATS, userId, reason) {
       await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ",");
     }
     
-    // اطلاع به ادمین‌ها
     if (GLOBAL_ENV && GLOBAL_ENV.BOT_TOKEN) {
       const TG = "https://api.telegram.org/bot" + GLOBAL_ENV.BOT_TOKEN;
       for (const adminId of ADMIN_IDS) {
@@ -474,7 +474,7 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
     if (lastMsgId) { try { await fetch(TG + "/deleteMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CH1, message_id: parseInt(lastMsgId) }) }); } catch(e) {} }
     const ooni = await fetchOONI(); const p = parseOONI(ooni);
     let emoji = "🟢", status = "پایدار"; if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; } else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; } else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
-    const text = "╭━━━ 📡 وضعیت لحظه‌ای ━━━╮\n\n  🕒 " + getIranTime() + "\n  📅 " + getIranDate() + "\n\n  " + emoji + "  <b>" + status + "</b>\n\n  🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n  " + makeBar(p.blockPercent / 10) + "\n\n  📊 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🤖 @Radarinternetiranbot";
+    const text = "╭━━━ 📡 وضعیت لحظه‌ای ━━━╮\n\n  🕒 " + getIranTime() + "\n  📅 " + getIranDate() + "\n\n  " + emoji + "  <b>" + status + "</b>\n\n  🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n  " + makeBar(p.blockPercent / 10) + "\n\n  📊 اندازه‌گیری: <code>" + p.totalMs.toLocaleString("fa-IR") + "</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯\n\n🤖 @Radarinternetiranbot" + WATERMARK;
     const r = await fetch(TG + "/sendMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CH1, text: text, parse_mode: "HTML" }) });
     const d = await r.json();
     if (d.ok && d.result) { await fetch(TG + "/pinChatMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CH1, message_id: d.result.message_id, disable_notification: true }) }); if (STATS) await STATS.put("channel_msg_id", String(d.result.message_id)); }
@@ -574,7 +574,6 @@ async function handleUpdate(update, TG, STATS, env) {
     const isBanned = await STATS.get("BANNED_" + cbUserId);
     if (isBanned === "1") { await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ شما مسدود هستید.", show_alert: true }) }); return; }
     
-    // بررسی Rate Limit برای دکمه‌ها
     if (!(await checkRateLimit(STATS, cbUserId))) {
       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⚠️ درخواست بیش از حد. لطفاً کمی صبر کنید.", show_alert: true }) });
       return;
@@ -625,7 +624,6 @@ async function handleUpdate(update, TG, STATS, env) {
   const msg = update.message; const chatId = msg.chat.id; const text = msg.text || ""; const userId = String(msg.from.id); const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
   if (STATS) await STATS.put("name:" + userId, userName);
 
-  // ====== بررسی Rate Limit برای پیام‌های متنی ======
   if (!(await checkRateLimit(STATS, userId))) {
     await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار سیستم</b>\n\nشما درخواست‌های زیادی در مدت کوتاه ارسال کرده‌اید. لطفاً کمی صبر کنید.\n\n⚠️ تکرار این رفتار منجر به مسدودسازی می‌شود.", { parse_mode: "HTML" });
     return;
@@ -699,7 +697,7 @@ async function handleUpdate(update, TG, STATS, env) {
     if (pinned.length === 0) { out += "هنوز برنده‌ای مشخص نشده است.\n\n"; } else { pinned.slice(0, 5).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); out += "\n"; }
     out += "🔥 <b>رقابت هفته جاری</b>\n━━━━━━━━━━━━━━━━\n\n";
     if (currentCompetitors.length === 0) { out += "هنوز کسی در این هفته امتیاز نگرفته!\nاولین نفر باش! 🚀\n\n"; } else { currentCompetitors.slice(0, 10).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); }
-    out += "\n<i>📌 برندگان هفته قبل از رقابت این هفته خارج شده‌اند.</i>"; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
+    out += "\n<i>📌 برندگان هفته قبل از رقابت این هفته خارج شده‌اند.</i>" + WATERMARK; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
   } else if (text === "/invite") { const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId; const pts = await getPoints(STATS, userId); await sendMessage(TG, chatId, "╭━━━ 🎁 <b>دعوت دوستان</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏆 امتیاز شما: <b>" + pts + "</b>\n\n🔗 لینک اختصاصی شما:\n<code>" + link + "</code>\n\n💰 جایزه:\n• شما: <b>+۱۰</b> امتیاز\n• دوستت: <b>+۵</b> امتیاز\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
   } else if (text === "/vs") { await sendMessage(TG, chatId, "📊 در حال مقایسه..."); await sendMessage(TG, chatId, await makeVsReport(STATS), { parse_mode: "HTML" });
   } else if (text === "/map") { await sendMessage(TG, chatId, "🗺 در حال ساخت نقشه حرارتی..."); const c = await makeMapChart(); await sendPhoto(TG, chatId, c.url, c.caption);
@@ -721,7 +719,7 @@ async function handleUpdate(update, TG, STATS, env) {
   } else if (text === "/trend") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📈 در حال ساخت نمودار روند..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/help") { await sendMessage(TG, chatId, "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n📊 گزارش‌ها:\n/status، /work، /score، /vs\n\n🆚 مقایسه:\n/compare، /top، /isp، /world\n\n📈 نمودارها:\n/comprehensive، /radar1h\n/today، /history، /trend، /chart، /pie، /map\n\n🎮 گیمیفیکیشن:\n/myrank، /leaderboard، /invite\n\n🔌 API:\n/api\n\n⚡ تست:\n/speed، /best، /ping\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
   }
-  }// ==================== Text Reports Generators ====================
+      }// ==================== Text Reports Generators ====================
 async function makePingReport() {
   let irList = "", globalList = ""; let irOk = 0, globalOk = 0;
   for (const s of IR_SITES) {
@@ -734,7 +732,7 @@ async function makePingReport() {
     if (t) { globalOk++; globalList += "✅ " + s.name + " - <code>" + t + "ms</code>\n"; }
     else { globalList += "❌ " + s.name + "\n"; }
   }
-  return "🌐 <b>پینگ سایت‌ها</b>\n" + getDateBoth() + "\n\n🇮🇷 <b>ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n\n" + irList + "\n🌍 <b>جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n\n" + globalList;
+  return "🌐 <b>پینگ سایت‌ها</b>\n" + getDateBoth() + "\n\n🇮🇷 <b>ایرانی</b> (" + irOk + "/" + IR_SITES.length + ")\n\n" + irList + "\n🌍 <b>جهانی</b> (" + globalOk + "/" + GLOBAL_SITES.length + ")\n\n" + globalList + WATERMARK;
 }
 
 async function makeFilteringReport() {
@@ -753,7 +751,7 @@ async function makeFilteringReport() {
       out += e + " <b>" + o.name + "</b> - %" + o.rate + " آزاد (" + o.count.toLocaleString("fa-IR") + " تست)\n";
     });
   }
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeSitesReport() {
@@ -763,7 +761,7 @@ async function makeSitesReport() {
     if (ok) { acc++; list += "✅ " + s.name + "\n"; } else { list += "🚫 " + s.name + "\n"; }
   }
   out += "📊 دسترسی: <b>" + acc + "/" + FILTER_CHECK.length + "</b>\n" + makeBar((acc/FILTER_CHECK.length) * 10) + "\n\n📋 جزئیات:\n\n" + list;
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeCompareReport() {
@@ -774,7 +772,7 @@ async function makeCompareReport() {
       ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
     }
   }
-  if (ops.length === 0) return "❌ داده کافی نیست.";
+  if (ops.length === 0) return "❌ داده کافی نیست." + WATERMARK;
   ops.sort((a, b) => b.rate - a.rate);
   let out = "🆚 <b>مقایسه اپراتورها</b>\n" + getDateBoth() + "\n\n🏆 <b>بهترین‌ها</b>\n\n";
   ops.slice(0, 5).forEach((o, i) => {
@@ -787,7 +785,7 @@ async function makeCompareReport() {
   });
   const avg = Math.round(ops.reduce((a, b) => a + b.rate, 0) / ops.length);
   out += "\n📊 میانگین کل: <b>%" + avg + "</b>\n" + makeBar(avg / 10);
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeTopReport() {
@@ -798,7 +796,7 @@ async function makeTopReport() {
       ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), count: d.count });
     }
   }
-  if (ops.length === 0) return "❌ داده کافی نیست.";
+  if (ops.length === 0) return "❌ داده کافی نیست." + WATERMARK;
   ops.sort((a, b) => b.rate - a.rate);
   let out = "🏆 <b>رتبه‌بندی هفتگی اپراتورها</b>\n📅 ۷ روز اخیر\n\n🥇 <b>بهترین‌ها</b>\n\n";
   ops.slice(0, 7).forEach((o, i) => {
@@ -809,7 +807,7 @@ async function makeTopReport() {
   ops.slice(-5).reverse().forEach(o => {
     out += "🔴 <b>" + o.name + "</b> - %" + o.rate + "\n";
   });
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeISPReport(query) {
@@ -819,12 +817,12 @@ async function makeISPReport(query) {
   for (const [name, code] of Object.entries(ISP_MAP)) {
     if (q.includes(name) || name.includes(q)) { asn = code; break; }
   }
-  if (!asn) return "❌ ISP پیدا نشد: <b>" + query + "</b>";
+  if (!asn) return "❌ ISP پیدا نشد: <b>" + query + "</b>" + WATERMARK;
   const ooni = await fetchOONI(); const p = parseOONI(ooni); const d = p.asnData[asn];
-  if (!d) return "❌ داده‌ای برای <b>" + asnName(asn) + "</b> یافت نشد.";
+  if (!d) return "❌ داده‌ای برای <b>" + asnName(asn) + "</b> یافت نشد." + WATERMARK;
   const rate = Math.round((d.ok / d.total) * 100);
   let emoji = "🔴", status = "ضعیف"; if (rate >= 80) { emoji = "🟢"; status = "عالی"; } else if (rate >= 60) { emoji = "🟡"; status = "خوب"; } else if (rate >= 40) { emoji = "🟠"; status = "متوسط"; }
-  return "📡 <b>" + asnName(asn) + "</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🔓 دسترسی آزاد: <b>%" + rate + "</b>\n" + makeBar(rate / 10) + "\n\n📈 تعداد تست: <code>" + d.count.toLocaleString("fa-IR") + "</code>\n🔒 مسدود: %" + (100 - rate);
+  return "📡 <b>" + asnName(asn) + "</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🔓 دسترسی آزاد: <b>%" + rate + "</b>\n" + makeBar(rate / 10) + "\n\n📈 تعداد تست: <code>" + d.count.toLocaleString("fa-IR") + "</code>\n🔒 مسدود: %" + (100 - rate) + WATERMARK;
 }
 
 async function makeWorldReport() {
@@ -842,7 +840,7 @@ async function makeWorldReport() {
       }
     } catch(e) {}
   }
-  if (results.length === 0) return "❌ داده کافی نیست.";
+  if (results.length === 0) return "❌ داده کافی نیست." + WATERMARK;
   results.sort((a, b) => a.percent - b.percent);
   let out = "🌍 <b>مقایسه جهانی</b>\n" + getDateBoth() + "\n\n🏆 رتبه‌بندی:\n\n";
   results.forEach((r, i) => {
@@ -850,7 +848,7 @@ async function makeWorldReport() {
     const e = r.percent < 15 ? "🟢" : r.percent < 30 ? "🟡" : r.percent < 50 ? "🟠" : "🔴";
     out += medal + " " + r.name + " - " + e + " %" + r.percent + " مسدود\n";
   });
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeVsReport(STATS) {
@@ -873,14 +871,14 @@ async function makeVsReport(STATS) {
     if (diff > 3) trend = "📈 بدتر (" + diff + "+)"; else if (diff > 0) trend = "🔺 کمی بدتر (+" + diff + ")"; else if (diff < -3) trend = "📉 بهتر (" + diff + ")"; else if (diff < 0) trend = "🔻 کمی بهتر (" + diff + ")";
     out += trend + "\n" + makeBar(todayPercent / 10);
   } else { out += "امروز: <b>%" + todayPercent + "</b>\n" + makeBar(todayPercent / 10) + "\n\n⚠️ داده دیروز در دسترس نیست"; }
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeWorkReport() {
   const ooni = await fetchOONI(); const p = parseOONI(ooni); let irOk = 0;
   for (const s of IR_SITES) { if (await pingSite(s.url)) irOk++; }
   let emoji = "🟢", status = "خوبه"; if (p.blockPercent >= 60) { emoji = "🔴"; status = "بحرانی"; } else if (p.blockPercent >= 40) { emoji = "🟠"; status = "ناپایدار"; } else if (p.blockPercent >= 20) { emoji = "🟡"; status = "متوسط"; }
-  return "⚡ <b>خلاصه وضعیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n🌐 سایت‌های ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>";
+  return "⚡ <b>خلاصه وضعیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n\n🚫 فیلترینگ: <b>%" + p.blockPercent + "</b>\n🌐 سایت‌های ایرانی: <b>" + irOk + "/" + IR_SITES.length + "</b>" + WATERMARK;
 }
 
 async function makeScoreReport() {
@@ -892,18 +890,18 @@ async function makeScoreReport() {
   const avgPing = globalCount > 0 ? globalPing / globalCount : 500; const pingScore = Math.max(0, 100 - (avgPing / 5)); score += pingScore * 0.3;
   score = Math.round(score);
   let emoji = "🔴", status = "بحرانی"; if (score >= 80) { emoji = "🟢"; status = "عالی"; } else if (score >= 60) { emoji = "🟡"; status = "خوب"; } else if (score >= 40) { emoji = "🟠"; status = "متوسط"; }
-  return "🎖️ <b>امتیاز کیفیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n⭐ امتیاز: <b>" + score + "/100</b>\n" + makeBar(score / 10) + "\n\n🚫 فیلترینگ: %" + Math.round(filterScore) + "\n🇮🇷 سایت ایرانی: %" + Math.round(irScore) + "\n🌍 پینگ جهانی: %" + Math.round(pingScore);
+  return "🎖️ <b>امتیاز کیفیت</b>\n" + getDateBoth() + "\n\n" + emoji + " <b>" + status + "</b>\n⭐ امتیاز: <b>" + score + "/100</b>\n" + makeBar(score / 10) + "\n\n🚫 فیلترینگ: %" + Math.round(filterScore) + "\n🇮🇷 سایت ایرانی: %" + Math.round(irScore) + "\n🌍 پینگ جهانی: %" + Math.round(pingScore) + WATERMARK;
 }
 
 async function makeBestTimeReport() {
   const hours = [ { range: "۰۲:۰۰ تا ۰۶:۰۰", quality: 90, emoji: "🏆", note: "بهترین زمان" }, { range: "۰۶:۰۰ تا ۰۹:۰۰", quality: 75, emoji: "✅", note: "خوب" }, { range: "۰۹:۰۰ تا ۱۲:۰۰", quality: 55, emoji: "🟡", note: "متوسط" }, { range: "۱۲:۰۰ تا ۱۷:۰۰", quality: 45, emoji: "🟠", note: "شلوغ" }, { range: "۱۷:۰۰ تا ۲۲:۰۰", quality: 35, emoji: "🔴", note: "پیک شلوغی" }, { range: "۲۲:۰۰ تا ۰۲:۰۰", quality: 70, emoji: "✅", note: "بهتر" } ];
   let out = "⏰ <b>بهترین زمان دانلود</b>\n" + getDateBoth() + "\n\n🏆 پیشنهاد: <b>۲ بامداد تا ۶ صبح</b> (۹۰٪)\n\n📊 جدول زمانی:\n\n";
   for (const h of hours) { out += h.emoji + " " + h.range + " - " + h.note + " (%" + h.quality + ")\n"; }
-  return out;
+  return out + WATERMARK;
 }
 
 async function makeSpeedReport() {
-  return "⚡ <b>تست سرعت</b>\n\n📋 راهنما:\n۱. لینک تست را باز کنید\n۲. سرعت خود را بسنجید\n۳. مقایسه کنید\n\n🔗 لینک‌ها:\n🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n⚡ <a href='https://fast.com/'>Fast.com</a>\n🇮🇷 <a href='https://speedtest.ir/'>Speedtest.ir</a>";
+  return "⚡ <b>تست سرعت</b>\n\n📋 راهنما:\n۱. لینک تست را باز کنید\n۲. سرعت خود را بسنجید\n۳. مقایسه کنید\n\n🔗 لینک‌ها:\n🌩 <a href='https://speed.cloudflare.com/'>Cloudflare Speedtest</a>\n📶 <a href='https://www.speedtest.net/'>Speedtest.net</a>\n⚡ <a href='https://fast.com/'>Fast.com</a>\n🇮🇷 <a href='https://speedtest.ir/'>Speedtest.ir</a>" + WATERMARK;
 }
 
 async function makeReport(mode) {
@@ -935,5 +933,5 @@ async function makeReport(mode) {
     const v = ripe.data.visibility; const vE = v > 95 ? "🟢" : v > 80 ? "🟡" : "🔴";
     out += "🚨 <b>مسیریابی</b>\n" + vE + " Visibility: <b>%" + v + "</b>\n" + makeBar(v / 10) + "\n";
   }
-  return out;
-    }
+  return out + WATERMARK;
+}
