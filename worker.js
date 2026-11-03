@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-//  ربات رادار اینترنت ایران - بخش ۱ (تنظیمات و نمودارها)
+//  ربات رادار اینترنت ایران - بخش ۱ (تنظیمات، دوزبانه و نمودارها)
 // ═══════════════════════════════════════════════════════════════
 const CH1 = "@radarinternetiran";
 const CH2 = "@radarinternetirangruop";
@@ -143,13 +143,21 @@ function parseOONI(ooni) {
   return { blockPercent: totalMs > 0 ? Math.round((blockedMs / totalMs) * 100) : 0, totalMs, blockedMs, asnData, dayData };
 }
 
-// ==================== NEX-GEN CHARTS ====================
+// ==================== NEX-GEN CHARTS (Fixed Watermark) ====================
 function quickChart(config) { 
   const json = JSON.stringify(config); 
-  return "https://quickchart.io/chart?w=900&h=500&bkg=%230b1120&v=" + Date.now() + "&c=" + encodeURIComponent(json); 
+  return "https://quickchart.io/chart?w=900&h=500&bkg=%230b1120&c=" + encodeURIComponent(json); 
 }
 
-const watermarkAnnotation = { type: 'label', xValue: '50%', yValue: '50%', backgroundColor: 'transparent', content: ['رادار اینترنت ایران', '© محفوظ'], font: { size: 40, family: 'Tahoma', weight: 'bold' }, color: 'rgba(255, 255, 255, 0.08)' };
+const watermarkAnnotation = { 
+  type: 'label', 
+  xValue: 3, 
+  yValue: 50, 
+  backgroundColor: 'transparent', 
+  content: ['رادار اینترنت ایران', '© محفوظ'], 
+  font: { size: 40, family: 'Tahoma', style: 'bold' }, 
+  color: 'rgba(255, 255, 255, 0.08)' 
+};
 
 async function makeComprehensiveChart() {
   let blockPercent = 0, ripeVisibility = 0, irOk = 0, globalOk = 0;
@@ -213,9 +221,9 @@ async function makeTodayChart(env) {
   let labels = [], values = []; let dataFromRadar = null;
   if (env.CLOUDFLARE_API_TOKEN) { try { const r = await fetch(`https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups?location=IR&dateRange=24h&metric=latency&aggInterval=1h`, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }); if (r.ok) { const d = await r.json(); if (d.success) dataFromRadar = d.result; } } catch(e) {} }
   for (let h = 0; h <= 23; h++) { labels.push(h + ":00"); if (dataFromRadar && dataFromRadar.values && dataFromRadar.values[h]) { values.push(dataFromRadar.values[h]); } else { let base = (h >= 2 && h <= 6) ? 85 : (h >= 18 && h <= 22) ? 35 : 60; values.push(base + Math.floor(Math.random() * 10) - 5); } }
-  const config = { type: "line", data: { labels: labels, datasets: [{ label: "تاخیر (ms)", data: values, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: '📈 نمودار کیفیت ۲۴ ساعت اخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
+  const config = { type: "line", data: { labels: labels, datasets: [{ label: "تاخیر (ms)", data: values, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: '📈 نمودار کیفیت ۲۴ ساعت اخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false }, annotation: { annotations: { watermark: { type: 'label', xValue: 12, yValue: 50, backgroundColor: 'transparent', content: ['رادار اینترنت ایران', '© محفوظ'], font: { size: 40, family: 'Tahoma', style: 'bold' }, color: 'rgba(255, 255, 255, 0.08)' } } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
   return { url: quickChart(config), caption: "📅 <b>نمودار امروز (۲۴ ساعته)</b>\n\n" + getDateBoth() + "\n\n📊 وضعیت لحظه‌ای کیفیت شبکه در ۲۴ ساعت گذشته" + WATERMARK };
-                           }// ==================== KV Stats & Database ====================
+      }// ==================== KV Stats & Database ====================
 async function saveDailySnapshot(STATS) { try { const ooni = await fetchOONI(); const p = parseOONI(ooni); const today = getToday(); await STATS.put("snap:" + today, JSON.stringify({ blockPercent: p.blockPercent, totalMs: p.totalMs, saved: new Date().toISOString() }), { expirationTtl: 2592000 }); } catch(e) {} }
 async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
@@ -234,7 +242,14 @@ async function trackUser(STATS, userId, userName) {
   try {
     const today = getToday(); const userKey = "u:" + userId; const exists = await STATS.get(userKey);
     let usersList = await STATS.get("all_users") || ""; const userArray = usersList.split(",").filter(x => x);
-    if (!exists) { await STATS.put(userKey, today); const total = parseInt(await STATS.get("total_users") || "0"); await STATS.put("total_users", String(total + 1)); }
+    if (!exists) { 
+      await STATS.put(userKey, today); 
+      const total = parseInt(await STATS.get("total_users") || "0"); 
+      await STATS.put("total_users", String(total + 1)); 
+      // ثبت آمار رشد روزانه
+      const joinsToday = parseInt(await STATS.get("joins:" + today) || "0");
+      await STATS.put("joins:" + today, String(joinsToday + 1));
+    }
     if (!userArray.includes(userId)) { usersList += userId + ","; await STATS.put("all_users", usersList); }
     if (userName) await STATS.put("name:" + userId, userName);
     const dkey = "dau:" + today; const dauRaw = await STATS.get(dkey); let dau = dauRaw ? JSON.parse(dauRaw) : [];
@@ -242,7 +257,7 @@ async function trackUser(STATS, userId, userName) {
   } catch(e) {}
 }
 async function getReferrer(STATS, userId) { if (!STATS) return null; try { return await STATS.get("ref:" + userId) || null; } catch(e) { return null; } }
-async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم امنیتی، پنل مدیریت، تست پینگ، تحریم و هشدار شخصی.\n\n🔹 دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
+async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم امنیتی ضد تخریب، پینگ، تحریم‌یاب، هشدار شخصی، رفرال پله‌ای و پنل مدیریت پیشرفته.\n\n🔹 برای استفاده از منوی جدید، دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
 
 // ==================== API Keys ====================
 async function generateAPIKey(STATS, owner, note) { const key = "rad_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15); const data = { key: key, owner: owner || "ناشناس", note: note || "", created_at: Date.now(), status: "active", usage_count: 0, last_used: 0 }; await STATS.put("APIKEY_" + key, JSON.stringify(data)); let list = await STATS.get("APIKEY_LIST") || ""; if (!list.includes(key)) { list += key + ","; await STATS.put("APIKEY_LIST", list); } return key; }
@@ -250,7 +265,7 @@ async function validateAPIKey(STATS, key) { if (!key) return null; const raw = a
 async function revokeAPIKey(STATS, key) { const raw = await STATS.get("APIKEY_" + key); if (!raw) return false; const data = JSON.parse(raw); data.status = "revoked"; data.revoked_at = Date.now(); await STATS.put("APIKEY_" + key, JSON.stringify(data)); return true; }
 async function listAPIKeys(STATS) { const list = await STATS.get("APIKEY_LIST") || ""; const keys = list.split(",").filter(x => x); const result = []; for (const k of keys) { const raw = await STATS.get("APIKEY_" + k); if (raw) result.push(JSON.parse(raw)); } return result; }
 
-// ==================== Weekly Winners & Referral ====================
+// ==================== Weekly Winners ====================
 async function checkWeeklyReset(env, STATS) { if (!STATS) return; try { const now = Date.now(); let lastReset = parseInt(await STATS.get("last_week_reset") || "0"); if (lastReset === 0) { await STATS.put("last_week_reset", String(now)); return; } const weekMs = 7 * 24 * 60 * 60 * 1000; if (now - lastReset >= weekMs) { await broadcastWeeklyWinners("https://api.telegram.org/bot" + env.BOT_TOKEN, STATS); } } catch(e) {} }
 async function broadcastWeeklyWinners(TG, STATS) {
   if (!STATS) return;
@@ -280,21 +295,8 @@ async function addPoints(env, STATS, userId, points) {
 }
 async function getPoints(STATS, userId) { if (!STATS) return 0; try { return parseInt(await STATS.get("points:" + userId) || "0"); } catch(e) { return 0; } }
 
-async function checkReferralMilestones(TG, STATS, userId, inviteCount) {
-  if (inviteCount === 10) {
-    await addPoints(GLOBAL_ENV, STATS, userId, 50);
-    const userLang = await getUserLang(STATS, userId);
-    await sendMessage(TG, userId, t("ref_milestone_10", userLang), { parse_mode: "HTML" }).catch(()=>{});
-  }
-  if (inviteCount === 50) {
-    await addPoints(GLOBAL_ENV, STATS, userId, 500);
-    await STATS.put("VIP_" + userId, "1");
-    const userLang = await getUserLang(STATS, userId);
-    await sendMessage(TG, userId, t("ref_milestone_50", userLang), { parse_mode: "HTML" }).catch(()=>{});
-  }
-}
-
 // ==================== Anti-Abuse & Suspicious Detection ====================
+const MAX_WARNINGS = 3;
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_MINUTE = 15;
 
@@ -305,7 +307,8 @@ async function checkRateLimit(STATS, userId) {
     const now = Date.now();
     const raw = await STATS.get(key);
     let data = raw ? JSON.parse(raw) : { count: 0, first: now };
-    if (now - data.first > RATE_LIMIT_WINDOW) { data = { count: 1, first: now }; } else { data.count++; }
+    if (now - data.first > RATE_LIMIT_WINDOW) { data = { count: 1, first: now }; } 
+    else { data.count++; }
     await STATS.put(key, JSON.stringify(data), { expirationTtl: 120 });
     if (data.count > MAX_REQUESTS_PER_MINUTE) {
       await flagSuspicious(STATS, userId, "ارسال بیش از حد درخواست (Rate Limit / Spam)");
@@ -327,7 +330,9 @@ async function flagSuspicious(STATS, userId, reason) {
     if (data.reasons.length > 10) data.reasons = data.reasons.slice(-10);
     await STATS.put(key, JSON.stringify(data));
     let listRaw = await STATS.get("SUSPICIOUS_LIST") || "";
-    if (!listRaw.includes(userId)) { await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ","); }
+    const list = listRaw.split(",").filter(x => x);
+    if (!list.includes(userId)) { await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ","); }
+    
     if (GLOBAL_ENV && GLOBAL_ENV.BOT_TOKEN) {
       const TG = "https://api.telegram.org/bot" + GLOBAL_ENV.BOT_TOKEN;
       for (const adminId of ADMIN_IDS) {
@@ -346,12 +351,16 @@ async function getSuspiciousList(STATS) {
     const result = [];
     for (const uid of list) {
       const raw = await STATS.get("SUSPICIOUS_" + uid);
-      if (raw) { const data = JSON.parse(raw); result.push({ id: uid, name: data.name, warnings: data.warnings, reasons: data.reasons || [], first_flagged: data.first_flagged, last_flagged: data.last_flagged }); }
+      if (raw) {
+        const data = JSON.parse(raw);
+        result.push({ id: uid, name: data.name, warnings: data.warnings, reasons: data.reasons || [], first_flagged: data.first_flagged, last_flagged: data.last_flagged });
+      }
     }
     result.sort((a, b) => b.last_flagged - a.last_flagged);
     return result;
   } catch(e) { return []; }
 }
+
 async function clearSuspicious(STATS, userId) {
   if (!STATS) return false;
   try {
@@ -363,10 +372,49 @@ async function clearSuspicious(STATS, userId) {
   } catch(e) { return false; }
 }
 
-// ==================== Send & Personal Alerts ====================
+// ==================== Personal Alerts (Cron) ====================
+async function checkPersonalAlerts(TG, STATS) {
+  try {
+    const listRaw = await STATS.get("ALERT_LIST") || "";
+    const list = listRaw.split(",").filter(x => x);
+    if (list.length === 0) return;
+    const ooni = await fetchOONI(); const p = parseOONI(ooni);
+
+    for (const item of list) {
+      const [uid, opAsn] = item.split(":");
+      const asnData = p.asnData[opAsn];
+      if (asnData) {
+        const rate = Math.round((asnData.ok / asnData.total) * 100);
+        if (rate < 70) {
+          const userLang = await getUserLang(STATS, uid);
+          const msg = (userLang === "en" ? 
+            `⚠️ <b>Quality Alert</b>\n\nYour ISP ( <b>${asnName(opAsn)}</b> ) quality has dropped.\n\n📉 Access Rate: ${rate}%\n⏰ ${getIranTime()}` :
+            `⚠️ <b>هشدار افت کیفیت اینترنت</b>\n\nکیفیت اینترنت اپراتور انتخابی شما ( <b>${asnName(opAsn)}</b> ) افت کرده است.\n\n📉 درصد دسترسی: ${rate}%\n⏰ زمان: ${getIranTime()}`
+          );
+          await sendMessage(TG, uid, msg, { parse_mode: "HTML" }).catch(()=>{});
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+// ==================== Referral Milestones ====================
+async function checkReferralMilestones(TG, STATS, userId, inviteCount) {
+  const userLang = await getUserLang(STATS, userId);
+  if (inviteCount === 10) {
+    await addPoints(GLOBAL_ENV, STATS, userId, 50);
+    await sendMessage(TG, userId, t("ref_milestone_10", userLang), { parse_mode: "HTML" });
+  }
+  if (inviteCount === 50) {
+    await addPoints(GLOBAL_ENV, STATS, userId, 500);
+    await STATS.put("VIP_" + userId, "1");
+    await sendMessage(TG, userId, t("ref_milestone_50", userLang), { parse_mode: "HTML" });
+  }
+}
+
+// ==================== Send Messages ====================
 async function sendPhoto(TG, chatId, url, caption) { try { await fetch(TG + "/sendPhoto", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" }) }); } catch(e) {} }
 async function sendMessage(TG, chatId, text, extra) { const body = { chat_id: chatId, text: text }; if (extra) { Object.keys(extra).forEach(k => { if (k === "inline_keyboard") body.reply_markup = { inline_keyboard: extra[k] }; else body[k] = extra[k]; }); } try { return await fetch(TG + "/sendMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r=>r.json()); } catch(e) { return {ok: false}; } }
-
 async function sendOrUpdateChannelStatus(TG, STATS) {
   try {
     const lastMsgId = STATS ? await STATS.get("channel_msg_id") : null;
@@ -379,10 +427,9 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
     if (d.ok && d.result) { await fetch(TG + "/pinChatMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CH1, message_id: d.result.message_id, disable_notification: true }) }); if (STATS) await STATS.put("channel_msg_id", String(d.result.message_id)); }
   } catch(e) { console.log("Channel status error: " + e.message); }
 }
-
 async function checkMember(TG, userId, channel) { try { const r = await fetch(TG + "/getChatMember?chat_id=" + channel + "&user_id=" + userId); const d = await r.json(); if (d.ok && d.result) { const s = d.result.status; return s === "member" || s === "administrator" || s === "creator"; } } catch(e) {} return false; }
 
-// ==================== Tools: Ping & Sanction ====================
+// ==================== Domain Tools ====================
 async function pingDomain(domain) {
   const start = Date.now();
   try {
@@ -404,30 +451,7 @@ async function checkSanction(domain) {
     if (res.status === 451) return "🚫 تحریم قانونی (خطای 451)";
     if (res.ok) return "✅ در دسترس (تحریم نیست)";
     return `⚠️ وضعیت نامشخص (کد ${res.status})`;
-  } catch (e) { return "❌ عدم دسترسی (احتمالاً مسدود)"; }
-}
-
-// ==================== Cron: Personal Alerts ====================
-async function checkPersonalAlerts(TG, STATS) {
-  try {
-    const listRaw = await STATS.get("ALERT_LIST") || "";
-    const list = listRaw.split(",").filter(x => x);
-    if (list.length === 0) return;
-    const ooni = await fetchOONI(); const p = parseOONI(ooni);
-    for (const item of list) {
-      const [uid, opAsn] = item.split(":");
-      if (!uid || !opAsn) continue;
-      const asnData = p.asnData[opAsn];
-      if (asnData) {
-        const rate = Math.round((asnData.ok / asnData.total) * 100);
-        if (rate < 70) {
-          const userLang = await getUserLang(STATS, uid);
-          const msg = (userLang === "en" ? `⚠️ <b>Quality Alert</b>\n\nYour ISP (<b>${asnName(opAsn)}</b>) quality has dropped.\n\n📉 Access Rate: ${rate}%\n⏰ ${getIranTime()}` : `⚠️ <b>هشدار افت کیفیت اینترنت</b>\n\nکیفیت اینترنت اپراتور انتخابی شما (<b>${asnName(opAsn)}</b>) افت کرده است.\n\n📉 درصد دسترسی: ${rate}%\n⏰ ${getIranTime()}`);
-          await sendMessage(TG, uid, msg, { parse_mode: "HTML" }).catch(()=>{});
-        }
-      }
-    }
-  } catch(e) {}
+  } catch (e) { return "❌ عدم دسترسی (احتمالاً مسدود یا فیلتر)"; }
 }
 
 // ==================== Main Entry ====================
@@ -475,16 +499,11 @@ async function handleAdminWeb(url, STATS, env) {
     if (type === "growth") {
       const labels = [], values = [];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const d = new Date(Date.now() - i * 86400000);
+        const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+        const val = parseInt(await STATS.get("joins:" + dateStr) || "0");
         labels.push(dateStr.substring(5));
-        const usersList = await STATS.get("all_users") || "";
-        let count = 0;
-        for (const uid of usersList.split(",").filter(x=>x)) {
-          const joinDate = await STATS.get("u:" + uid);
-          if (joinDate === dateStr) count++;
-        }
-        values.push(count);
+        values.push(val);
       }
       return new Response(JSON.stringify({ ok: true, labels, values }), { headers: cors });
     }
@@ -504,7 +523,12 @@ async function handleAdminWeb(url, STATS, env) {
     if (action === "revoke_key") { const key = url.searchParams.get("key"); const success = await revokeAPIKey(STATS, key); return new Response(JSON.stringify({ ok: success, message: success ? "کلید باطل شد" : "کلید یافت نشد" }), { headers: cors }); }
     if (action === "reset_week") { if (env.BOT_TOKEN) await broadcastWeeklyWinners("https://api.telegram.org/bot" + env.BOT_TOKEN, STATS); return new Response(JSON.stringify({ ok: true, message: "هفته ریست شد" }), { headers: cors }); }
     if (action === "clear_suspicious") { const id = url.searchParams.get("id"); const success = await clearSuspicious(STATS, id); return new Response(JSON.stringify({ ok: success }), { headers: cors }); }
-    if (action === "toggle_maintenance") { const cur = await STATS.get("MAINTENANCE_MODE"); const nv = cur === "1" ? "0" : "1"; await STATS.put("MAINTENANCE_MODE", nv); return new Response(JSON.stringify({ ok: true, message: nv === "1" ? "حالت تعمیرات فعال شد" : "حالت تعمیرات غیرفعال شد" }), { headers: cors }); }
+    if (action === "toggle_maintenance") {
+      const current = await STATS.get("MAINTENANCE_MODE") || "0";
+      const next = current === "1" ? "0" : "1";
+      await STATS.put("MAINTENANCE_MODE", next);
+      return new Response(JSON.stringify({ ok: true, message: `حالت تعمیرات: ${next === "1" ? "فعال" : "غیرفعال"}` }), { headers: cors });
+    }
     return new Response(JSON.stringify({ ok: false, error: "unknown action" }), { status: 400, headers: cors });
   }
   return new Response("Not found", { status: 404 });
@@ -535,18 +559,6 @@ async function handleAPI(url, STATS, env) {
 
 // ==================== Bot Update Handler ====================
 async function handleUpdate(update, TG, STATS, env) {
-  // بررسی حالت تعمیرات
-  const isMaint = await STATS.get("MAINTENANCE_MODE") === "1";
-  const isAdminUser = ADMIN_IDS.includes(String(update.message?.from?.id || update.callback_query?.from?.id));
-
-  if (isMaint && !isAdminUser) {
-    if (update.message && update.message.text === "/start") {
-      const userLang = await getUserLang(STATS, String(update.message.from.id));
-      await sendMessage(TG, update.message.chat.id, t("maintenance", userLang), { parse_mode: "HTML" });
-    }
-    return;
-  }
-
   if (update.callback_query) {
     const cb = update.callback_query; const cbData = cb.data; const cbUserId = String(cb.from.id); const cbChatId = cb.message.chat.id;
     const isBanned = await STATS.get("BANNED_" + cbUserId);
@@ -560,57 +572,67 @@ async function handleUpdate(update, TG, STATS, env) {
     if (cbData === "admin_panel") {
       if (!ADMIN_IDS.includes(cbUserId)) {
         await flagSuspicious(STATS, cbUserId, "تلاش غیرمجاز برای دسترسی به پنل ادمین");
-        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز", show_alert: true }) });
+        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", show_alert: true }) });
         return;
       }
       update.message = { chat: { id: cbChatId }, from: cb.from, text: "/admin" };
     } else if (cbData === "claim_daily") {
       const lastDaily = parseInt(await STATS.get("daily:" + cbUserId) || "0");
-      if (Date.now() - lastDaily < 86400000) { const hours = Math.ceil((86400000 - (Date.now() - lastDaily)) / 3600000); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: `⏳ ${hours} ساعت دیگر.`, show_alert: true }) }); return; }
-      await STATS.put("daily:" + cbUserId, String(Date.now())); await addPoints(env, STATS, cbUserId, 10); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "🎁 +۱۰ امتیاز!", show_alert: true }) }); return;
-    } else if (cbData === "support_ticket") { await STATS.put("STATE_" + cbUserId, "await_support_ticket"); await sendMessage(TG, cbChatId, "✉️ <b>پشتیبانی</b>\n\nپیام خود را بنویسید:", { parse_mode: "HTML" }); return;
-    } else if (cbData === "ads_request") { await STATS.put("STATE_" + cbUserId, "await_ad_request"); await sendMessage(TG, cbChatId, "📢 <b>تبلیغات</b>\n\nمتن را ارسال کنید:", { parse_mode: "HTML" }); return;
-    } else if (cbData === "last_week_winners") {
-      const pinnedRaw = await STATS.get("pinned_winners"); const pinned = pinnedRaw ? JSON.parse(pinnedRaw) : [];
-      if (pinned.length === 0) { await sendMessage(TG, cbChatId, "📌 برنده‌ای ثبت نشده.", { parse_mode: "HTML" }); return; }
-      let msg = "🏆 <b>تالار افتخارات</b>\n\n"; pinned.forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; msg += `${md} <b>${u.n || u.id}</b> → ${u.p} امتیاز\n`; }); await sendMessage(TG, cbChatId, msg, { parse_mode: "HTML" }); return;
-    } else if (cbData === "tool_ping") { await STATS.put("STATE_" + cbUserId, "await_ping"); const uLang = await getUserLang(STATS, cbUserId); await sendMessage(TG, cbChatId, t("ping_prompt", uLang), { parse_mode: "HTML" }); return;
-    } else if (cbData === "tool_sanction") { await STATS.put("STATE_" + cbUserId, "await_sanction"); const uLang = await getUserLang(STATS, cbUserId); await sendMessage(TG, cbChatId, t("sanction_prompt", uLang), { parse_mode: "HTML" }); return;
+      if (Date.now() - lastDaily < 86400000) { const hours = Math.ceil((86400000 - (Date.now() - lastDaily)) / 3600000); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: `⏳ شما پاداش امروز را گرفته‌اید. ${hours} ساعت دیگر برگردید.`, show_alert: true }) }); return; }
+      await STATS.put("daily:" + cbUserId, String(Date.now())); await addPoints(env, STATS, cbUserId, 10); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "🎁 ۱۰ امتیاز به شما اضافه شد!", show_alert: true }) }); return;
+    } else if (cbData === "support_ticket") { await STATS.put("STATE_" + cbUserId, "await_support_ticket"); await sendMessage(TG, cbChatId, "✉️ <b>پشتیبانی ربات</b>\n\nلطفاً پیام یا سوال خود را بنویسید. پیام شما مستقیماً برای مدیریت ارسال می‌شود.", { parse_mode: "HTML" }); return;
+    } else if (cbData === "ads_request") { await STATS.put("STATE_" + cbUserId, "await_ad_request"); await sendMessage(TG, cbChatId, "📢 <b>درخواست تبلیغات</b>\n\nلطفاً متن یا توضیحات تبلیغاتی خود را همراه با لینک (در صورت وجود) ارسال کنید. مدیریت پس از بررسی با شما تماس خواهد گرفت.", { parse_mode: "HTML" }); return;
+    } else if (cbData === "tool_ping") { await STATS.put("STATE_" + cbUserId, "await_ping"); await sendMessage(TG, cbChatId, t("ping_prompt", await getUserLang(STATS, cbUserId)), { parse_mode: "HTML" }); return;
+    } else if (cbData === "tool_sanction") { await STATS.put("STATE_" + cbUserId, "await_sanction"); await sendMessage(TG, cbChatId, t("sanction_prompt", await getUserLang(STATS, cbUserId)), { parse_mode: "HTML" }); return;
     } else if (cbData === "alert_start") {
-       const uLang = await getUserLang(STATS, cbUserId);
-       const kb = [[{text: "ایرانسل", callback_data: "alert_set_44244"}], [{text: "همراه اول", callback_data: "alert_set_197207"}], [{text: "مخابرات", callback_data: "alert_set_58224"}], [{text: "حذف هشدارها", callback_data: "alert_clear"}]];
-       await sendMessage(TG, cbChatId, t("alerts_prompt", uLang), { parse_mode: "HTML", inline_keyboard: kb }); return;
+       const kb = [ [{text: "ایرانسل", callback_data: "alert_set_44244"}], [{text: "همراه اول", callback_data: "alert_set_197207"}], [{text: "مخابرات", callback_data: "alert_set_58224"}], [{text: "حذف هشدارها", callback_data: "alert_clear"}] ];
+       await sendMessage(TG, cbChatId, t("alerts_prompt", await getUserLang(STATS, cbUserId)), { parse_mode: "HTML", inline_keyboard: kb });
+       return;
     } else if (cbData === "toggle_lang") {
-       const newLang = (await STATS.get("LANG_" + cbUserId) || "fa") === "fa" ? "en" : "fa";
+       const currentLang = await getUserLang(STATS, cbUserId);
+       const newLang = currentLang === "fa" ? "en" : "fa";
        await STATS.put("LANG_" + cbUserId, newLang);
-       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: newLang === "fa" ? "زبان تغییر کرد: فارسی" : "Language changed: English", show_alert: true }) }); return;
+       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: newLang === "fa" ? "زبان تغییر کرد: فارسی" : "Language changed: English", show_alert: true }) });
+       return;
     } else if (cbData.startsWith("alert_set_")) {
        const asn = cbData.replace("alert_set_", "");
        await STATS.put("ALERT_" + cbUserId, asn);
        let list = await STATS.get("ALERT_LIST") || "";
        const entry = cbUserId + ":" + asn;
        if (!list.includes(cbUserId)) { list += entry + ","; await STATS.put("ALERT_LIST", list); }
-       const uLang = await getUserLang(STATS, cbUserId);
-       await sendMessage(TG, cbChatId, t("alerts_set", uLang, { operator: asnName(asn) }), { parse_mode: "HTML" }); return;
+       await sendMessage(TG, cbChatId, t("alerts_set", await getUserLang(STATS, cbUserId), { operator: asnName(asn) }), { parse_mode: "HTML" });
+       return;
     } else if (cbData === "alert_clear") {
        await STATS.delete("ALERT_" + cbUserId);
        let list = await STATS.get("ALERT_LIST") || "";
        list = list.split(",").filter(x => x && !x.startsWith(cbUserId + ":")).join(",");
        if (list) list += ",";
        await STATS.put("ALERT_LIST", list);
-       await sendMessage(TG, cbChatId, "✅ هشدارهای شما حذف شد."); return;
-    } else if (cbData === "api_info") {
-      await sendMessage(TG, cbChatId, "🔌 <b>API اختصاصی رادار اینترنت</b>\n\nاین سرویس برای همکاران و اسپانسرهای رسمی طراحی شده است تا به داده‌های بهینه و زنده دسترسی داشته باشند.\n\n📌 <b>شرایط دریافت:</b>\n- معرفی رادار اینترنت ایران به عنوان منبع رسمی در وب‌سایت یا ربات شما\n- استفاده تجاری یا شخصی قانونی\n\n💬 <b>جهت دریافت کلید اختصاصی:</b>\nبه ادمین پیام دهید: @Adddddddm\n\n📊 پس از دریافت کلید، به آدرس‌های زیر دسترسی خواهید داشت:\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/status?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/operators?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/top?key=YOUR_KEY</code>", { parse_mode: "HTML" }); return;
+       await sendMessage(TG, cbChatId, "✅ هشدارهای شما حذف شد.");
+       return;
+    } else if (cbData === "last_week_winners") {
+      const pinnedRaw = await STATS.get("pinned_winners"); const pinned = pinnedRaw ? JSON.parse(pinnedRaw) : [];
+      if (pinned.length === 0) { await sendMessage(TG, cbChatId, "📌 هنوز برنده‌ای برای هفته گذشته ثبت نشده است.", { parse_mode: "HTML" }); return; }
+      let msg = "🏆 <b>تالار افتخارات (برندگان هفته گذشته)</b> 📌\n\nاین کاربران با تلاش خود در هفته گذشته به عنوان برترین‌ها انتخاب شدند:\n\n";
+      pinned.forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; msg += `${medal} <b>${u.n || u.id}</b> → ${u.p} امتیاز\n`; });
+      await sendMessage(TG, cbChatId, msg, { parse_mode: "HTML" }); return;
     } else if (cbData === "adm_users_list") {
       let usersList = await STATS.get("all_users") || ""; let arr = usersList.split(",").filter(x => x);
-      let out = "👥 <b>۱۰ کاربر آخر:</b>\n\n"; for (let i = Math.max(0, arr.length - 10); i < arr.length; i++) { let uid = arr[i]; let name = await STATS.get("name:" + uid) || "کاربر"; let ban = await STATS.get("BANNED_" + uid); out += `${ban === "1" ? "🚫" : "✅"} <b>${name}</b> | <code>${uid}</code>\n`; } out += `\n📊 مجموع: <b>${arr.length}</b>`; await sendMessage(TG, cbChatId, out, { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_stats") { let ul = await STATS.get("all_users") || ""; let tot = ul.split(",").filter(x => x).length; await sendMessage(TG, cbChatId, `📊 <b>آمار کل:</b>\n\n👥 کاربران: <b>${tot}</b>`, { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_search") { await STATS.put("STATE_" + cbUserId, "await_search"); await sendMessage(TG, cbChatId, "🔍 آیدی کاربر:"); return;
-    } else if (cbData === "adm_ban") { await STATS.put("STATE_" + cbUserId, "await_ban"); await sendMessage(TG, cbChatId, "🚫 آیدی برای بلاک:"); return;
-    } else if (cbData === "adm_unban") { await STATS.put("STATE_" + cbUserId, "await_unban"); await sendMessage(TG, cbChatId, "✅ آیدی برای آنبلاک:"); return;
-    } else if (cbData === "adm_broadcast") { await STATS.put("STATE_" + cbUserId, "await_broadcast"); await sendMessage(TG, cbChatId, "📨 متن پیام همگانی:"); return;
-    } else if (cbData.startsWith("reply_ticket_")) { const targetId = cbData.replace("reply_ticket_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ticket_" + targetId); await sendMessage(TG, cbChatId, `✉️ پاسخ به <code>${targetId}</code>:`); return;
-    } else if (cbData.startsWith("reply_ads_")) { const targetId = cbData.replace("reply_ads_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ads_" + targetId); await sendMessage(TG, cbChatId, `📢 پاسخ به <code>${targetId}</code>:`); return;
+      let out = "👥 <b>۱۰ کاربر آخر ربات:</b>\n\n";
+      for (let i = Math.max(0, arr.length - 10); i < arr.length; i++) { let uid = arr[i]; let name = await STATS.get("name:" + uid) || "کاربر"; let ban = await STATS.get("BANNED_" + uid); out += `${ban === "1" ? "🚫" : "✅"} <b>${name}</b> | <code>${uid}</code>\n`; }
+      out += `\n📊 مجموع کاربران: <b>${arr.length}</b>`; await sendMessage(TG, cbChatId, out, { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_stats") {
+      let usersList = await STATS.get("all_users") || ""; let total = usersList.split(",").filter(x => x).length;
+      await sendMessage(TG, cbChatId, `📊 <b>آمار کلی ربات:</b>\n\n👥 کاربران کل: <b>${total}</b>\n✅ ربات فعال است.`, { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_search") { await STATS.put("STATE_" + cbUserId, "await_search"); await sendMessage(TG, cbChatId, "🔍 <b>لطفاً آیدی عددی کاربر را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_ban") { await STATS.put("STATE_" + cbUserId, "await_ban"); await sendMessage(TG, cbChatId, "🚫 <b>لطفاً آیدی عددی کاربر برای بلاک را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_unban") { await STATS.put("STATE_" + cbUserId, "await_unban"); await sendMessage(TG, cbChatId, "✅ <b>لطفاً آیدی عددی کاربر برای آنبلاک را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_broadcast") { await STATS.put("STATE_" + cbUserId, "await_broadcast"); await sendMessage(TG, cbChatId, "📨 <b>لطفاً متن پیام همگانی را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
+    } else if (cbData.startsWith("reply_ticket_")) { const targetId = cbData.replace("reply_ticket_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ticket_" + targetId); await sendMessage(TG, cbChatId, `✉️ <b>پاسخ به تیکت کاربر <code>${targetId}</code>:</b>\nلطفاً متن پاسخ خود را بنویسید:`, { parse_mode: "HTML" }); return;
+    } else if (cbData.startsWith("reply_ads_")) { const targetId = cbData.replace("reply_ads_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ads_" + targetId); await sendMessage(TG, cbChatId, `📢 <b>پاسخ به درخواست تبلیغات کاربر <code>${targetId}</code>:</b>\nلطفاً متن پاسخ خود را بنویسید:`, { parse_mode: "HTML" }); return;
+    } else if (cbData === "api_info") {
+      await sendMessage(TG, cbChatId, "🔌 <b>API اختصاصی رادار اینترنت</b>\n\nاین سرویس برای همکاران و اسپانسرهای رسمی طراحی شده است تا به داده‌های بهینه و زنده دسترسی داشته باشند.\n\n📌 <b>شرایط دریافت:</b>\n- معرفی رادار اینترنت ایران به عنوان منبع رسمی در وب‌سایت یا ربات شما\n- استفاده تجاری یا شخصی قانونی\n\n💬 <b>جهت دریافت کلید اختصاصی:</b>\nبه ادمین پیام دهید: @Adddddddm\n\n📊 پس از دریافت کلید، به آدرس‌های زیر دسترسی خواهید داشت:\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/status?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/operators?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/top?key=YOUR_KEY</code>", { parse_mode: "HTML" });
+      return;
     } else {
       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "در حال پردازش..." }) });
       let fakeText = "";
@@ -622,49 +644,93 @@ async function handleUpdate(update, TG, STATS, env) {
   if (!update.message) return;
   const msg = update.message; const chatId = msg.chat.id; const text = msg.text || ""; const userId = String(msg.from.id); const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
   if (STATS) await STATS.put("name:" + userId, userName);
-  const userLang = await getUserLang(STATS, userId);
+
+  const isMaintenance = await STATS.get("MAINTENANCE_MODE");
+  if (isMaintenance === "1" && !ADMIN_IDS.includes(userId)) {
+    const userLang = await getUserLang(STATS, userId);
+    await sendMessage(TG, chatId, t("maintenance", userLang), { parse_mode: "HTML" });
+    return;
+  }
 
   if (!(await checkRateLimit(STATS, userId))) {
-    await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار</b>\n\nدرخواست‌های زیادی ارسال کرده‌اید. صبر کنید.", { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار سیستم</b>\n\nشما درخواست‌های زیادی در مدت کوتاه ارسال کرده‌اید. لطفاً کمی صبر کنید.\n\n⚠️ تکرار این رفتار منجر به مسدودسازی می‌شود.", { parse_mode: "HTML" });
     return;
   }
 
   if (ADMIN_IDS.includes(userId)) {
     const adminState = await STATS.get("STATE_" + userId);
-    if (adminState === "await_search") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); const name = await STATS.get("name:" + targetId) || "ناشناس"; const ban = await STATS.get("BANNED_" + targetId); await sendMessage(TG, chatId, `🔍 <b>اطلاعات:</b>\n\n👤 <b>${name}</b>\n🆔 <code>${targetId}</code>\n📌 ${ban === "1" ? "🚫 مسدود" : "✅ فعال"}`, { parse_mode: "HTML" }); return; }
-    if (adminState === "await_ban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.put("BANNED_" + targetId, "1"); await STATS.put("BAN_REASON_" + targetId, "تخلف"); await sendMessage(TG, targetId, "🚫 <b>شما مسدود شدید.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> مسدود شد.`); return; }
-    if (adminState === "await_unban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.delete("BANNED_" + targetId); await STATS.delete("BAN_REASON_" + targetId); await sendMessage(TG, targetId, "✅ <b>مسدودی شما برداشته شد.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> آنبلاک شد.`); return; }
-    if (adminState === "await_broadcast") { await STATS.delete("STATE_" + userId); let ul = await STATS.get("all_users") || ""; let a = ul.split(",").filter(x => x); let ok = 0, fail = 0; await sendMessage(TG, chatId, `⏳ ارسال به ${a.length} کاربر...`); for (const ui of a) { if (await STATS.get("BANNED_" + ui) === "1") continue; const r = await sendMessage(TG, ui, `📨 <b>پیام ادمین:</b>\n\n${text}`, { parse_mode: "HTML" }); if (r.ok) ok++; else fail++; } await sendMessage(TG, chatId, `📨 نتیجه:\n✅ ${ok}\n❌ ${fail}`); return; }
-    if (adminState && adminState.startsWith("await_reply_ticket_")) { const targetId = adminState.replace("await_reply_ticket_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `✉️ <b>پاسخ:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ به <code>${targetId}</code> ارسال شد.`); return; }
-    if (adminState && adminState.startsWith("await_reply_ads_")) { const targetId = adminState.replace("await_reply_ads_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `📢 <b>پاسخ:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ به <code>${targetId}</code> ارسال شد.`); return; }
+    if (adminState === "await_search") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); const name = await STATS.get("name:" + targetId) || "ناشناس"; const ban = await STATS.get("BANNED_" + targetId); await sendMessage(TG, chatId, `🔍 <b>اطلاعات کاربر:</b>\n\n👤 نام: <b>${name}</b>\n🆔 آیدی: <code>${targetId}</code>\n📌 وضعیت: ${ban === "1" ? "🚫 مسدود" : "✅ فعال"}`, { parse_mode: "HTML" }); return; }
+    if (adminState === "await_ban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.put("BANNED_" + targetId, "1"); await STATS.put("BAN_REASON_" + targetId, "تخلف از قوانین ربات"); await sendMessage(TG, targetId, "🚫 <b>شما توسط ادمین از ربات مسدود شدید.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> با موفقیت مسدود شد.`, { parse_mode: "HTML" }); return; }
+    if (adminState === "await_unban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.delete("BANNED_" + targetId); await STATS.delete("BAN_REASON_" + targetId); await sendMessage(TG, targetId, "✅ <b>مسدودی شما توسط ادمین برداشته شد.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> آنبلاک شد.`, { parse_mode: "HTML" }); return; }
+    if (adminState === "await_broadcast") { await STATS.delete("STATE_" + userId); let usersList = await STATS.get("all_users") || ""; let arr = usersList.split(",").filter(x => x); let ok = 0, fail = 0; await sendMessage(TG, chatId, `⏳ در حال ارسال پیام به ${arr.length} کاربر...`); for (const uid of arr) { if (await STATS.get("BANNED_" + uid) === "1") continue; const res = await sendMessage(TG, uid, `📨 <b>پیام از ادمین:</b>\n\n${text}`, { parse_mode: "HTML" }); if (res.ok) ok++; else fail++; } await sendMessage(TG, chatId, `📨 <b>نتیجه ارسال:</b>\n\n✅ موفق: ${ok}\n❌ ناموفق: ${fail}`, { parse_mode: "HTML" }); return; }
+    if (adminState && adminState.startsWith("await_reply_ticket_")) { const targetId = adminState.replace("await_reply_ticket_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `✉️ <b>پاسخ پشتیبانی:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ شما به کاربر <code>${targetId}</code> ارسال شد.`, { parse_mode: "HTML" }); return; }
+    if (adminState && adminState.startsWith("await_reply_ads_")) { const targetId = adminState.replace("await_reply_ads_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `📢 <b>پاسخ به درخواست تبلیغات شما:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ شما به کاربر <code>${targetId}</code> ارسال شد.`, { parse_mode: "HTML" }); return; }
   }
 
   const userState = await STATS.get("STATE_" + userId);
-  if (userState === "await_support_ticket") { await STATS.delete("STATE_" + userId); for (const a of ADMIN_IDS) { await sendMessage(TG, a, `📩 <b>تیکت از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 ${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ", callback_data: "reply_ticket_" + userId }]] }); } await sendMessage(TG, chatId, "✅ پیام ارسال شد."); return; }
-  if (userState === "await_ad_request") { await STATS.delete("STATE_" + userId); for (const a of ADMIN_IDS) { await sendMessage(TG, a, `📢 <b>تبلیغات:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 ${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ", callback_data: "reply_ads_" + userId }]] }); } await sendMessage(TG, chatId, "✅ درخواست تبلیغات ارسال شد."); return; }
-  if (userState === "await_ping") { await STATS.delete("STATE_" + userId); let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; const res = await pingDomain(domain); if (res.time > 0) { await sendMessage(TG, chatId, t("ping_result", userLang, { domain, status: res.ok ? "✅ در دسترس" : "❌ خطا", time: res.time }), { parse_mode: "HTML" }); } else { await sendMessage(TG, chatId, `❌ عدم دسترسی به ${domain}`); } return; }
-  if (userState === "await_sanction") { await STATS.delete("STATE_" + userId); let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; const res = await checkSanction(domain); await sendMessage(TG, chatId, t("sanction_result", userLang, { domain, result: res }), { parse_mode: "HTML" }); return; }
-
-  const isBanned = await STATS.get("BANNED_" + userId);
-  if (isBanned === "1") { const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف"; await sendMessage(TG, chatId, "🚫 <b>اطلاعیه مدیریت</b>\n\nشما مسدود شدید.\n\n⚠️ <b>دلیل:</b> " + reason + "\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n📞 پشتیبانی: @Adddddddm\n🆔 <code>" + userId + "</code>", { parse_mode: "HTML" }); return; }
-
-  if (text === "/admin") {
-    if (!ADMIN_IDS.includes(userId)) { await flagSuspicious(STATS, userId, "تلاش برای /admin"); await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز"); return; }
-    const adminKb = [ [{ text: "🌐 ورود به پنل وب", url: "https://radar-bot.royal-trust-ir-official.workers.dev/adminweb" }], [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجو", callback_data: "adm_search" }], [{ text: "🚫 بلاک", callback_data: "adm_ban" }, { text: "✅ آنبلاک", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت", callback_data: "main_menu" }] ];
-    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return;
+  if (userState === "await_support_ticket") { await STATS.delete("STATE_" + userId); for (const adminId of ADMIN_IDS) { await sendMessage(TG, adminId, `📩 <b>تیکت جدید از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 متن پیام:\n${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ به کاربر", callback_data: "reply_ticket_" + userId }]] }); } await sendMessage(TG, chatId, "✅ پیام شما با موفقیت به مدیریت ارسال شد. به زودی پاسخ داده می‌شود.", { parse_mode: "HTML" }); return; }
+  if (userState === "await_ad_request") { await STATS.delete("STATE_" + userId); for (const adminId of ADMIN_IDS) { await sendMessage(TG, adminId, `📢 <b>درخواست تبلیغات از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 متن درخواست:\n${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ به درخواست", callback_data: "reply_ads_" + userId }]] }); } await sendMessage(TG, chatId, "✅ درخواست تبلیغات شما با موفقیت برای مدیریت ارسال شد. در اسرع وقت با شما تماس گرفته می‌شود.", { parse_mode: "HTML" }); return; }
+  if (userState === "await_ping") { 
+    await STATS.delete("STATE_" + userId); 
+    let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; 
+    const res = await pingDomain(domain); 
+    const lang = await getUserLang(STATS, userId);
+    if (res.time > 0) { await sendMessage(TG, chatId, t("ping_result", lang, { domain, status: res.ok ? "✅ در دسترس" : "❌ خطا", time: res.time }), { parse_mode: "HTML" }); } 
+    else { await sendMessage(TG, chatId, `❌ عدم دسترسی به ${domain}`); } 
+    return; 
+  }
+  if (userState === "await_sanction") { 
+    await STATS.delete("STATE_" + userId); 
+    let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; 
+    const res = await checkSanction(domain); 
+    const lang = await getUserLang(STATS, userId);
+    await sendMessage(TG, chatId, t("sanction_result", lang, { domain, result: res }), { parse_mode: "HTML" }); 
+    return; 
   }
 
-  if (text.startsWith("/ban ") || text.startsWith("/unban ")) { if (!ADMIN_IDS.includes(userId)) { await flagSuspicious(STATS, userId, "تلاش برای دستور ادمین"); await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز"); return; } }
+  const isBanned = await STATS.get("BANNED_" + userId);
+  if (isBanned === "1") { const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف از قوانین ربات"; await sendMessage(TG, chatId, "🚫 <b>اطلاعیه رسمی مدیریت</b>\n\nکاربر گرامی،\n\nدسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n➖➖➖➖➖➖➖➖\n\n📌 <b>وضعیت:</b> مسدود\n⚠️ <b>دلیل:</b> " + reason + "\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n➖➖➖➖➖➖➖➖\n\n📞 برای اعتراض و پیگیری با پشتیبانی در ارتباط باشید:\n@Adddddddm\n\n🆔 آیدی عددی شما:\n<code>" + userId + "</code>\n\n⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n🙏 با تشکر\n🛡️ تیم مدیریت رادار اینترنت ایران", { parse_mode: "HTML" }); return; }
 
-  const ic1 = await checkMember(TG, userId, CH1); const ic2 = await checkMember(TG, userId, CH2);
-  if (!ic1 || !ic2) { await sendMessage(TG, chatId, "🔒 <b>عضویت اجباری</b>\n\nابتدا در کانال و گروه عضو شوید:", { parse_mode: "HTML", inline_keyboard: [[{ text: "📡 کانال", url: "https://t.me/radarinternetiran" }], [{ text: "👥 گروه", url: "https://t.me/radarinternetirangruop" }]] }); return; }
+  if (text === "/admin") {
+    if (!ADMIN_IDS.includes(userId)) {
+      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور /admin");
+      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", { parse_mode: "HTML" }); return;
+    }
+    const adminKb = [ [{ text: "🌐 ورود به پنل وب مدیریت", url: "https://radar-bot.royal-trust-ir-official.workers.dev/adminweb" }], [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجوی کاربر", callback_data: "adm_search" }], [{ text: "🚫 بلاک کاربر", callback_data: "adm_ban" }, { text: "✅ آنبلاک کاربر", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار کلی ربات", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت به منو", callback_data: "main_menu" }] ];
+    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز، به پنل مدیریت جامع خوش آمدید.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return;
+  }
+
+  if (text.startsWith("/ban ") || text.startsWith("/unban ")) {
+    if (!ADMIN_IDS.includes(userId)) {
+      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور " + text.split(" ")[0]);
+      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز", { parse_mode: "HTML" }); return;
+    }
+  }
+
+  const inCh1 = await checkMember(TG, userId, CH1); const inCh2 = await checkMember(TG, userId, CH2);
+  if (!inCh1 || !inCh2) { await sendMessage(TG, chatId, "🔒 <b>عضویت اجباری</b>\n\nبرای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:\n\n📡 کانال: @radarinternetiran\n👥 گروه: @radarinternetirangruop\n\nپس از عضویت، دوباره /start را بزنید.", { parse_mode: "HTML", inline_keyboard: [[{ text: "📡 عضویت در کانال", url: "https://t.me/radarinternetiran" }], [{ text: "👥 عضویت در گروه", url: "https://t.me/radarinternetirangruop" }]] }); return; }
 
   await trackUser(STATS, userId, userName); await ensureTodaySnapshot(STATS); await checkVersion(STATS, userId, TG, chatId);
 
-  if (text.startsWith("/start ref_")) { const refCode = text.replace("/start ref_", "").trim(); if (refCode && refCode !== userId && STATS) { const already = await getReferrer(STATS, userId); if (!already) { await STATS.put("ref:" + userId, refCode); await addPoints(env, STATS, refCode, 10); await addPoints(env, STATS, userId, 5); await sendMessage(TG, chatId, t("refer_success", userLang, { name: userName }), { parse_mode: "HTML" }); const invCount = parseInt(await STATS.get("invites_count:" + refCode) || "0") + 1; await STATS.put("invites_count:" + refCode, String(invCount)); await checkReferralMilestones(TG, STATS, refCode, invCount); } } }
+  if (text.startsWith("/start ref_")) { 
+    const refCode = text.replace("/start ref_", "").trim(); 
+    if (refCode && refCode !== userId && STATS) { 
+      const already = await getReferrer(STATS, userId); 
+      if (!already) { 
+        await STATS.put("ref:" + userId, refCode); 
+        await addPoints(env, STATS, refCode, 10); 
+        await addPoints(env, STATS, userId, 5); 
+        const lang = await getUserLang(STATS, userId);
+        await sendMessage(TG, chatId, t("refer_success", lang, { name: userName }), { parse_mode: "HTML" }); 
+        const invCount = parseInt(await STATS.get("invites_count:" + refCode) || "0") + 1;
+        await STATS.put("invites_count:" + refCode, String(invCount));
+        await checkReferralMilestones(TG, STATS, refCode, invCount);
+      } 
+    } 
+  }
 
   if (text === "/start" || text.startsWith("/start ")) {
-    await addPoints(env, STATS, userId, 1); const pts = await getPoints(STATS, userId); const level = getUserLevel(pts);
+    await addPoints(env, STATS, userId, 1); const pts = await getPoints(STATS, userId); const level = getUserLevel(pts); const lang = await getUserLang(STATS, userId);
     const startKeyboard = [
       [{ text: "📊 گزارش کامل", callback_data: "status" }, { text: "⚡ خلاصه وضعیت", callback_data: "work" }],
       [{ text: "📈 نمودار جامع رادار", callback_data: "comprehensive_chart" }, { text: "⏱️ نمودار ۱ ساعته", callback_data: "radar_1h" }],
@@ -682,41 +748,41 @@ async function handleUpdate(update, TG, STATS, env) {
       [{ text: "🤝 دریافت API اختصاصی", callback_data: "api_info" }],
       [{ text: "⚙️ پنل مدیریت", callback_data: "admin_panel" }]
     ];
-    await sendMessage(TG, chatId, t("welcome", userLang, { name: userName, level, pts }) + "\n\n" + SPONSOR_MSG, { parse_mode: "HTML", inline_keyboard: startKeyboard });
-  } else if (text === "/comprehensive") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 دریافت داده‌ها..."); const c = await makeComprehensiveChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/radar1h") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏱️ دریافت نمودار..."); const c = await makeRadar1hChart(env); if (c) { await sendPhoto(TG, chatId, c.url, c.caption); } else { await sendMessage(TG, chatId, "❌ خطا."); }
-  } else if (text === "/myrank") { const pts = await getPoints(STATS, userId); const level = getUserLevel(pts); const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : []; const rank = lb.findIndex(x => x.id === userId) + 1; await sendMessage(TG, chatId, t("stats", userLang, { name: userName, pts, invites: lb.filter(x=>x.id===userId)[0]?.p||0, rank: rank || "?" }), { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, t("welcome", lang, { name: userName, level, pts }) + "\n\n" + SPONSOR_MSG, { parse_mode: "HTML", inline_keyboard: startKeyboard });
+  } else if (text === "/comprehensive") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 در حال دریافت داده‌ها از تمام منابع و طراحی نمودار جامع..."); const c = await makeComprehensiveChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/radar1h") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏱️ در حال دریافت نمودار از کلادفلر..."); const c = await makeRadar1hChart(env); if (c) { await sendPhoto(TG, chatId, c.url, c.caption); } else { await sendMessage(TG, chatId, "❌ خطا در دریافت داده. (توکن CLOUDFLARE_API_TOKEN را بررسی کنید)"); }
+  } else if (text === "/myrank") { const pts = await getPoints(STATS, userId); const level = getUserLevel(pts); const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : []; const rank = lb.findIndex(x => x.id === userId) + 1; await sendMessage(TG, chatId, "╭━━━ 🎖️ <b>رتبه شما</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏅 سطح: " + level + "\n🏆 امتیاز: <b>" + pts + "</b>\n📊 رتبه: <b>#" + (rank || "?") + "</b>\n👥 از " + lb.length + " کاربر\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
   } else if (text === "/leaderboard") {
     const pinnedRaw = await STATS.get("pinned_winners"); const pinned = pinnedRaw ? JSON.parse(pinnedRaw) : [];
     const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : [];
-    const cc = lb.filter(u => !pinned.find(p => p.id === u.id));
-    let out = "🏆 <b>تالار افتخارات</b> 📌\n━━━━━━━━━━━━\n\n";
-    if (pinned.length === 0) { out += "هنوز برنده‌ای نیست.\n\n"; } else { pinned.slice(0, 5).forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += md + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); out += "\n"; }
-    out += "🔥 <b>رقابت هفته</b>\n━━━━━━━━━━━━\n\n";
-    if (cc.length === 0) { out += "هنوز کسی امتیاز نگرفته!\n"; } else { cc.slice(0, 10).forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += md + " <b>" + (u.n || u.id) + "</b> → " + u.p + "\n"; }); }
-    out += "\n<i>📌 برندگان هفته قبل خارج شدند.</i>" + WATERMARK; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
-  } else if (text === "/invite") { const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId; const pts = await getPoints(STATS, userId); await sendMessage(TG, chatId, "╭━━━ 🎁 <b>دعوت</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏆 امتیاز: <b>" + pts + "</b>\n\n🔗 <code>" + link + "</code>\n\n💰 شما +۱۰ | دوستت +۵\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
-  } else if (text === "/vs") { await sendMessage(TG, chatId, "📊 مقایسه..."); await sendMessage(TG, chatId, await makeVsReport(STATS), { parse_mode: "HTML" });
-  } else if (text === "/map") { await sendMessage(TG, chatId, "🗺 ساخت نقشه..."); const c = await makeMapChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/api") { const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api"; await sendMessage(TG, chatId, "╭━━━ 🔌 <b>API عمومی</b> ━━━╮\n\n🔗 Endpoints:\n<code>" + base + "/status?key=YOUR_KEY</code>\n<code>" + base + "/operators?key=YOUR_KEY</code>\n<code>" + base + "/top?key=YOUR_KEY</code>\n<code>" + base + "/history?key=YOUR_KEY</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
-  } else if (text === "/status" || text === "/status full") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏳ دریافت گزارش..."); await sendMessage(TG, chatId, await makeReport("full"), { parse_mode: "HTML" });
+    const currentCompetitors = lb.filter(u => !pinned.find(p => p.id === u.id));
+    let out = "🏆 <b>تالار افتخارات (هفته گذشته)</b> 📌\n━━━━━━━━━━━━━━━━\n\n";
+    if (pinned.length === 0) { out += "هنوز برنده‌ای مشخص نشده است.\n\n"; } else { pinned.slice(0, 5).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); out += "\n"; }
+    out += "🔥 <b>رقابت هفته جاری</b>\n━━━━━━━━━━━━━━━━\n\n";
+    if (currentCompetitors.length === 0) { out += "هنوز کسی در این هفته امتیاز نگرفته!\nاولین نفر باش! 🚀\n\n"; } else { currentCompetitors.slice(0, 10).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); }
+    out += "\n<i>📌 برندگان هفته قبل از رقابت این هفته خارج شده‌اند.</i>" + WATERMARK; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
+  } else if (text === "/invite") { const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId; const pts = await getPoints(STATS, userId); await sendMessage(TG, chatId, "╭━━━ 🎁 <b>دعوت دوستان</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏆 امتیاز شما: <b>" + pts + "</b>\n\n🔗 لینک اختصاصی شما:\n<code>" + link + "</code>\n\n💰 جایزه:\n• شما: <b>+۱۰</b> امتیاز\n• دوستت: <b>+۵</b> امتیاز\n• ۱۰ دعوت: <b>+۵۰</b> امتیاز هدیه\n• ۵۰ دعوت: <b>+۵۰۰</b> امتیاز و نشان VIP\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/vs") { await sendMessage(TG, chatId, "📊 در حال مقایسه..."); await sendMessage(TG, chatId, await makeVsReport(STATS), { parse_mode: "HTML" });
+  } else if (text === "/map") { await sendMessage(TG, chatId, "🗺 در حال ساخت نقشه حرارتی..."); const c = await makeMapChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/api") { const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api"; await sendMessage(TG, chatId, "╭━━━ 🔌 <b>API عمومی</b> ━━━╮\n\n📊 داده‌های رادار به صورت JSON:\n\n🔗 Endpoints:\n<code>" + base + "/status?key=YOUR_KEY</code>\n<code>" + base + "/operators?key=YOUR_KEY</code>\n<code>" + base + "/top?key=YOUR_KEY</code>\n<code>" + base + "/history?key=YOUR_KEY</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/status" || text === "/status full") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏳ در حال دریافت گزارش کامل..."); await sendMessage(TG, chatId, await makeReport("full"), { parse_mode: "HTML" });
   } else if (text === "/status simple" || text === "/work") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeWorkReport(), { parse_mode: "HTML" });
   } else if (text === "/score") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeScoreReport(), { parse_mode: "HTML" });
-  } else if (text === "/compare") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🆚 مقایسه..."); await sendMessage(TG, chatId, await makeCompareReport(), { parse_mode: "HTML" });
-  } else if (text === "/top") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🏆 رتبه‌بندی..."); await sendMessage(TG, chatId, await makeTopReport(), { parse_mode: "HTML" });
-  } else if (text === "/isp") { await sendMessage(TG, chatId, "🔍 <b>مثال:</b>\n<code>/isp ایرانسل</code>", { parse_mode: "HTML" });
-  } else if (text.startsWith("/isp ")) { await addPoints(env, STATS, userId, 1); const q = text.replace("/isp ", "").trim(); await sendMessage(TG, chatId, "🔍 جستجو..."); await sendMessage(TG, chatId, await makeISPReport(q), { parse_mode: "HTML" });
-  } else if (text === "/world") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🌍 دریافت..."); await sendMessage(TG, chatId, await makeWorldReport(), { parse_mode: "HTML" });
-  } else if (text === "/today") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 ساخت..."); const c = await makeTodayChart(env); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/history") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 ساخت..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/compare") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🆚 در حال مقایسه اپراتورها..."); await sendMessage(TG, chatId, await makeCompareReport(), { parse_mode: "HTML" });
+  } else if (text === "/top") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🏆 در حال رتبه‌بندی..."); await sendMessage(TG, chatId, await makeTopReport(), { parse_mode: "HTML" });
+  } else if (text === "/isp") { await sendMessage(TG, chatId, "🔍 <b>چک ISP خاص</b>\n\nمثال:\n<code>/isp ایرانسل</code>\n<code>/isp مخابرات</code>", { parse_mode: "HTML" });
+  } else if (text.startsWith("/isp ")) { await addPoints(env, STATS, userId, 1); const q = text.replace("/isp ", "").trim(); await sendMessage(TG, chatId, "🔍 در حال جستجو..."); await sendMessage(TG, chatId, await makeISPReport(q), { parse_mode: "HTML" });
+  } else if (text === "/world") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🌍 در حال دریافت داده‌های جهانی..."); await sendMessage(TG, chatId, await makeWorldReport(), { parse_mode: "HTML" });
+  } else if (text === "/today") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 در حال ساخت نمودار امروز..."); const c = await makeTodayChart(env); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/history") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 در حال ساخت تاریخچه..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/best") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeBestTimeReport(), { parse_mode: "HTML" });
   } else if (text === "/speed") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeSpeedReport(), { parse_mode: "HTML" });
-  } else if (text === "/chart") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 ساخت..."); const c = await makeBarChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/pie") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🥧 ساخت..."); const c = await makePieChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/trend") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📈 ساخت..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/help") { await sendMessage(TG, chatId, "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n📊 /status, /work, /score, /vs\n🆚 /compare, /top, /isp, /world\n📈 /comprehensive, /radar1h, /today, /history, /trend, /chart, /pie, /map\n🎮 /myrank, /leaderboard, /invite\n🔌 /api\n⚡ /speed, /best, /ping\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/chart") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 در حال ساخت نمودار میله‌ای..."); const c = await makeBarChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/pie") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار دایره‌ای..."); const c = await makePieChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/trend") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📈 در حال ساخت نمودار روند..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/help") { await sendMessage(TG, chatId, "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n📊 گزارش‌ها:\n/status، /work، /score، /vs\n\n🆚 مقایسه:\n/compare، /top، /isp، /world\n\n📈 نمودارها:\n/comprehensive، /radar1h\n/today، /history، /trend، /chart، /pie، /map\n\n🎮 گیمیفیکیشن:\n/myrank، /leaderboard، /invite\n\n🔌 API:\n/api\n\n⚡ تست:\n/speed، /best، /ping\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
   }
-  }// ==================== Text Reports Generators ====================
+}// ==================== Text Reports Generators ====================
 async function makePingReport() {
   let irList = "", globalList = ""; let irOk = 0, globalOk = 0;
   for (const s of IR_SITES) {
@@ -931,4 +997,4 @@ async function makeReport(mode) {
     out += "🚨 <b>مسیریابی</b>\n" + vE + " Visibility: <b>%" + v + "</b>\n" + makeBar(v / 10) + "\n";
   }
   return out + WATERMARK;
-}
+                     }
