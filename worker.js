@@ -4,7 +4,7 @@
 const CH1 = "@radarinternetiran";
 const CH2 = "@radarinternetirangruop";
 const BOT_USERNAME = "Radarinternetiranbot";
-const CURRENT_VERSION = "6.0";
+const CURRENT_VERSION = "7.0";
 const ADMIN_IDS = ["8344700031", "7652496428"];
 const SPONSOR_MSG = "💎 <b>اسپانسر رسمی ربات:</b>\n<i>(جایگاه تبلیغات شما - جهت رزرو روی دکمه درخواست تبلیغات بزنید)</i>";
 const WATERMARK = "\n\n📌 <b>منبع:</b> رادار اینترنت ایران\n⚠️ <i>هرگونه سوءاستفاده از این آمار و داده‌ها پیگرد قانونی دارد.</i>";
@@ -12,13 +12,60 @@ const WATERMARK = "\n\n📌 <b>منبع:</b> رادار اینترنت ایرا�
 let GLOBAL_STATS = null;
 let GLOBAL_ENV = null;
 
+// ==================== Internationalization (FA/EN) ====================
+const LANG_DICT = {
+  fa: {
+    welcome: "سلام <b>{name}</b> عزیز!\n🏅 سطح شما: {level}\n🏆 امتیاز شما: <b>{pts}</b>\n\nاز منوی زیر انتخاب کنید:",
+    maintenance: "🛠 <b>اطلاعیه رسمی مدیریت</b>\n\nربات موقتاً به دلیل به‌روزرسانی زیرساخت‌ها و بهبود کیفیت خدمات در دسترس نیست.\n\n⏳ لطفاً ساعاتی دیگر دوباره تلاش کنید.\n\n🙏 از صبر شما سپاسگزاریم.",
+    stats: "📊 آمار شما:\n\n👤 نام: {name}\n⭐ امتیاز: {pts}\n👥 دعوت‌ها: {invites}\n🏅 رتبه: {rank}",
+    ping_prompt: "🌐 لطفاً آدرس سایت را وارد کنید (مثلاً: google.com):",
+    ping_result: "⚡ نتیجه پینگ برای <b>{domain}</b>:\n\n📡 وضعیت: {status}\n⏱ زمان: {time}ms",
+    sanction_prompt: "🚫 لطفاً آدرس سایت را برای تست تحریم وارد کنید (مثلاً: steam.com):",
+    sanction_result: "🚫 نتیجه تست تحریم برای <b>{domain}</b>:\n\n{result}",
+    alerts_prompt: "🔔 سیستم هشدار شخصی‌سازی شده\n\nاپراتور خود را انتخاب کنید تا در صورت افت کیفیت اینترنت آن، به شما اطلاع دهیم:",
+    alerts_set: "✅ هشدار برای اپراتور <b>{operator}</b> فعال شد. در صورت افت کیفیت به شما اطلاع می‌دهیم.",
+    alerts_none: "شما هیچ هشداری فعال ندارید.",
+    refer_success: "🎉 خوش آمدی {name}!\n✅ ۵ امتیاز گرفتی!",
+    ref_milestone_10: "🏅 تبریک! شما ۱۰ نفر را دعوت کردید و ۵۰ امتیاز هدیه گرفتید!",
+    ref_milestone_50: "👑 تبریک! شما ۵۰ نفر را دعوت کردید، ۵۰۰ امتیاز و نشان VIP گرفتید!"
+  },
+  en: {
+    welcome: "Hello <b>{name}</b>!\n🏅 Level: {level}\n🏆 Points: <b>{pts}</b>\n\nChoose from the menu:",
+    maintenance: "🛠 <b>Official Maintenance Notice</b>\n\nThe bot is temporarily unavailable for infrastructure upgrades.\n\n⏳ Please try again in a few hours.\n\n🙏 Thank you for your patience.",
+    stats: "📊 Your Stats:\n\n👤 Name: {name}\n⭐ Points: {pts}\n👥 Invites: {invites}\n🏅 Rank: {rank}",
+    ping_prompt: "🌐 Enter domain to ping (e.g., google.com):",
+    ping_result: "⚡ Ping Result for <b>{domain}</b>:\n\n📡 Status: {status}\n⏱ Time: {time}ms",
+    sanction_prompt: "🚫 Enter domain to check sanctions (e.g., steam.com):",
+    sanction_result: "🚫 Sanction Check for <b>{domain}</b>:\n\n{result}",
+    alerts_prompt: "🔔 Personalized Alerts\n\nSelect your ISP to get notified if internet quality drops:",
+    alerts_set: "✅ Alert enabled for <b>{operator}</b>.",
+    alerts_none: "You have no active alerts.",
+    refer_success: "🎉 Welcome {name}!\n✅ You got 5 points!",
+    ref_milestone_10: "🏅 Congrats! You invited 10 people and got 50 bonus points!",
+    ref_milestone_50: "👑 Congrats! You invited 50 people, got 500 points and VIP badge!"
+  }
+};
+
+function t(key, lang = "fa", replacements = {}) {
+  let text = LANG_DICT[lang] ? (LANG_DICT[lang][key] || LANG_DICT["fa"][key]) : LANG_DICT["fa"][key];
+  if (!text) return key;
+  for (const [k, v] of Object.entries(replacements)) {
+    text = text.replace(new RegExp(`{${k}}`, 'g'), v);
+  }
+  return text;
+}
+
 // ==================== Web Admin HTML ====================
 const ADMIN_WEB_HTML = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>پنل مدیریت رادار</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Tahoma;background:#0b1120;color:#f8fafc;min-height:100vh}header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:20px;text-align:center;border-bottom:2px solid #f59e0b}header h1{font-size:20px;color:#f59e0b}header .date{font-size:12px;color:#94a3b8}nav{display:flex;flex-wrap:wrap;background:#0f172a;padding:10px;gap:8px;justify-content:center;border-bottom:1px solid #1e293b}nav button{background:#1e293b;color:#f8fafc;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px}nav button.active{background:#f59e0b;color:#0f172a;font-weight:bold}main{padding:20px;max-width:1200px;margin:0 auto}.card{background:#0f172a;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #1e293b}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px}.stat{background:#1e293b;border-radius:10px;padding:15px;text-align:center;border-bottom:3px solid #f59e0b}.stat .num{font-size:28px;font-weight:bold;color:#f59e0b}.stat .label{font-size:12px;color:#94a3b8;margin-top:5px}input,textarea{background:#0b1120;color:#f8fafc;border:1px solid #334155;padding:10px;border-radius:8px;width:100%;margin-bottom:10px}button.btn{background:#f59e0b;color:#0f172a;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold}button.btn-danger{background:#ef4444;color:#fff}button.btn-success{background:#10b981;color:#fff}.user-row{display:flex;justify-content:space-between;padding:12px;background:#1e293b;border-radius:8px;margin-bottom:8px;cursor:pointer}.user-row:hover{background:#334155}.badge{padding:3px 8px;border-radius:6px;font-size:11px}.badge-active{background:#10b981;color:#fff}.badge-banned{background:#ef4444;color:#fff}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:none;justify-content:center;align-items:center;z-index:100;padding:20px}.modal.show{display:flex}.modal-content{background:#0f172a;border-radius:12px;padding:25px;max-width:500px;width:100%;border:2px solid #f59e0b;max-height:90vh;overflow-y:auto}.modal-content h3{color:#f59e0b;margin-bottom:15px}.profile-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e293b;font-size:13px}.profile-row .label{color:#94a3b8}.profile-row .value{color:#f8fafc;font-weight:bold}.pagination{display:flex;justify-content:center;gap:10px;margin-top:15px}.pagination button{background:#1e293b;color:#f8fafc;border:none;padding:8px 16px;border-radius:6px;cursor:pointer}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:200;display:none}.toast.show{display:block}.tab{display:none}.tab.active{display:block}.loading{text-align:center;padding:20px;color:#94a3b8}.key-row{background:#1e293b;padding:12px;border-radius:8px;margin-bottom:10px;font-size:12px;word-break:break-all}.key-row code{background:#0b1120;padding:3px 6px;border-radius:4px;color:#06b6d4}#loginScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:#0b1120;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000}#loginScreen h2{color:#f59e0b;margin-bottom:20px}#loginScreen input{max-width:300px;text-align:center;font-size:18px;border-color:#f59e0b}#loginScreen button{max-width:300px;width:100%;padding:15px;font-size:16px;margin-top:10px}</style></head><body>
 <div id="loginScreen"><h2>🔐 ورود به مدیریت</h2><p style="color:#94a3b8;margin-bottom:20px">رمز عبور را وارد کنید</p><input type="password" id="passInput" placeholder="رمز عبور..."><button class="btn" onclick="doLogin()">ورود به پنل</button></div>
 <div id="mainScreen" style="display:none;"><header><h1>🔐 پنل مدیریت رادار اینترنت ایران</h1><div class="date" id="dateBox">...</div></header>
 <nav><button class="active" onclick="showTab('dashboard')">📊 داشبورد</button><button onclick="showTab('users')">👥 کاربران</button><button onclick="showTab('apikeys')">🔑 API Keys</button><button onclick="showTab('winners')">🏆 برندگان</button><button onclick="showTab('suspicious')" style="background:#7f1d1d;">🚨 کاربران مشکوک</button></nav>
 <main>
-<div class="tab active" id="tab-dashboard"><div class="card"><div class="stats"><div class="stat"><div class="num" id="sTotal">-</div><div class="label">کل کاربران</div></div><div class="stat"><div class="num" id="sActive">-</div><div class="label">فعال امروز</div></div><div class="stat"><div class="num" id="sRegistered">-</div><div class="label">ثبت‌شده</div></div><div class="stat"><div class="num" id="sBanned">-</div><div class="label">مسدود</div></div></div></div></div>
+<div class="tab active" id="tab-dashboard">
+  <div class="card"><div class="stats"><div class="stat"><div class="num" id="sTotal">-</div><div class="label">کل کاربران</div></div><div class="stat"><div class="num" id="sActive">-</div><div class="label">فعال امروز</div></div><div class="stat"><div class="num" id="sRegistered">-</div><div class="label">ثبت‌شده</div></div><div class="stat"><div class="num" id="sBanned">-</div><div class="label">مسدود</div></div></div></div>
+  <div class="card"><h3 style="color:#f59e0b;margin-bottom:15px">📈 نمودار رشد کاربران (۷ روز اخیر)</h3><img id="growthChart" src="" style="width:100%; border-radius:8px;"></div>
+  <button class="btn btn-danger" onclick="toggleMaintenance()" style="width:100%">🛠 فعال/غیرفعال کردن حالت تعمیرات</button>
+</div>
 <div class="tab" id="tab-users"><div class="card"><input type="text" id="searchBox" placeholder="🔍 جستجو..." onkeyup="if(event.key==='Enter')loadUsers(1)"><button class="btn" onclick="loadUsers(1)">جستجو</button></div><div class="card" id="usersList"><div class="loading">در حال بارگذاری...</div></div><div class="pagination" id="pagination"></div></div>
 <div class="tab" id="tab-apikeys"><div class="card"><h3>ساخت کلید</h3><input type="text" id="keyOwner" placeholder="نام همکار"><button class="btn" onclick="createKey()">🔑 صدور</button></div><div class="card" id="keysList"></div></div>
 <div class="tab" id="tab-winners"><div class="card"><h3>برندگان</h3><div id="winnersList"></div><button class="btn btn-danger" style="margin-top:15px" onclick="resetWeek()">🔄 ریست</button></div></div>
@@ -31,7 +78,9 @@ function doLogin(){const i=document.getElementById('passInput').value;if(!i)retu
 if(SECRET){document.getElementById('loginScreen').style.display='none';document.getElementById('mainScreen').style.display='block';loadStats()}
 async function safeFetch(u){const r=await fetch(u);if(r.status===403){localStorage.removeItem('radar_admin_secret');SECRET='';document.getElementById('loginScreen').style.display='flex';document.getElementById('mainScreen').style.display='none';throw new Error('منقضی شده')}return r.json()}
 function showTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById('tab-'+n).classList.add('active');event.target.classList.add('active');if(n==='dashboard')loadStats();else if(n==='users')loadUsers(1);else if(n==='apikeys')loadKeys();else if(n==='winners')loadWinners();else if(n==='suspicious')loadSuspicious()}
-async function loadStats(){try{const d=await safeFetch(API+'/data?secret='+SECRET+'&type=stats');document.getElementById('sTotal').textContent=d.total_users;document.getElementById('sActive').textContent=d.today_active;document.getElementById('sRegistered').textContent=d.total_registered;document.getElementById('sBanned').textContent=d.banned_count;document.getElementById('dateBox').textContent=d.date+' • '+d.time}catch(e){showToast(e.message,true)}}
+async function loadStats(){try{const d=await safeFetch(API+'/data?secret='+SECRET+'&type=stats');document.getElementById('sTotal').textContent=d.total_users;document.getElementById('sActive').textContent=d.today_active;document.getElementById('sRegistered').textContent=d.total_registered;document.getElementById('sBanned').textContent=d.banned_count;document.getElementById('dateBox').textContent=d.date+' • '+d.time;loadGrowthChart()}catch(e){showToast(e.message,true)}}
+async function loadGrowthChart(){try{const d=await safeFetch(API+'/data?secret='+SECRET+'&type=growth');if(d.ok&&d.labels.length>0){const cfg={type:'line',data:{labels:d.labels,datasets:[{label:'کاربران جدید',data:d.values,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.2)',fill:true,tension:0.4}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},beginAtZero:true}}}};document.getElementById('growthChart').src="https://quickchart.io/chart?w=800&h=300&bkg=%230f172a&c="+encodeURIComponent(JSON.stringify(cfg))}}catch(e){}}
+async function toggleMaintenance(){if(!confirm('آیا وضعیت تعمیرات تغییر کند؟'))return;try{const d=await safeFetch(API+'/action?secret='+SECRET+'&action=toggle_maintenance');if(d.ok){showToast(d.message)}}catch(e){showToast(e.message,true)}}
 async function loadUsers(p){const s=document.getElementById('searchBox').value.trim();document.getElementById('usersList').innerHTML='<div class="loading">...</div>';try{const d=await safeFetch(API+'/data?secret='+SECRET+'&type=users&page='+p+'&search='+encodeURIComponent(s));if(d.users.length===0){document.getElementById('usersList').innerHTML='<div class="loading">یافت نشد</div>';return}let h='';d.users.forEach(u=>{const b=u.is_banned?'<span class="badge badge-banned">مسدود</span>':'<span class="badge badge-active">فعال</span>';h+='<div class="user-row" onclick="showUser(\''+u.id+'\')"><div><b>'+u.name+'</b> '+b+'<br><code>'+u.id+'</code> • '+u.points+' امتیاز</div><div>👁️</div></div>'});document.getElementById('usersList').innerHTML=h;let pg='';if(d.page>1)pg+='<button onclick="loadUsers('+(d.page-1)+')">قبلی</button>';pg+='<button disabled>صفحه '+d.page+'</button>';if(d.page<d.pages)pg+='<button onclick="loadUsers('+(d.page+1)+')">بعدی</button>';document.getElementById('pagination').innerHTML=pg}catch(e){document.getElementById('usersList').innerHTML='<div class="loading">خطا</div>'}}
 async function showUser(id){try{const d=await safeFetch(API+'/data?secret='+SECRET+'&type=user&id='+id);const u=d.user;const b=u.is_banned?'<span class="badge badge-banned">مسدود</span>':'<span class="badge badge-active">فعال</span>';const a=u.is_banned?'<button class="btn btn-success" onclick="unbanUser(\''+u.id+'\')">آنبلاک</button>':'<button class="btn btn-danger" onclick="banUser(\''+u.id+'\')">مسدود</button>';document.getElementById('userModalContent').innerHTML='<h3>پروفایل '+b+'</h3><div class="profile-row"><span>نام:</span><b>'+u.name+'</b></div><div class="profile-row"><span>آیدی:</span><b>'+u.id+'</b></div><div class="profile-row"><span>امتیاز:</span><b>'+u.points+'</b></div><div class="profile-row"><span>سطح:</span><b>'+u.level+'</b></div><div class="profile-row"><span>عضویت:</span><b>'+u.join_date+'</b></div>'+(u.is_banned?'<div class="profile-row"><span>دلیل:</span><b style="color:red">'+u.ban_reason+'</b></div>':'')+'<div style="display:flex;gap:10px;margin-top:20px">'+a+'<button class="btn" style="background:#64748b" onclick="closeModal()">بستن</button></div>';document.getElementById('userModal').classList.add('show')}catch(e){showToast(e.message,true)}}
 function closeModal(){document.getElementById('userModal').classList.remove('show')}
@@ -48,13 +97,12 @@ async function clearSuspiciousUser(id){if(!confirm('پاک شود؟'))return;try
 document.getElementById('userModal').addEventListener('click',function(e){if(e.target===this)closeModal()});
 </script></body></html>`;
 
-// ==================== Constants ====================
+// ==================== Constants & Utils ====================
 const ASN_NAMES = { "12880": "زیرساخت (DCI)", "58224": "مخابرات ایران (TCI)", "6736": "شاتل قدیمی", "44244": "ایرانسل", "197207": "همراه اول (MCI)", "57218": "رایتل", "57497": "شاتل موبایل", "50810": "آسیاتک", "31549": "شاتل", "42337": "پارس‌آنلاین", "16322": "پارس‌پک", "43754": "آسیاتک", "48159": "پیشگامان", "25184": "افرانت", "56402": "صبانت", "205648": "رسپینا", "21478": "مبین‌نت", "206065": "پیشگامان", "48434": "پارس‌آنلاین", "51685": "پارس‌پک", "51074": "شاتل", "52140": "ایران‌سرور", "201150": "کیان‌نت", "61173": "میزبان", "201540": "خلیج فارس", "56703": "ندای رایانه", "205647": "ایران‌سرور", "48431": "ماهان", "203087": "سیستم‌های نوین", "39501": "ابر آروان", "202468": "ایران‌سرور", "204213": "همراه نت", "44208": "شبکه گستر", "49100": "ارتباطات زیرساخت", "208161": "ایرانسل جدید" };
 const IR_SITES = [{ name: "دیجی‌کالا", url: "https://digikala.com" }, { name: "شاپرک", url: "https://shaparak.ir" }, { name: "ایرانسل", url: "https://irancell.ir" }, { name: "همراه اول", url: "https://mci.ir" }];
 const GLOBAL_SITES = [{ name: "گوگل", url: "https://www.google.com" }, { name: "کلادفلر", url: "https://www.cloudflare.com" }, { name: "مایکروسافت", url: "https://www.microsoft.com" }];
 const FILTER_CHECK = [{ name: "توییتر / X", url: "https://x.com" }, { name: "یوتیوب", url: "https://www.youtube.com" }, { name: "فیسبوک", url: "https://www.facebook.com" }, { name: "اینستاگرام", url: "https://www.instagram.com" }, { name: "تلگرام", url: "https://telegram.org" }, { name: "واتساپ", url: "https://web.whatsapp.com" }, { name: "گوگل پلی", url: "https://play.google.com" }, { name: "ویکی‌پدیا", url: "https://www.wikipedia.org" }];
 
-// ==================== Utils ====================
 function getIranTime() { return new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()); }
 function getIranDate() { return new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
 function getGregDate() { const d = new Date(); return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0"); }
@@ -64,6 +112,7 @@ function getYesterday() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'A
 function getIranHour() { return parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tehran', hour: '2-digit', hour12: false }).format(new Date())); }
 function asnName(asn) { const c = String(asn).replace(/^AS/i, ""); return ASN_NAMES[c] || ("AS" + c); }
 function getUserLevel(pts) { if (pts >= 1000) return "👑 افسانه‌ای"; if (pts >= 500) return "💎 حرفه‌ای"; if (pts >= 100) return "🥇 فعال"; return "🌱 تازه‌کار"; }
+async function getUserLang(STATS, userId) { try { return await STATS.get("LANG_" + userId) || "fa"; } catch(e) { return "fa"; } }
 
 async function asnNameAuto(asn) {
   const clean = String(asn).replace(/^AS/i, ""); if (ASN_NAMES[clean]) return ASN_NAMES[clean];
@@ -94,10 +143,13 @@ function parseOONI(ooni) {
   return { blockPercent: totalMs > 0 ? Math.round((blockedMs / totalMs) * 100) : 0, totalMs, blockedMs, asnData, dayData };
 }
 
-// ==================== NEX-GEN CHARTS (Dark & Watermark) ====================
-function quickChart(config) { const json = JSON.stringify(config); return "https://quickchart.io/chart?w=900&h=500&bkg=%230b1120&c=" + encodeURIComponent(json); }
+// ==================== NEX-GEN CHARTS ====================
+function quickChart(config) { 
+  const json = JSON.stringify(config); 
+  return "https://quickchart.io/chart?w=900&h=500&bkg=%230b1120&v=" + Date.now() + "&c=" + encodeURIComponent(json); 
+}
 
-const watermarkAnnotation = { type: 'label', xValue: '50%', yValue: '50%', backgroundColor: 'transparent', content: ['رادار اینترنت ایران', '© محفوظ'], font: { size: 40, family: 'Tahoma', style: 'bold' }, color: 'rgba(255, 255, 255, 0.08)' };
+const watermarkAnnotation = { type: 'label', xValue: '50%', yValue: '50%', backgroundColor: 'transparent', content: ['رادار اینترنت ایران', '© محفوظ'], font: { size: 40, family: 'Tahoma', weight: 'bold' }, color: 'rgba(255, 255, 255, 0.08)' };
 
 async function makeComprehensiveChart() {
   let blockPercent = 0, ripeVisibility = 0, irOk = 0, globalOk = 0;
@@ -107,14 +159,9 @@ async function makeComprehensiveChart() {
   const irScore = Math.round((irOk / IR_SITES.length) * 100);
   for (const s of GLOBAL_SITES) { if (await pingSite(s.url)) globalOk++; }
   const globalScore = Math.round((globalOk / GLOBAL_SITES.length) * 100);
-
-  const chartConfig = {
-    type: 'line', data: { labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'], datasets: [{ label: 'شاخص سلامت شبکه', data: [100 - blockPercent, (100-blockPercent)+2, (100-blockPercent)-5, irScore, globalScore, ripeVisibility, 100-blockPercent], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 3, fill: true, tension: 0.4, pointBackgroundColor: '#f59e0b', pointBorderColor: '#fff' }, { label: 'هشدار قطعی', data: [0, 0, 0, 0, 0, 20, 0], borderColor: '#ef4444', borderDash: [5, 5], borderWidth: 2, fill: false, pointRadius: 0 }] },
-    options: { plugins: { title: { display: true, text: 'تحلیل لحظه‌ای پایداری اینترنت ایران', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { labels: { color: '#94a3b8', font: { family: 'Tahoma' } } }, annotation: { annotations: { boxGood: { type: 'box', yMin: 80, yMax: 100, backgroundColor: 'rgba(16, 185, 129, 0.1)' }, boxBad: { type: 'box', yMin: 0, yMax: 40, backgroundColor: 'rgba(239, 68, 68, 0.1)' }, watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] }, beginAtZero: true, max: 100 } } }
-  };
-  const url = quickChart(chartConfig);
+  const chartConfig = { type: 'line', data: { labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'], datasets: [{ label: 'شاخص سلامت شبکه', data: [100 - blockPercent, (100-blockPercent)+2, (100-blockPercent)-5, irScore, globalScore, ripeVisibility, 100-blockPercent], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 3, fill: true, tension: 0.4, pointBackgroundColor: '#f59e0b', pointBorderColor: '#fff' }, { label: 'هشدار قطعی', data: [0, 0, 0, 0, 0, 20, 0], borderColor: '#ef4444', borderDash: [5, 5], borderWidth: 2, fill: false, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: 'تحلیل لحظه‌ای پایداری اینترنت ایران', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { labels: { color: '#94a3b8', font: { family: 'Tahoma' } } }, annotation: { annotations: { boxGood: { type: 'box', yMin: 80, yMax: 100, backgroundColor: 'rgba(16, 185, 129, 0.1)' }, boxBad: { type: 'box', yMin: 0, yMax: 40, backgroundColor: 'rgba(239, 68, 68, 0.1)' }, watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] }, beginAtZero: true, max: 100 } } } };
   const caption = `📊 <b>گزارش جامع وضعیت اینترنت</b>\n🗓 ${getDateBoth()}\n\n🚫 مسدودسازی: <b>${blockPercent}%</b>\n🌐 پایداری RIPE: <b>${ripeVisibility}%</b>\n🇮🇷 سایت‌های ایرانی: <b>${irScore}%</b>\n🌍 سایت‌های جهانی: <b>${globalScore}%</b>` + WATERMARK;
-  return { url, caption };
+  return { url: quickChart(chartConfig), caption };
 }
 
 async function makeRadar1hChart(env) {
@@ -124,10 +171,7 @@ async function makeRadar1hChart(env) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }); const data = await res.json();
     if (!data.success || !data.result || !data.result.timestamps) return null;
     const labels = data.result.timestamps.map(t => { const d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + ":" + String(d.getMinutes()).padStart(2, '0'); });
-    const chartConfig = {
-      type: 'line', data: { labels: labels, datasets: [{ label: 'تاخیر (ms)', data: data.result.values || [], borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.15)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#06b6d4', borderWidth: 3 }] },
-      options: { plugins: { title: { display: true, text: 'بار ترافیکی (تاخیر ۱ ساعته)', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] } } } }
-    };
+    const chartConfig = { type: 'line', data: { labels: labels, datasets: [{ label: 'تاخیر (ms)', data: data.result.values || [], borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.15)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#06b6d4', borderWidth: 3 }] }, options: { plugins: { title: { display: true, text: 'بار ترافیکی (تاخیر ۱ ساعته)', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5, 5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5, 5] } } } } };
     return { url: quickChart(chartConfig), caption: `📊 <b>نمودار ۱ ساعته تاخیر</b>\n\n📡 منبع: Cloudflare Radar\n⏰ ${getIranTime()}` + WATERMARK };
   } catch(e) { return null; }
 }
@@ -136,10 +180,7 @@ async function makeTrendChart() {
   const ooni = await fetchOONI7d(); const p = parseOONI(ooni);
   let days = Object.keys(p.dayData).sort(); let labels = [], values = [];
   for (const d of days) { const blocked = p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0; labels.push(d.substring(5)); values.push(blocked); }
-  const chartConfig = {
-    type: "line", data: { labels: labels, datasets: [{ label: "درصد مسدودسازی", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#ef4444' }] },
-    options: { plugins: { title: { display: true, text: 'روند ۷ روزه فیلترینگ', color: '#f8fafc' }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5,5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5,5] }, beginAtZero: true, max: 100 } } }
-  };
+  const chartConfig = { type: "line", data: { labels: labels, datasets: [{ label: "درصد مسدودسازی", data: values, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#ef4444' }] }, options: { plugins: { title: { display: true, text: 'روند ۷ روزه فیلترینگ', color: '#f8fafc' }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b', borderDash: [5,5] } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b', borderDash: [5,5] }, beginAtZero: true, max: 100 } } } };
   return { url: quickChart(chartConfig), caption: "📈 <b>روند فیلترینگ ۷ روز</b>\n\n" + getDateBoth() + "\n\n🔺 بالاترین: <b>%" + Math.max(...values) + "</b>\n🔻 پایین‌ترین: <b>%" + Math.min(...values) + "</b>" + WATERMARK };
 }
 
@@ -174,7 +215,7 @@ async function makeTodayChart(env) {
   for (let h = 0; h <= 23; h++) { labels.push(h + ":00"); if (dataFromRadar && dataFromRadar.values && dataFromRadar.values[h]) { values.push(dataFromRadar.values[h]); } else { let base = (h >= 2 && h <= 6) ? 85 : (h >= 18 && h <= 22) ? 35 : 60; values.push(base + Math.floor(Math.random() * 10) - 5); } }
   const config = { type: "line", data: { labels: labels, datasets: [{ label: "تاخیر (ms)", data: values, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.2)", fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { plugins: { title: { display: true, text: '📈 نمودار کیفیت ۲۴ ساعت اخیر', color: '#f8fafc', font: { size: 18, family: 'Tahoma' } }, legend: { display: false }, annotation: { annotations: { watermark: watermarkAnnotation } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } } };
   return { url: quickChart(config), caption: "📅 <b>نمودار امروز (۲۴ ساعته)</b>\n\n" + getDateBoth() + "\n\n📊 وضعیت لحظه‌ای کیفیت شبکه در ۲۴ ساعت گذشته" + WATERMARK };
-                                                                                                                                                            }// ==================== KV Stats & Database ====================
+                           }// ==================== KV Stats & Database ====================
 async function saveDailySnapshot(STATS) { try { const ooni = await fetchOONI(); const p = parseOONI(ooni); const today = getToday(); await STATS.put("snap:" + today, JSON.stringify({ blockPercent: p.blockPercent, totalMs: p.totalMs, saved: new Date().toISOString() }), { expirationTtl: 2592000 }); } catch(e) {} }
 async function ensureTodaySnapshot(STATS) {
   if (!STATS) return;
@@ -201,7 +242,7 @@ async function trackUser(STATS, userId, userName) {
   } catch(e) {}
 }
 async function getReferrer(STATS, userId) { if (!STATS) return null; try { return await STATS.get("ref:" + userId) || null; } catch(e) { return null; } }
-async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم امنیتی ضد تخریب، شناسایی کاربران مشکوک، وب‌پنل مدیریت پیشرفته و طراحی نسل جدید نمودارها.\n\n🔹 برای استفاده از منوی جدید، دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
+async function checkVersion(STATS, userId, TG, chatId) { if (!STATS) return; try { const userVer = await STATS.get("v:" + userId); if (userVer !== CURRENT_VERSION) { await sendMessage(TG, chatId, "🎉 <b>ربات آپدیت شد!</b>\n\nنسخه جدید با سیستم امنیتی، پنل مدیریت، تست پینگ، تحریم و هشدار شخصی.\n\n🔹 دوباره /start رو بزن.", { parse_mode: "HTML" }); await STATS.put("v:" + userId, CURRENT_VERSION); } } catch(e) {} }
 
 // ==================== API Keys ====================
 async function generateAPIKey(STATS, owner, note) { const key = "rad_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15); const data = { key: key, owner: owner || "ناشناس", note: note || "", created_at: Date.now(), status: "active", usage_count: 0, last_used: 0 }; await STATS.put("APIKEY_" + key, JSON.stringify(data)); let list = await STATS.get("APIKEY_LIST") || ""; if (!list.includes(key)) { list += key + ","; await STATS.put("APIKEY_LIST", list); } return key; }
@@ -209,7 +250,7 @@ async function validateAPIKey(STATS, key) { if (!key) return null; const raw = a
 async function revokeAPIKey(STATS, key) { const raw = await STATS.get("APIKEY_" + key); if (!raw) return false; const data = JSON.parse(raw); data.status = "revoked"; data.revoked_at = Date.now(); await STATS.put("APIKEY_" + key, JSON.stringify(data)); return true; }
 async function listAPIKeys(STATS) { const list = await STATS.get("APIKEY_LIST") || ""; const keys = list.split(",").filter(x => x); const result = []; for (const k of keys) { const raw = await STATS.get("APIKEY_" + k); if (raw) result.push(JSON.parse(raw)); } return result; }
 
-// ==================== Weekly Winners ====================
+// ==================== Weekly Winners & Referral ====================
 async function checkWeeklyReset(env, STATS) { if (!STATS) return; try { const now = Date.now(); let lastReset = parseInt(await STATS.get("last_week_reset") || "0"); if (lastReset === 0) { await STATS.put("last_week_reset", String(now)); return; } const weekMs = 7 * 24 * 60 * 60 * 1000; if (now - lastReset >= weekMs) { await broadcastWeeklyWinners("https://api.telegram.org/bot" + env.BOT_TOKEN, STATS); } } catch(e) {} }
 async function broadcastWeeklyWinners(TG, STATS) {
   if (!STATS) return;
@@ -239,8 +280,21 @@ async function addPoints(env, STATS, userId, points) {
 }
 async function getPoints(STATS, userId) { if (!STATS) return 0; try { return parseInt(await STATS.get("points:" + userId) || "0"); } catch(e) { return 0; } }
 
+async function checkReferralMilestones(TG, STATS, userId, inviteCount) {
+  if (inviteCount === 10) {
+    await addPoints(GLOBAL_ENV, STATS, userId, 50);
+    const userLang = await getUserLang(STATS, userId);
+    await sendMessage(TG, userId, t("ref_milestone_10", userLang), { parse_mode: "HTML" }).catch(()=>{});
+  }
+  if (inviteCount === 50) {
+    await addPoints(GLOBAL_ENV, STATS, userId, 500);
+    await STATS.put("VIP_" + userId, "1");
+    const userLang = await getUserLang(STATS, userId);
+    await sendMessage(TG, userId, t("ref_milestone_50", userLang), { parse_mode: "HTML" }).catch(()=>{});
+  }
+}
+
 // ==================== Anti-Abuse & Suspicious Detection ====================
-const MAX_WARNINGS = 3;
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_MINUTE = 15;
 
@@ -251,12 +305,8 @@ async function checkRateLimit(STATS, userId) {
     const now = Date.now();
     const raw = await STATS.get(key);
     let data = raw ? JSON.parse(raw) : { count: 0, first: now };
-    
-    if (now - data.first > RATE_LIMIT_WINDOW) { data = { count: 1, first: now }; } 
-    else { data.count++; }
-    
+    if (now - data.first > RATE_LIMIT_WINDOW) { data = { count: 1, first: now }; } else { data.count++; }
     await STATS.put(key, JSON.stringify(data), { expirationTtl: 120 });
-    
     if (data.count > MAX_REQUESTS_PER_MINUTE) {
       await flagSuspicious(STATS, userId, "ارسال بیش از حد درخواست (Rate Limit / Spam)");
       return false;
@@ -271,22 +321,13 @@ async function flagSuspicious(STATS, userId, reason) {
     const key = "SUSPICIOUS_" + userId;
     const raw = await STATS.get(key);
     let data = raw ? JSON.parse(raw) : { warnings: 0, reasons: [], first_flagged: Date.now(), last_flagged: 0, name: "" };
-    
     const name = await STATS.get("name:" + userId) || "کاربر";
-    data.warnings++;
-    data.last_flagged = Date.now();
-    data.name = name;
+    data.warnings++; data.last_flagged = Date.now(); data.name = name;
     data.reasons.push({ reason: reason, time: Date.now() });
     if (data.reasons.length > 10) data.reasons = data.reasons.slice(-10);
-    
     await STATS.put(key, JSON.stringify(data));
-    
     let listRaw = await STATS.get("SUSPICIOUS_LIST") || "";
-    const list = listRaw.split(",").filter(x => x);
-    if (!list.includes(userId)) {
-      await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ",");
-    }
-    
+    if (!listRaw.includes(userId)) { await STATS.put("SUSPICIOUS_LIST", listRaw + userId + ","); }
     if (GLOBAL_ENV && GLOBAL_ENV.BOT_TOKEN) {
       const TG = "https://api.telegram.org/bot" + GLOBAL_ENV.BOT_TOKEN;
       for (const adminId of ADMIN_IDS) {
@@ -305,16 +346,12 @@ async function getSuspiciousList(STATS) {
     const result = [];
     for (const uid of list) {
       const raw = await STATS.get("SUSPICIOUS_" + uid);
-      if (raw) {
-        const data = JSON.parse(raw);
-        result.push({ id: uid, name: data.name, warnings: data.warnings, reasons: data.reasons || [], first_flagged: data.first_flagged, last_flagged: data.last_flagged });
-      }
+      if (raw) { const data = JSON.parse(raw); result.push({ id: uid, name: data.name, warnings: data.warnings, reasons: data.reasons || [], first_flagged: data.first_flagged, last_flagged: data.last_flagged }); }
     }
     result.sort((a, b) => b.last_flagged - a.last_flagged);
     return result;
   } catch(e) { return []; }
 }
-
 async function clearSuspicious(STATS, userId) {
   if (!STATS) return false;
   try {
@@ -326,9 +363,10 @@ async function clearSuspicious(STATS, userId) {
   } catch(e) { return false; }
 }
 
-// ==================== Send Messages ====================
+// ==================== Send & Personal Alerts ====================
 async function sendPhoto(TG, chatId, url, caption) { try { await fetch(TG + "/sendPhoto", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: chatId, photo: url, caption: caption, parse_mode: "HTML" }) }); } catch(e) {} }
 async function sendMessage(TG, chatId, text, extra) { const body = { chat_id: chatId, text: text }; if (extra) { Object.keys(extra).forEach(k => { if (k === "inline_keyboard") body.reply_markup = { inline_keyboard: extra[k] }; else body[k] = extra[k]; }); } try { return await fetch(TG + "/sendMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r=>r.json()); } catch(e) { return {ok: false}; } }
+
 async function sendOrUpdateChannelStatus(TG, STATS) {
   try {
     const lastMsgId = STATS ? await STATS.get("channel_msg_id") : null;
@@ -341,7 +379,56 @@ async function sendOrUpdateChannelStatus(TG, STATS) {
     if (d.ok && d.result) { await fetch(TG + "/pinChatMessage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CH1, message_id: d.result.message_id, disable_notification: true }) }); if (STATS) await STATS.put("channel_msg_id", String(d.result.message_id)); }
   } catch(e) { console.log("Channel status error: " + e.message); }
 }
+
 async function checkMember(TG, userId, channel) { try { const r = await fetch(TG + "/getChatMember?chat_id=" + channel + "&user_id=" + userId); const d = await r.json(); if (d.ok && d.result) { const s = d.result.status; return s === "member" || s === "administrator" || s === "creator"; } } catch(e) {} return false; }
+
+// ==================== Tools: Ping & Sanction ====================
+async function pingDomain(domain) {
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`https://${domain}`, { method: "HEAD", signal: controller.signal, redirect: "follow" });
+    clearTimeout(timeout);
+    return { ok: res.ok || res.status < 400, time: Date.now() - start };
+  } catch (e) { return { ok: false, time: 0 }; }
+}
+
+async function checkSanction(domain) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`https://${domain}`, { method: "HEAD", signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.status === 403) return "🚫 احتمالاً تحریم شده (خطای 403)";
+    if (res.status === 451) return "🚫 تحریم قانونی (خطای 451)";
+    if (res.ok) return "✅ در دسترس (تحریم نیست)";
+    return `⚠️ وضعیت نامشخص (کد ${res.status})`;
+  } catch (e) { return "❌ عدم دسترسی (احتمالاً مسدود)"; }
+}
+
+// ==================== Cron: Personal Alerts ====================
+async function checkPersonalAlerts(TG, STATS) {
+  try {
+    const listRaw = await STATS.get("ALERT_LIST") || "";
+    const list = listRaw.split(",").filter(x => x);
+    if (list.length === 0) return;
+    const ooni = await fetchOONI(); const p = parseOONI(ooni);
+    for (const item of list) {
+      const [uid, opAsn] = item.split(":");
+      if (!uid || !opAsn) continue;
+      const asnData = p.asnData[opAsn];
+      if (asnData) {
+        const rate = Math.round((asnData.ok / asnData.total) * 100);
+        if (rate < 70) {
+          const userLang = await getUserLang(STATS, uid);
+          const msg = (userLang === "en" ? `⚠️ <b>Quality Alert</b>\n\nYour ISP (<b>${asnName(opAsn)}</b>) quality has dropped.\n\n📉 Access Rate: ${rate}%\n⏰ ${getIranTime()}` : `⚠️ <b>هشدار افت کیفیت اینترنت</b>\n\nکیفیت اینترنت اپراتور انتخابی شما (<b>${asnName(opAsn)}</b>) افت کرده است.\n\n📉 درصد دسترسی: ${rate}%\n⏰ ${getIranTime()}`);
+          await sendMessage(TG, uid, msg, { parse_mode: "HTML" }).catch(()=>{});
+        }
+      }
+    }
+  } catch(e) {}
+}
 
 // ==================== Main Entry ====================
 export default {
@@ -368,6 +455,7 @@ export default {
     if (now.getUTCDay() === 5 && now.getUTCHours() === 17 && now.getUTCMinutes() < 15) { await broadcastWeeklyWinners(TG, env.STATS); }
     if (env.CLOUDFLARE_API_TOKEN) { const compChart = await makeComprehensiveChart(); if (compChart) await sendPhoto(TG, CH1, compChart.url, compChart.caption); }
     await sendOrUpdateChannelStatus(TG, env.STATS);
+    await checkPersonalAlerts(TG, env.STATS);
     if (env.STATS) { await saveDailySnapshot(env.STATS); await saveHourlySnapshot(env.STATS); }
   }
 };
@@ -384,6 +472,22 @@ async function handleAdminWeb(url, STATS, env) {
   if (url.pathname === "/adminweb/data") {
     const type = url.searchParams.get("type");
     if (type === "stats") { const total = await STATS.get("total_users") || "0"; const today = getToday(); const dauRaw = await STATS.get("dau:" + today); const dau = dauRaw ? JSON.parse(dauRaw) : []; const allRaw = await STATS.get("all_users") || ""; const all = allRaw.split(",").filter(x => x); let banned = 0; for (const uid of all) { if (await STATS.get("BANNED_" + uid) === "1") banned++; } return new Response(JSON.stringify({ ok: true, total_users: parseInt(total), today_active: dau.length, total_registered: all.length, banned_count: banned, date: getDateBoth(), time: getIranTime() }), { headers: cors }); }
+    if (type === "growth") {
+      const labels = [], values = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split("T")[0];
+        labels.push(dateStr.substring(5));
+        const usersList = await STATS.get("all_users") || "";
+        let count = 0;
+        for (const uid of usersList.split(",").filter(x=>x)) {
+          const joinDate = await STATS.get("u:" + uid);
+          if (joinDate === dateStr) count++;
+        }
+        values.push(count);
+      }
+      return new Response(JSON.stringify({ ok: true, labels, values }), { headers: cors });
+    }
     if (type === "users") { const search = (url.searchParams.get("search") || "").toLowerCase(); const page = parseInt(url.searchParams.get("page") || "1"); const perPage = 20; const allRaw = await STATS.get("all_users") || ""; let all = allRaw.split(",").filter(x => x); if (search) { const filtered = []; for (const uid of all) { const name = (await STATS.get("name:" + uid) || "").toLowerCase(); if (uid.includes(search) || name.includes(search)) filtered.push(uid); } all = filtered; } all = all.reverse(); const total = all.length; const pages = Math.ceil(total / perPage) || 1; const slice = all.slice((page - 1) * perPage, page * perPage); const users = []; for (const uid of slice) { const name = await STATS.get("name:" + uid) || "کاربر"; const pts = await getPoints(STATS, uid); const banned = await STATS.get("BANNED_" + uid); users.push({ id: uid, name: name, points: pts, is_banned: banned === "1" }); } return new Response(JSON.stringify({ ok: true, total, page, pages, users }), { headers: cors }); }
     if (type === "user") { const id = url.searchParams.get("id"); if (!id) return new Response(JSON.stringify({ ok: false, error: "id required" }), { status: 400, headers: cors }); const name = await STATS.get("name:" + id) || "ناشناس"; const pts = await getPoints(STATS, id); const level = getUserLevel(pts); const banned = await STATS.get("BANNED_" + id) === "1"; const banReason = await STATS.get("BAN_REASON_" + id) || ""; const joinDate = await STATS.get("u:" + id) || "نامشخص"; const invitedBy = await STATS.get("ref:" + id) || "ندارد"; const lastDaily = await STATS.get("daily:" + id) || "0"; return new Response(JSON.stringify({ ok: true, user: { id, name, points: pts, level, is_banned: banned, ban_reason: banReason, join_date: joinDate, invited_by: invitedBy, last_daily: lastDaily } }), { headers: cors }); }
     if (type === "apikeys") { const keys = await listAPIKeys(STATS); return new Response(JSON.stringify({ ok: true, keys }), { headers: cors }); }
@@ -400,6 +504,7 @@ async function handleAdminWeb(url, STATS, env) {
     if (action === "revoke_key") { const key = url.searchParams.get("key"); const success = await revokeAPIKey(STATS, key); return new Response(JSON.stringify({ ok: success, message: success ? "کلید باطل شد" : "کلید یافت نشد" }), { headers: cors }); }
     if (action === "reset_week") { if (env.BOT_TOKEN) await broadcastWeeklyWinners("https://api.telegram.org/bot" + env.BOT_TOKEN, STATS); return new Response(JSON.stringify({ ok: true, message: "هفته ریست شد" }), { headers: cors }); }
     if (action === "clear_suspicious") { const id = url.searchParams.get("id"); const success = await clearSuspicious(STATS, id); return new Response(JSON.stringify({ ok: success }), { headers: cors }); }
+    if (action === "toggle_maintenance") { const cur = await STATS.get("MAINTENANCE_MODE"); const nv = cur === "1" ? "0" : "1"; await STATS.put("MAINTENANCE_MODE", nv); return new Response(JSON.stringify({ ok: true, message: nv === "1" ? "حالت تعمیرات فعال شد" : "حالت تعمیرات غیرفعال شد" }), { headers: cors }); }
     return new Response(JSON.stringify({ ok: false, error: "unknown action" }), { status: 400, headers: cors });
   }
   return new Response("Not found", { status: 404 });
@@ -423,13 +528,25 @@ async function handleAPI(url, STATS, env) {
     if (url.pathname === "/api/operators") { const ooni = await fetchOONI(); const p = parseOONI(ooni); const ops = []; for (const [asn, d] of Object.entries(p.asnData)) { const name = await asnNameAuto(asn); ops.push({ asn: "AS" + asn, name: name, free_percent: Math.round((d.ok / d.total) * 100), tests: d.count }); } ops.sort((a, b) => b.tests - a.tests); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, count: ops.length, data: ops.slice(0, 20) }, null, 2), { headers: cors }); }
     if (url.pathname === "/api/top") { const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const ops = []; for (const [asn, d] of Object.entries(p.asnData)) { if (d.count >= 500) { const name = await asnNameAuto(asn); ops.push({ name: name, rate: Math.round((d.ok / d.total) * 100), tests: d.count }); } } ops.sort((a, b) => b.rate - a.rate); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, period: "7 days", best: ops.slice(0, 5), worst: ops.slice(-5).reverse() }, null, 2), { headers: cors }); }
     if (url.pathname === "/api/history") { const ooni = await fetchOONI7d(); const p = parseOONI(ooni); const days = Object.keys(p.dayData).sort(); const data = days.map(d => ({ date: d, block_percent: p.dayData[d].total > 0 ? Math.round((p.dayData[d].blocked / p.dayData[d].total) * 100) : 0, total: p.dayData[d].total })); return new Response(JSON.stringify({ ok: true, partner: keyData.owner, data }, null, 2), { headers: cors }); }
-    if (url.pathname === "/api" || url.pathname === "/api/") { return new Response(JSON.stringify({ ok: true, name: "Radar Internet Public API", version: "6.0", partner: keyData.owner, endpoints: { status: "/api/status?key=YOUR_KEY", operators: "/api/operators?key=YOUR_KEY", top: "/api/top?key=YOUR_KEY", history: "/api/history?key=YOUR_KEY" } }, null, 2), { headers: cors }); }
+    if (url.pathname === "/api" || url.pathname === "/api/") { return new Response(JSON.stringify({ ok: true, name: "Radar Internet Public API", version: "7.0", partner: keyData.owner, endpoints: { status: "/api/status?key=YOUR_KEY", operators: "/api/operators?key=YOUR_KEY", top: "/api/top?key=YOUR_KEY", history: "/api/history?key=YOUR_KEY" } }, null, 2), { headers: cors }); }
     return new Response(JSON.stringify({ ok: false, error: "Not found" }), { status: 404, headers: cors });
   } catch(e) { return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500, headers: cors }); }
 }
 
 // ==================== Bot Update Handler ====================
 async function handleUpdate(update, TG, STATS, env) {
+  // بررسی حالت تعمیرات
+  const isMaint = await STATS.get("MAINTENANCE_MODE") === "1";
+  const isAdminUser = ADMIN_IDS.includes(String(update.message?.from?.id || update.callback_query?.from?.id));
+
+  if (isMaint && !isAdminUser) {
+    if (update.message && update.message.text === "/start") {
+      const userLang = await getUserLang(STATS, String(update.message.from.id));
+      await sendMessage(TG, update.message.chat.id, t("maintenance", userLang), { parse_mode: "HTML" });
+    }
+    return;
+  }
+
   if (update.callback_query) {
     const cb = update.callback_query; const cbData = cb.data; const cbUserId = String(cb.from.id); const cbChatId = cb.message.chat.id;
     const isBanned = await STATS.get("BANNED_" + cbUserId);
@@ -443,39 +560,57 @@ async function handleUpdate(update, TG, STATS, env) {
     if (cbData === "admin_panel") {
       if (!ADMIN_IDS.includes(cbUserId)) {
         await flagSuspicious(STATS, cbUserId, "تلاش غیرمجاز برای دسترسی به پنل ادمین");
-        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", show_alert: true }) });
+        await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "⛔️ دسترسی غیرمجاز", show_alert: true }) });
         return;
       }
       update.message = { chat: { id: cbChatId }, from: cb.from, text: "/admin" };
     } else if (cbData === "claim_daily") {
       const lastDaily = parseInt(await STATS.get("daily:" + cbUserId) || "0");
-      if (Date.now() - lastDaily < 86400000) { const hours = Math.ceil((86400000 - (Date.now() - lastDaily)) / 3600000); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: `⏳ شما پاداش امروز را گرفته‌اید. ${hours} ساعت دیگر برگردید.`, show_alert: true }) }); return; }
-      await STATS.put("daily:" + cbUserId, String(Date.now())); await addPoints(env, STATS, cbUserId, 10); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "🎁 ۱۰ امتیاز به شما اضافه شد!", show_alert: true }) }); return;
-    } else if (cbData === "support_ticket") { await STATS.put("STATE_" + cbUserId, "await_support_ticket"); await sendMessage(TG, cbChatId, "✉️ <b>پشتیبانی ربات</b>\n\nلطفاً پیام یا سوال خود را بنویسید. پیام شما مستقیماً برای مدیریت ارسال می‌شود.", { parse_mode: "HTML" }); return;
-    } else if (cbData === "ads_request") { await STATS.put("STATE_" + cbUserId, "await_ad_request"); await sendMessage(TG, cbChatId, "📢 <b>درخواست تبلیغات</b>\n\nلطفاً متن یا توضیحات تبلیغاتی خود را همراه با لینک (در صورت وجود) ارسال کنید. مدیریت پس از بررسی با شما تماس خواهد گرفت.", { parse_mode: "HTML" }); return;
+      if (Date.now() - lastDaily < 86400000) { const hours = Math.ceil((86400000 - (Date.now() - lastDaily)) / 3600000); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: `⏳ ${hours} ساعت دیگر.`, show_alert: true }) }); return; }
+      await STATS.put("daily:" + cbUserId, String(Date.now())); await addPoints(env, STATS, cbUserId, 10); await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "🎁 +۱۰ امتیاز!", show_alert: true }) }); return;
+    } else if (cbData === "support_ticket") { await STATS.put("STATE_" + cbUserId, "await_support_ticket"); await sendMessage(TG, cbChatId, "✉️ <b>پشتیبانی</b>\n\nپیام خود را بنویسید:", { parse_mode: "HTML" }); return;
+    } else if (cbData === "ads_request") { await STATS.put("STATE_" + cbUserId, "await_ad_request"); await sendMessage(TG, cbChatId, "📢 <b>تبلیغات</b>\n\nمتن را ارسال کنید:", { parse_mode: "HTML" }); return;
     } else if (cbData === "last_week_winners") {
       const pinnedRaw = await STATS.get("pinned_winners"); const pinned = pinnedRaw ? JSON.parse(pinnedRaw) : [];
-      if (pinned.length === 0) { await sendMessage(TG, cbChatId, "📌 هنوز برنده‌ای برای هفته گذشته ثبت نشده است.", { parse_mode: "HTML" }); return; }
-      let msg = "🏆 <b>تالار افتخارات (برندگان هفته گذشته)</b> 📌\n\nاین کاربران با تلاش خود در هفته گذشته به عنوان برترین‌ها انتخاب شدند:\n\n";
-      pinned.forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; msg += `${medal} <b>${u.n || u.id}</b> → ${u.p} امتیاز\n`; });
-      await sendMessage(TG, cbChatId, msg, { parse_mode: "HTML" }); return;
+      if (pinned.length === 0) { await sendMessage(TG, cbChatId, "📌 برنده‌ای ثبت نشده.", { parse_mode: "HTML" }); return; }
+      let msg = "🏆 <b>تالار افتخارات</b>\n\n"; pinned.forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; msg += `${md} <b>${u.n || u.id}</b> → ${u.p} امتیاز\n`; }); await sendMessage(TG, cbChatId, msg, { parse_mode: "HTML" }); return;
+    } else if (cbData === "tool_ping") { await STATS.put("STATE_" + cbUserId, "await_ping"); const uLang = await getUserLang(STATS, cbUserId); await sendMessage(TG, cbChatId, t("ping_prompt", uLang), { parse_mode: "HTML" }); return;
+    } else if (cbData === "tool_sanction") { await STATS.put("STATE_" + cbUserId, "await_sanction"); const uLang = await getUserLang(STATS, cbUserId); await sendMessage(TG, cbChatId, t("sanction_prompt", uLang), { parse_mode: "HTML" }); return;
+    } else if (cbData === "alert_start") {
+       const uLang = await getUserLang(STATS, cbUserId);
+       const kb = [[{text: "ایرانسل", callback_data: "alert_set_44244"}], [{text: "همراه اول", callback_data: "alert_set_197207"}], [{text: "مخابرات", callback_data: "alert_set_58224"}], [{text: "حذف هشدارها", callback_data: "alert_clear"}]];
+       await sendMessage(TG, cbChatId, t("alerts_prompt", uLang), { parse_mode: "HTML", inline_keyboard: kb }); return;
+    } else if (cbData === "toggle_lang") {
+       const newLang = (await STATS.get("LANG_" + cbUserId) || "fa") === "fa" ? "en" : "fa";
+       await STATS.put("LANG_" + cbUserId, newLang);
+       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: newLang === "fa" ? "زبان تغییر کرد: فارسی" : "Language changed: English", show_alert: true }) }); return;
+    } else if (cbData.startsWith("alert_set_")) {
+       const asn = cbData.replace("alert_set_", "");
+       await STATS.put("ALERT_" + cbUserId, asn);
+       let list = await STATS.get("ALERT_LIST") || "";
+       const entry = cbUserId + ":" + asn;
+       if (!list.includes(cbUserId)) { list += entry + ","; await STATS.put("ALERT_LIST", list); }
+       const uLang = await getUserLang(STATS, cbUserId);
+       await sendMessage(TG, cbChatId, t("alerts_set", uLang, { operator: asnName(asn) }), { parse_mode: "HTML" }); return;
+    } else if (cbData === "alert_clear") {
+       await STATS.delete("ALERT_" + cbUserId);
+       let list = await STATS.get("ALERT_LIST") || "";
+       list = list.split(",").filter(x => x && !x.startsWith(cbUserId + ":")).join(",");
+       if (list) list += ",";
+       await STATS.put("ALERT_LIST", list);
+       await sendMessage(TG, cbChatId, "✅ هشدارهای شما حذف شد."); return;
+    } else if (cbData === "api_info") {
+      await sendMessage(TG, cbChatId, "🔌 <b>API اختصاصی رادار اینترنت</b>\n\nاین سرویس برای همکاران و اسپانسرهای رسمی طراحی شده است تا به داده‌های بهینه و زنده دسترسی داشته باشند.\n\n📌 <b>شرایط دریافت:</b>\n- معرفی رادار اینترنت ایران به عنوان منبع رسمی در وب‌سایت یا ربات شما\n- استفاده تجاری یا شخصی قانونی\n\n💬 <b>جهت دریافت کلید اختصاصی:</b>\nبه ادمین پیام دهید: @Adddddddm\n\n📊 پس از دریافت کلید، به آدرس‌های زیر دسترسی خواهید داشت:\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/status?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/operators?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/top?key=YOUR_KEY</code>", { parse_mode: "HTML" }); return;
     } else if (cbData === "adm_users_list") {
       let usersList = await STATS.get("all_users") || ""; let arr = usersList.split(",").filter(x => x);
-      let out = "👥 <b>۱۰ کاربر آخر ربات:</b>\n\n";
-      for (let i = Math.max(0, arr.length - 10); i < arr.length; i++) { let uid = arr[i]; let name = await STATS.get("name:" + uid) || "کاربر"; let ban = await STATS.get("BANNED_" + uid); out += `${ban === "1" ? "🚫" : "✅"} <b>${name}</b> | <code>${uid}</code>\n`; }
-      out += `\n📊 مجموع کاربران: <b>${arr.length}</b>`; await sendMessage(TG, cbChatId, out, { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_stats") {
-      let usersList = await STATS.get("all_users") || ""; let total = usersList.split(",").filter(x => x).length;
-      await sendMessage(TG, cbChatId, `📊 <b>آمار کلی ربات:</b>\n\n👥 کاربران کل: <b>${total}</b>\n✅ ربات فعال است.`, { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_search") { await STATS.put("STATE_" + cbUserId, "await_search"); await sendMessage(TG, cbChatId, "🔍 <b>لطفاً آیدی عددی کاربر را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_ban") { await STATS.put("STATE_" + cbUserId, "await_ban"); await sendMessage(TG, cbChatId, "🚫 <b>لطفاً آیدی عددی کاربر برای بلاک را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_unban") { await STATS.put("STATE_" + cbUserId, "await_unban"); await sendMessage(TG, cbChatId, "✅ <b>لطفاً آیدی عددی کاربر برای آنبلاک را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
-    } else if (cbData === "adm_broadcast") { await STATS.put("STATE_" + cbUserId, "await_broadcast"); await sendMessage(TG, cbChatId, "📨 <b>لطفاً متن پیام همگانی را ارسال کنید:</b>", { parse_mode: "HTML" }); return;
-    } else if (cbData.startsWith("reply_ticket_")) { const targetId = cbData.replace("reply_ticket_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ticket_" + targetId); await sendMessage(TG, cbChatId, `✉️ <b>پاسخ به تیکت کاربر <code>${targetId}</code>:</b>\nلطفاً متن پاسخ خود را بنویسید:`, { parse_mode: "HTML" }); return;
-    } else if (cbData.startsWith("reply_ads_")) { const targetId = cbData.replace("reply_ads_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ads_" + targetId); await sendMessage(TG, cbChatId, `📢 <b>پاسخ به درخواست تبلیغات کاربر <code>${targetId}</code>:</b>\nلطفاً متن پاسخ خود را بنویسید:`, { parse_mode: "HTML" }); return;
-    } else if (cbData === "api_info") {
-      await sendMessage(TG, cbChatId, "🔌 <b>API اختصاصی رادار اینترنت</b>\n\nاین سرویس برای همکاران و اسپانسرهای رسمی طراحی شده است تا به داده‌های بهینه و زنده دسترسی داشته باشند.\n\n📌 <b>شرایط دریافت:</b>\n- معرفی رادار اینترنت ایران به عنوان منبع رسمی در وب‌سایت یا ربات شما\n- استفاده تجاری یا شخصی قانونی\n\n💬 <b>جهت دریافت کلید اختصاصی:</b>\nبه ادمین پیام دهید: @Adddddddm\n\n📊 پس از دریافت کلید، به آدرس‌های زیر دسترسی خواهید داشت:\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/status?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/operators?key=YOUR_KEY</code>\n<code>radar-bot.royal-trust-ir-official.workers.dev/api/top?key=YOUR_KEY</code>", { parse_mode: "HTML" });
-      return;
+      let out = "👥 <b>۱۰ کاربر آخر:</b>\n\n"; for (let i = Math.max(0, arr.length - 10); i < arr.length; i++) { let uid = arr[i]; let name = await STATS.get("name:" + uid) || "کاربر"; let ban = await STATS.get("BANNED_" + uid); out += `${ban === "1" ? "🚫" : "✅"} <b>${name}</b> | <code>${uid}</code>\n`; } out += `\n📊 مجموع: <b>${arr.length}</b>`; await sendMessage(TG, cbChatId, out, { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_stats") { let ul = await STATS.get("all_users") || ""; let tot = ul.split(",").filter(x => x).length; await sendMessage(TG, cbChatId, `📊 <b>آمار کل:</b>\n\n👥 کاربران: <b>${tot}</b>`, { parse_mode: "HTML" }); return;
+    } else if (cbData === "adm_search") { await STATS.put("STATE_" + cbUserId, "await_search"); await sendMessage(TG, cbChatId, "🔍 آیدی کاربر:"); return;
+    } else if (cbData === "adm_ban") { await STATS.put("STATE_" + cbUserId, "await_ban"); await sendMessage(TG, cbChatId, "🚫 آیدی برای بلاک:"); return;
+    } else if (cbData === "adm_unban") { await STATS.put("STATE_" + cbUserId, "await_unban"); await sendMessage(TG, cbChatId, "✅ آیدی برای آنبلاک:"); return;
+    } else if (cbData === "adm_broadcast") { await STATS.put("STATE_" + cbUserId, "await_broadcast"); await sendMessage(TG, cbChatId, "📨 متن پیام همگانی:"); return;
+    } else if (cbData.startsWith("reply_ticket_")) { const targetId = cbData.replace("reply_ticket_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ticket_" + targetId); await sendMessage(TG, cbChatId, `✉️ پاسخ به <code>${targetId}</code>:`); return;
+    } else if (cbData.startsWith("reply_ads_")) { const targetId = cbData.replace("reply_ads_", ""); await STATS.put("STATE_" + cbUserId, "await_reply_ads_" + targetId); await sendMessage(TG, cbChatId, `📢 پاسخ به <code>${targetId}</code>:`); return;
     } else {
       await fetch(TG + "/answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: "در حال پردازش..." }) });
       let fakeText = "";
@@ -487,51 +622,46 @@ async function handleUpdate(update, TG, STATS, env) {
   if (!update.message) return;
   const msg = update.message; const chatId = msg.chat.id; const text = msg.text || ""; const userId = String(msg.from.id); const userName = msg.from.first_name || msg.from.username || ("کاربر " + userId.slice(-4));
   if (STATS) await STATS.put("name:" + userId, userName);
+  const userLang = await getUserLang(STATS, userId);
 
   if (!(await checkRateLimit(STATS, userId))) {
-    await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار سیستم</b>\n\nشما درخواست‌های زیادی در مدت کوتاه ارسال کرده‌اید. لطفاً کمی صبر کنید.\n\n⚠️ تکرار این رفتار منجر به مسدودسازی می‌شود.", { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, "⚠️ <b>هشدار خودکار</b>\n\nدرخواست‌های زیادی ارسال کرده‌اید. صبر کنید.", { parse_mode: "HTML" });
     return;
   }
 
   if (ADMIN_IDS.includes(userId)) {
     const adminState = await STATS.get("STATE_" + userId);
-    if (adminState === "await_search") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); const name = await STATS.get("name:" + targetId) || "ناشناس"; const ban = await STATS.get("BANNED_" + targetId); await sendMessage(TG, chatId, `🔍 <b>اطلاعات کاربر:</b>\n\n👤 نام: <b>${name}</b>\n🆔 آیدی: <code>${targetId}</code>\n📌 وضعیت: ${ban === "1" ? "🚫 مسدود" : "✅ فعال"}`, { parse_mode: "HTML" }); return; }
-    if (adminState === "await_ban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.put("BANNED_" + targetId, "1"); await STATS.put("BAN_REASON_" + targetId, "تخلف از قوانین ربات"); await sendMessage(TG, targetId, "🚫 <b>شما توسط ادمین از ربات مسدود شدید.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> با موفقیت مسدود شد.`, { parse_mode: "HTML" }); return; }
-    if (adminState === "await_unban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.delete("BANNED_" + targetId); await STATS.delete("BAN_REASON_" + targetId); await sendMessage(TG, targetId, "✅ <b>مسدودی شما توسط ادمین برداشته شد.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> آنبلاک شد.`, { parse_mode: "HTML" }); return; }
-    if (adminState === "await_broadcast") { await STATS.delete("STATE_" + userId); let usersList = await STATS.get("all_users") || ""; let arr = usersList.split(",").filter(x => x); let ok = 0, fail = 0; await sendMessage(TG, chatId, `⏳ در حال ارسال پیام به ${arr.length} کاربر...`); for (const uid of arr) { if (await STATS.get("BANNED_" + uid) === "1") continue; const res = await sendMessage(TG, uid, `📨 <b>پیام از ادمین:</b>\n\n${text}`, { parse_mode: "HTML" }); if (res.ok) ok++; else fail++; } await sendMessage(TG, chatId, `📨 <b>نتیجه ارسال:</b>\n\n✅ موفق: ${ok}\n❌ ناموفق: ${fail}`, { parse_mode: "HTML" }); return; }
-    if (adminState && adminState.startsWith("await_reply_ticket_")) { const targetId = adminState.replace("await_reply_ticket_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `✉️ <b>پاسخ پشتیبانی:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ شما به کاربر <code>${targetId}</code> ارسال شد.`, { parse_mode: "HTML" }); return; }
-    if (adminState && adminState.startsWith("await_reply_ads_")) { const targetId = adminState.replace("await_reply_ads_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `📢 <b>پاسخ به درخواست تبلیغات شما:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ شما به کاربر <code>${targetId}</code> ارسال شد.`, { parse_mode: "HTML" }); return; }
+    if (adminState === "await_search") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); const name = await STATS.get("name:" + targetId) || "ناشناس"; const ban = await STATS.get("BANNED_" + targetId); await sendMessage(TG, chatId, `🔍 <b>اطلاعات:</b>\n\n👤 <b>${name}</b>\n🆔 <code>${targetId}</code>\n📌 ${ban === "1" ? "🚫 مسدود" : "✅ فعال"}`, { parse_mode: "HTML" }); return; }
+    if (adminState === "await_ban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.put("BANNED_" + targetId, "1"); await STATS.put("BAN_REASON_" + targetId, "تخلف"); await sendMessage(TG, targetId, "🚫 <b>شما مسدود شدید.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> مسدود شد.`); return; }
+    if (adminState === "await_unban") { await STATS.delete("STATE_" + userId); const targetId = text.trim(); await STATS.delete("BANNED_" + targetId); await STATS.delete("BAN_REASON_" + targetId); await sendMessage(TG, targetId, "✅ <b>مسدودی شما برداشته شد.</b>", { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ کاربر <code>${targetId}</code> آنبلاک شد.`); return; }
+    if (adminState === "await_broadcast") { await STATS.delete("STATE_" + userId); let ul = await STATS.get("all_users") || ""; let a = ul.split(",").filter(x => x); let ok = 0, fail = 0; await sendMessage(TG, chatId, `⏳ ارسال به ${a.length} کاربر...`); for (const ui of a) { if (await STATS.get("BANNED_" + ui) === "1") continue; const r = await sendMessage(TG, ui, `📨 <b>پیام ادمین:</b>\n\n${text}`, { parse_mode: "HTML" }); if (r.ok) ok++; else fail++; } await sendMessage(TG, chatId, `📨 نتیجه:\n✅ ${ok}\n❌ ${fail}`); return; }
+    if (adminState && adminState.startsWith("await_reply_ticket_")) { const targetId = adminState.replace("await_reply_ticket_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `✉️ <b>پاسخ:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ به <code>${targetId}</code> ارسال شد.`); return; }
+    if (adminState && adminState.startsWith("await_reply_ads_")) { const targetId = adminState.replace("await_reply_ads_", ""); await STATS.delete("STATE_" + userId); await sendMessage(TG, targetId, `📢 <b>پاسخ:</b>\n\n${text}`, { parse_mode: "HTML" }).catch(()=>{}); await sendMessage(TG, chatId, `✅ پاسخ به <code>${targetId}</code> ارسال شد.`); return; }
   }
 
   const userState = await STATS.get("STATE_" + userId);
-  if (userState === "await_support_ticket") { await STATS.delete("STATE_" + userId); for (const adminId of ADMIN_IDS) { await sendMessage(TG, adminId, `📩 <b>تیکت جدید از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 متن پیام:\n${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ به کاربر", callback_data: "reply_ticket_" + userId }]] }); } await sendMessage(TG, chatId, "✅ پیام شما با موفقیت به مدیریت ارسال شد. به زودی پاسخ داده می‌شود.", { parse_mode: "HTML" }); return; }
-  if (userState === "await_ad_request") { await STATS.delete("STATE_" + userId); for (const adminId of ADMIN_IDS) { await sendMessage(TG, adminId, `📢 <b>درخواست تبلیغات از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 متن درخواست:\n${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ به درخواست", callback_data: "reply_ads_" + userId }]] }); } await sendMessage(TG, chatId, "✅ درخواست تبلیغات شما با موفقیت برای مدیریت ارسال شد. در اسرع وقت با شما تماس گرفته می‌شود.", { parse_mode: "HTML" }); return; }
+  if (userState === "await_support_ticket") { await STATS.delete("STATE_" + userId); for (const a of ADMIN_IDS) { await sendMessage(TG, a, `📩 <b>تیکت از:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 ${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ", callback_data: "reply_ticket_" + userId }]] }); } await sendMessage(TG, chatId, "✅ پیام ارسال شد."); return; }
+  if (userState === "await_ad_request") { await STATS.delete("STATE_" + userId); for (const a of ADMIN_IDS) { await sendMessage(TG, a, `📢 <b>تبلیغات:</b> ${userName}\n🆔 <code>${userId}</code>\n\n💬 ${text}`, { parse_mode: "HTML", inline_keyboard: [[{ text: "↩️ پاسخ", callback_data: "reply_ads_" + userId }]] }); } await sendMessage(TG, chatId, "✅ درخواست تبلیغات ارسال شد."); return; }
+  if (userState === "await_ping") { await STATS.delete("STATE_" + userId); let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; const res = await pingDomain(domain); if (res.time > 0) { await sendMessage(TG, chatId, t("ping_result", userLang, { domain, status: res.ok ? "✅ در دسترس" : "❌ خطا", time: res.time }), { parse_mode: "HTML" }); } else { await sendMessage(TG, chatId, `❌ عدم دسترسی به ${domain}`); } return; }
+  if (userState === "await_sanction") { await STATS.delete("STATE_" + userId); let domain = text.trim().replace(/^https?:\/\//, "").split("/")[0]; const res = await checkSanction(domain); await sendMessage(TG, chatId, t("sanction_result", userLang, { domain, result: res }), { parse_mode: "HTML" }); return; }
 
   const isBanned = await STATS.get("BANNED_" + userId);
-  if (isBanned === "1") { const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف از قوانین ربات"; await sendMessage(TG, chatId, "🚫 <b>اطلاعیه رسمی مدیریت</b>\n\nکاربر گرامی،\n\nدسترسی شما به ربات رادار اینترنت ایران به دلیل تخلف از قوانین، مسدود شد.\n\n➖➖➖➖➖➖➖➖\n\n📌 <b>وضعیت:</b> مسدود\n⚠️ <b>دلیل:</b> " + reason + "\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n➖➖➖➖➖➖➖➖\n\n📞 برای اعتراض و پیگیری با پشتیبانی در ارتباط باشید:\n@Adddddddm\n\n🆔 آیدی عددی شما:\n<code>" + userId + "</code>\n\n⏳ مدت بررسی: حداکثر ۴۸ ساعت کاری\n\n🙏 با تشکر\n🛡️ تیم مدیریت رادار اینترنت ایران", { parse_mode: "HTML" }); return; }
+  if (isBanned === "1") { const reason = await STATS.get("BAN_REASON_" + userId) || "تخلف"; await sendMessage(TG, chatId, "🚫 <b>اطلاعیه مدیریت</b>\n\nشما مسدود شدید.\n\n⚠️ <b>دلیل:</b> " + reason + "\n📅 <b>تاریخ:</b> " + getIranDate() + "\n\n📞 پشتیبانی: @Adddddddm\n🆔 <code>" + userId + "</code>", { parse_mode: "HTML" }); return; }
 
   if (text === "/admin") {
-    if (!ADMIN_IDS.includes(userId)) {
-      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور /admin");
-      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز\n\nاین بخش تنها برای مالکان و مدیران ارشد ربات در نظر گرفته شده است.", { parse_mode: "HTML" }); return;
-    }
-    const adminKb = [ [{ text: "🌐 ورود به پنل وب مدیریت", url: "https://radar-bot.royal-trust-ir-official.workers.dev/adminweb" }], [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجوی کاربر", callback_data: "adm_search" }], [{ text: "🚫 بلاک کاربر", callback_data: "adm_ban" }, { text: "✅ آنبلاک کاربر", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار کلی ربات", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت به منو", callback_data: "main_menu" }] ];
-    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز، به پنل مدیریت جامع خوش آمدید.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return;
+    if (!ADMIN_IDS.includes(userId)) { await flagSuspicious(STATS, userId, "تلاش برای /admin"); await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز"); return; }
+    const adminKb = [ [{ text: "🌐 ورود به پنل وب", url: "https://radar-bot.royal-trust-ir-official.workers.dev/adminweb" }], [{ text: "👥 لیست کاربران", callback_data: "adm_users_list" }, { text: "🔍 جستجو", callback_data: "adm_search" }], [{ text: "🚫 بلاک", callback_data: "adm_ban" }, { text: "✅ آنبلاک", callback_data: "adm_unban" }], [{ text: "📨 پیام همگانی", callback_data: "adm_broadcast" }, { text: "📊 آمار", callback_data: "adm_stats" }], [{ text: "🔙 بازگشت", callback_data: "main_menu" }] ];
+    await sendMessage(TG, chatId, "╭━━━ 🔐 <b>پنل مدیریت</b> ━━━╮\n\nسلام ادمین عزیز.\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: adminKb }); return;
   }
 
-  if (text.startsWith("/ban ") || text.startsWith("/unban ")) {
-    if (!ADMIN_IDS.includes(userId)) {
-      await flagSuspicious(STATS, userId, "تلاش غیرمجاز برای اجرای دستور " + text.split(" ")[0]);
-      await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز", { parse_mode: "HTML" }); return;
-    }
-  }
+  if (text.startsWith("/ban ") || text.startsWith("/unban ")) { if (!ADMIN_IDS.includes(userId)) { await flagSuspicious(STATS, userId, "تلاش برای دستور ادمین"); await sendMessage(TG, chatId, "⛔️ دسترسی غیرمجاز"); return; } }
 
-  const inCh1 = await checkMember(TG, userId, CH1); const inCh2 = await checkMember(TG, userId, CH2);
-  if (!inCh1 || !inCh2) { await sendMessage(TG, chatId, "🔒 <b>عضویت اجباری</b>\n\nبرای استفاده از ربات، ابتدا در کانال و گروه زیر عضو شوید:\n\n📡 کانال: @radarinternetiran\n👥 گروه: @radarinternetirangruop\n\nپس از عضویت، دوباره /start را بزنید.", { parse_mode: "HTML", inline_keyboard: [[{ text: "📡 عضویت در کانال", url: "https://t.me/radarinternetiran" }], [{ text: "👥 عضویت در گروه", url: "https://t.me/radarinternetirangruop" }]] }); return; }
+  const ic1 = await checkMember(TG, userId, CH1); const ic2 = await checkMember(TG, userId, CH2);
+  if (!ic1 || !ic2) { await sendMessage(TG, chatId, "🔒 <b>عضویت اجباری</b>\n\nابتدا در کانال و گروه عضو شوید:", { parse_mode: "HTML", inline_keyboard: [[{ text: "📡 کانال", url: "https://t.me/radarinternetiran" }], [{ text: "👥 گروه", url: "https://t.me/radarinternetirangruop" }]] }); return; }
 
   await trackUser(STATS, userId, userName); await ensureTodaySnapshot(STATS); await checkVersion(STATS, userId, TG, chatId);
 
-  if (text.startsWith("/start ref_")) { const refCode = text.replace("/start ref_", "").trim(); if (refCode && refCode !== userId && STATS) { const already = await getReferrer(STATS, userId); if (!already) { await STATS.put("ref:" + userId, refCode); await addPoints(env, STATS, refCode, 10); await addPoints(env, STATS, userId, 5); await sendMessage(TG, chatId, "🎉 <b>خوش آمدی " + userName + "!</b>\n\n✅ ۵ امتیاز به خاطر دعوت گرفتی!\n🎁 دعات هم ۱۰ امتیاز گرفت.", { parse_mode: "HTML" }); } } }
+  if (text.startsWith("/start ref_")) { const refCode = text.replace("/start ref_", "").trim(); if (refCode && refCode !== userId && STATS) { const already = await getReferrer(STATS, userId); if (!already) { await STATS.put("ref:" + userId, refCode); await addPoints(env, STATS, refCode, 10); await addPoints(env, STATS, userId, 5); await sendMessage(TG, chatId, t("refer_success", userLang, { name: userName }), { parse_mode: "HTML" }); const invCount = parseInt(await STATS.get("invites_count:" + refCode) || "0") + 1; await STATS.put("invites_count:" + refCode, String(invCount)); await checkReferralMilestones(TG, STATS, refCode, invCount); } } }
 
   if (text === "/start" || text.startsWith("/start ")) {
     await addPoints(env, STATS, userId, 1); const pts = await getPoints(STATS, userId); const level = getUserLevel(pts);
@@ -544,47 +674,49 @@ async function handleUpdate(update, TG, STATS, env) {
       [{ text: "📅 تاریخچه", callback_data: "history" }, { text: "📈 امروز", callback_data: "today" }],
       [{ text: "🎁 پاداش روزانه", callback_data: "claim_daily" }, { text: "🎮 رتبه من", callback_data: "myrank" }],
       [{ text: "🏆 جدول برترین‌ها", callback_data: "leaderboard" }, { text: "🥇 برندگان هفته قبل", callback_data: "last_week_winners" }],
+      [{ text: "🌐 پینگ سایت", callback_data: "tool_ping" }, { text: "🚫 تست تحریم", callback_data: "tool_sanction" }],
+      [{ text: "🔔 هشدار شخصی", callback_data: "alert_start" }, { text: "🌍 تغییر زبان", callback_data: "toggle_lang" }],
       [{ text: "🎁 دعوت دوستان", callback_data: "invite" }, { text: "⚡ تست سرعت", callback_data: "speed" }],
       [{ text: "⏰ بهترین زمان", callback_data: "best" }, { text: "🔌 API عمومی", callback_data: "api" }],
       [{ text: "✉️ پشتیبانی", callback_data: "support_ticket" }, { text: "📢 درخواست تبلیغات", callback_data: "ads_request" }],
       [{ text: "🤝 دریافت API اختصاصی", callback_data: "api_info" }],
       [{ text: "⚙️ پنل مدیریت", callback_data: "admin_panel" }]
     ];
-    await sendMessage(TG, chatId, "╭━━━ 👋 <b>خوش آمدید</b> ━━━╮\n\nسلام <b>" + userName + "</b> عزیز!\n🏅 سطح شما: " + level + "\n🏆 امتیاز شما: <b>" + pts + "</b>\n\n" + SPONSOR_MSG + "\n\nاز دکمه‌های شیشه‌ای زیر برای دسترسی به بخش‌های مختلف ربات استفاده کنید:\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML", inline_keyboard: startKeyboard });
-  } else if (text === "/comprehensive") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 در حال دریافت داده‌ها از تمام منابع و طراحی نمودار جامع..."); const c = await makeComprehensiveChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/radar1h") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏱️ در حال دریافت نمودار از کلادفلر..."); const c = await makeRadar1hChart(env); if (c) { await sendPhoto(TG, chatId, c.url, c.caption); } else { await sendMessage(TG, chatId, "❌ خطا در دریافت داده. (توکن CLOUDFLARE_API_TOKEN را بررسی کنید)"); }
-  } else if (text === "/myrank") { const pts = await getPoints(STATS, userId); const level = getUserLevel(pts); const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : []; const rank = lb.findIndex(x => x.id === userId) + 1; await sendMessage(TG, chatId, "╭━━━ 🎖️ <b>رتبه شما</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏅 سطح: " + level + "\n🏆 امتیاز: <b>" + pts + "</b>\n📊 رتبه: <b>#" + (rank || "?") + "</b>\n👥 از " + lb.length + " کاربر\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+    await sendMessage(TG, chatId, t("welcome", userLang, { name: userName, level, pts }) + "\n\n" + SPONSOR_MSG, { parse_mode: "HTML", inline_keyboard: startKeyboard });
+  } else if (text === "/comprehensive") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 دریافت داده‌ها..."); const c = await makeComprehensiveChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/radar1h") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏱️ دریافت نمودار..."); const c = await makeRadar1hChart(env); if (c) { await sendPhoto(TG, chatId, c.url, c.caption); } else { await sendMessage(TG, chatId, "❌ خطا."); }
+  } else if (text === "/myrank") { const pts = await getPoints(STATS, userId); const level = getUserLevel(pts); const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : []; const rank = lb.findIndex(x => x.id === userId) + 1; await sendMessage(TG, chatId, t("stats", userLang, { name: userName, pts, invites: lb.filter(x=>x.id===userId)[0]?.p||0, rank: rank || "?" }), { parse_mode: "HTML" });
   } else if (text === "/leaderboard") {
     const pinnedRaw = await STATS.get("pinned_winners"); const pinned = pinnedRaw ? JSON.parse(pinnedRaw) : [];
     const lbRaw = await STATS.get("leaderboard"); const lb = lbRaw ? JSON.parse(lbRaw) : [];
-    const currentCompetitors = lb.filter(u => !pinned.find(p => p.id === u.id));
-    let out = "🏆 <b>تالار افتخارات (هفته گذشته)</b> 📌\n━━━━━━━━━━━━━━━━\n\n";
-    if (pinned.length === 0) { out += "هنوز برنده‌ای مشخص نشده است.\n\n"; } else { pinned.slice(0, 5).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); out += "\n"; }
-    out += "🔥 <b>رقابت هفته جاری</b>\n━━━━━━━━━━━━━━━━\n\n";
-    if (currentCompetitors.length === 0) { out += "هنوز کسی در این هفته امتیاز نگرفته!\nاولین نفر باش! 🚀\n\n"; } else { currentCompetitors.slice(0, 10).forEach((u, i) => { const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += medal + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); }
-    out += "\n<i>📌 برندگان هفته قبل از رقابت این هفته خارج شده‌اند.</i>" + WATERMARK; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
-  } else if (text === "/invite") { const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId; const pts = await getPoints(STATS, userId); await sendMessage(TG, chatId, "╭━━━ 🎁 <b>دعوت دوستان</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏆 امتیاز شما: <b>" + pts + "</b>\n\n🔗 لینک اختصاصی شما:\n<code>" + link + "</code>\n\n💰 جایزه:\n• شما: <b>+۱۰</b> امتیاز\n• دوستت: <b>+۵</b> امتیاز\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
-  } else if (text === "/vs") { await sendMessage(TG, chatId, "📊 در حال مقایسه..."); await sendMessage(TG, chatId, await makeVsReport(STATS), { parse_mode: "HTML" });
-  } else if (text === "/map") { await sendMessage(TG, chatId, "🗺 در حال ساخت نقشه حرارتی..."); const c = await makeMapChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/api") { const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api"; await sendMessage(TG, chatId, "╭━━━ 🔌 <b>API عمومی</b> ━━━╮\n\n📊 داده‌های رادار به صورت JSON:\n\n🔗 Endpoints:\n<code>" + base + "/status?key=YOUR_KEY</code>\n<code>" + base + "/operators?key=YOUR_KEY</code>\n<code>" + base + "/top?key=YOUR_KEY</code>\n<code>" + base + "/history?key=YOUR_KEY</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
-  } else if (text === "/status" || text === "/status full") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏳ در حال دریافت گزارش کامل..."); await sendMessage(TG, chatId, await makeReport("full"), { parse_mode: "HTML" });
+    const cc = lb.filter(u => !pinned.find(p => p.id === u.id));
+    let out = "🏆 <b>تالار افتخارات</b> 📌\n━━━━━━━━━━━━\n\n";
+    if (pinned.length === 0) { out += "هنوز برنده‌ای نیست.\n\n"; } else { pinned.slice(0, 5).forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += md + " <b>" + (u.n || u.id) + "</b> → " + u.p + " امتیاز\n"; }); out += "\n"; }
+    out += "🔥 <b>رقابت هفته</b>\n━━━━━━━━━━━━\n\n";
+    if (cc.length === 0) { out += "هنوز کسی امتیاز نگرفته!\n"; } else { cc.slice(0, 10).forEach((u, i) => { const md = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  " + (i+1) + "."; out += md + " <b>" + (u.n || u.id) + "</b> → " + u.p + "\n"; }); }
+    out += "\n<i>📌 برندگان هفته قبل خارج شدند.</i>" + WATERMARK; await sendMessage(TG, chatId, out, { parse_mode: "HTML" });
+  } else if (text === "/invite") { const link = "https://t.me/" + BOT_USERNAME + "?start=ref_" + userId; const pts = await getPoints(STATS, userId); await sendMessage(TG, chatId, "╭━━━ 🎁 <b>دعوت</b> ━━━╮\n\n👤 <b>" + userName + "</b>\n🏆 امتیاز: <b>" + pts + "</b>\n\n🔗 <code>" + link + "</code>\n\n💰 شما +۱۰ | دوستت +۵\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/vs") { await sendMessage(TG, chatId, "📊 مقایسه..."); await sendMessage(TG, chatId, await makeVsReport(STATS), { parse_mode: "HTML" });
+  } else if (text === "/map") { await sendMessage(TG, chatId, "🗺 ساخت نقشه..."); const c = await makeMapChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/api") { const base = "https://radar-bot.royal-trust-ir-official.workers.dev/api"; await sendMessage(TG, chatId, "╭━━━ 🔌 <b>API عمومی</b> ━━━╮\n\n🔗 Endpoints:\n<code>" + base + "/status?key=YOUR_KEY</code>\n<code>" + base + "/operators?key=YOUR_KEY</code>\n<code>" + base + "/top?key=YOUR_KEY</code>\n<code>" + base + "/history?key=YOUR_KEY</code>\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/status" || text === "/status full") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "⏳ دریافت گزارش..."); await sendMessage(TG, chatId, await makeReport("full"), { parse_mode: "HTML" });
   } else if (text === "/status simple" || text === "/work") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeWorkReport(), { parse_mode: "HTML" });
   } else if (text === "/score") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeScoreReport(), { parse_mode: "HTML" });
-  } else if (text === "/compare") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🆚 در حال مقایسه اپراتورها..."); await sendMessage(TG, chatId, await makeCompareReport(), { parse_mode: "HTML" });
-  } else if (text === "/top") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🏆 در حال رتبه‌بندی..."); await sendMessage(TG, chatId, await makeTopReport(), { parse_mode: "HTML" });
-  } else if (text === "/isp") { await sendMessage(TG, chatId, "🔍 <b>چک ISP خاص</b>\n\nمثال:\n<code>/isp ایرانسل</code>\n<code>/isp مخابرات</code>", { parse_mode: "HTML" });
-  } else if (text.startsWith("/isp ")) { await addPoints(env, STATS, userId, 1); const q = text.replace("/isp ", "").trim(); await sendMessage(TG, chatId, "🔍 در حال جستجو..."); await sendMessage(TG, chatId, await makeISPReport(q), { parse_mode: "HTML" });
-  } else if (text === "/world") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🌍 در حال دریافت داده‌های جهانی..."); await sendMessage(TG, chatId, await makeWorldReport(), { parse_mode: "HTML" });
-  } else if (text === "/today") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 در حال ساخت نمودار امروز..."); const c = await makeTodayChart(env); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/history") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 در حال ساخت تاریخچه..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/compare") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🆚 مقایسه..."); await sendMessage(TG, chatId, await makeCompareReport(), { parse_mode: "HTML" });
+  } else if (text === "/top") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🏆 رتبه‌بندی..."); await sendMessage(TG, chatId, await makeTopReport(), { parse_mode: "HTML" });
+  } else if (text === "/isp") { await sendMessage(TG, chatId, "🔍 <b>مثال:</b>\n<code>/isp ایرانسل</code>", { parse_mode: "HTML" });
+  } else if (text.startsWith("/isp ")) { await addPoints(env, STATS, userId, 1); const q = text.replace("/isp ", "").trim(); await sendMessage(TG, chatId, "🔍 جستجو..."); await sendMessage(TG, chatId, await makeISPReport(q), { parse_mode: "HTML" });
+  } else if (text === "/world") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🌍 دریافت..."); await sendMessage(TG, chatId, await makeWorldReport(), { parse_mode: "HTML" });
+  } else if (text === "/today") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 ساخت..."); const c = await makeTodayChart(env); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/history") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📅 ساخت..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
   } else if (text === "/best") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeBestTimeReport(), { parse_mode: "HTML" });
   } else if (text === "/speed") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, await makeSpeedReport(), { parse_mode: "HTML" });
-  } else if (text === "/chart") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 در حال ساخت نمودار میله‌ای..."); const c = await makeBarChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/pie") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🥧 در حال ساخت نمودار دایره‌ای..."); const c = await makePieChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/trend") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📈 در حال ساخت نمودار روند..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
-  } else if (text === "/help") { await sendMessage(TG, chatId, "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n📊 گزارش‌ها:\n/status، /work، /score، /vs\n\n🆚 مقایسه:\n/compare، /top، /isp، /world\n\n📈 نمودارها:\n/comprehensive، /radar1h\n/today، /history، /trend، /chart، /pie، /map\n\n🎮 گیمیفیکیشن:\n/myrank، /leaderboard، /invite\n\n🔌 API:\n/api\n\n⚡ تست:\n/speed، /best، /ping\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
+  } else if (text === "/chart") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📊 ساخت..."); const c = await makeBarChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/pie") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "🥧 ساخت..."); const c = await makePieChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/trend") { await addPoints(env, STATS, userId, 1); await sendMessage(TG, chatId, "📈 ساخت..."); const c = await makeTrendChart(); await sendPhoto(TG, chatId, c.url, c.caption);
+  } else if (text === "/help") { await sendMessage(TG, chatId, "╭━━━ 📚 <b>راهنما</b> ━━━╮\n\n📊 /status, /work, /score, /vs\n🆚 /compare, /top, /isp, /world\n📈 /comprehensive, /radar1h, /today, /history, /trend, /chart, /pie, /map\n🎮 /myrank, /leaderboard, /invite\n🔌 /api\n⚡ /speed, /best, /ping\n\n╰━━━━━━━━━━━━━━━━━━━╯", { parse_mode: "HTML" });
   }
-      }// ==================== Text Reports Generators ====================
+  }// ==================== Text Reports Generators ====================
 async function makePingReport() {
   let irList = "", globalList = ""; let irOk = 0, globalOk = 0;
   for (const s of IR_SITES) {
@@ -799,4 +931,4 @@ async function makeReport(mode) {
     out += "🚨 <b>مسیریابی</b>\n" + vE + " Visibility: <b>%" + v + "</b>\n" + makeBar(v / 10) + "\n";
   }
   return out + WATERMARK;
-      }
+}
